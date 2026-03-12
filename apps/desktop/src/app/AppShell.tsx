@@ -164,12 +164,12 @@ export function AppShell() {
         try {
           const settingsRes = await settingsGet();
           if (settingsRes.settings) {
-            const s = settingsRes.settings;
-            if (s.productMode) setProductMode(s.productMode);
-            if (s.defaultInputMode) setDefaultInputMode(s.defaultInputMode);
-            if (s.reducedClutter !== undefined) setReducedClutter(s.reducedClutter);
-            if (s.simplifiedSummaries !== undefined) setSimplifiedSummaries(s.simplifiedSummaries);
-            if (s.confirmMediumRisk !== undefined) setConfirmMediumRisk(s.confirmMediumRisk);
+            const s = settingsRes.settings as Record<string, unknown>;
+            if (typeof s.productMode === "string") setProductMode(s.productMode as "classic" | "guided");
+            if (typeof s.defaultInputMode === "string") setDefaultInputMode(s.defaultInputMode as "command" | "ask");
+            if (typeof s.reducedClutter === "boolean") setReducedClutter(s.reducedClutter);
+            if (typeof s.simplifiedSummaries === "boolean") setSimplifiedSummaries(s.simplifiedSummaries);
+            if (typeof s.confirmMediumRisk === "boolean") setConfirmMediumRisk(s.confirmMediumRisk);
           }
         } catch {
           // settings not critical
