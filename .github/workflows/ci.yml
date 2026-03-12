@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    paths:
+      - "packages/**"
+      - "apps/**"
+      - ".github/workflows/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+  pull_request:
+    paths:
+      - "packages/**"
+      - "apps/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test
+        working-directory: apps/desktop/src-tauri

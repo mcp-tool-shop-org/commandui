@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CommandUI",
+  "version": "0.0.1",
+  "identifier": "com.commandui.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm --dir .. dev",
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "CommandUI",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis", "app", "dmg", "deb"],
+    "category": "DeveloperTool",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "shortDescription": "AI-native shell environment with semantic command review",
+    "longDescription": "CommandUI is a terminal-first desktop shell that adds semantic intent review, memory, and workflow management on top of a real PTY shell session."
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@commandui/domain",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "echo \"lint not configured yet\""
+  },
+  "devDependencies": {
+    "vitest": "^3.0.8"
+  }
+}
