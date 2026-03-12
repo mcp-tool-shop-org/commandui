@@ -107,7 +107,7 @@ pub fn memory_list(state: State<'_, AppState>) -> Result<MemoryListResponse, Api
         .prepare("SELECT id, scope, project_root, kind, key, value, confidence, source, created_at, updated_at FROM memory_items ORDER BY updated_at DESC")
         .map_err(|e| ApiError::database(e.to_string()))?;
 
-    let items: Vec<MemoryItem> = stmt
+    let rows = stmt
         .query_map([], |row| {
             Ok(MemoryItem {
                 id: row.get(0)?,
@@ -122,15 +122,14 @@ pub fn memory_list(state: State<'_, AppState>) -> Result<MemoryListResponse, Api
                 updated_at: row.get(9)?,
             })
         })
-        .map_err(|e| ApiError::database(e.to_string()))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .map_err(|e| ApiError::database(e.to_string()))?;
+    let items: Vec<MemoryItem> = rows.filter_map(|r| r.ok()).collect();
 
     let mut stmt2 = conn
         .prepare("SELECT id, scope, project_root, kind, label, proposed_key, proposed_value, confidence, derived_from_history_ids_json, status, created_at FROM memory_suggestions WHERE status = 'pending' ORDER BY created_at DESC")
         .map_err(|e| ApiError::database(e.to_string()))?;
 
-    let suggestions: Vec<MemorySuggestion> = stmt2
+    let rows2 = stmt2
         .query_map([], |row| {
             let ids_json: String = row.get(8)?;
             let derived: Vec<String> =
@@ -149,9 +148,8 @@ pub fn memory_list(state: State<'_, AppState>) -> Result<MemoryListResponse, Api
                 created_at: row.get(10)?,
             })
         })
-        .map_err(|e| ApiError::database(e.to_string()))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .map_err(|e| ApiError::database(e.to_string()))?;
+    let suggestions: Vec<MemorySuggestion> = rows2.filter_map(|r| r.ok()).collect();
 
     Ok(MemoryListResponse { items, suggestions })
 }

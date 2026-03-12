@@ -127,10 +127,9 @@ pub fn history_list(
             )
             .map_err(|e| ApiError::database(e.to_string()))?;
 
-        stmt.query_map(rusqlite::params![sid, limit], map_history_row)
-            .map_err(|e| ApiError::database(e.to_string()))?
-            .filter_map(|r| r.ok())
-            .collect()
+        let rows = stmt.query_map(rusqlite::params![sid, limit], map_history_row)
+            .map_err(|e| ApiError::database(e.to_string()))?;
+        rows.filter_map(|r| r.ok()).collect()
     } else {
         let mut stmt = conn
             .prepare(
@@ -138,10 +137,9 @@ pub fn history_list(
             )
             .map_err(|e| ApiError::database(e.to_string()))?;
 
-        stmt.query_map(rusqlite::params![limit], map_history_row)
-            .map_err(|e| ApiError::database(e.to_string()))?
-            .filter_map(|r| r.ok())
-            .collect()
+        let rows = stmt.query_map(rusqlite::params![limit], map_history_row)
+            .map_err(|e| ApiError::database(e.to_string()))?;
+        rows.filter_map(|r| r.ok()).collect()
     };
 
     Ok(HistoryListResponse { items })

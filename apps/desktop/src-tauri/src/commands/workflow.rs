@@ -66,7 +66,7 @@ pub fn workflow_list(state: State<'_, AppState>) -> Result<WorkflowListResponse,
         .prepare("SELECT id, label, source, original_intent, command, project_root, created_at FROM workflows ORDER BY created_at DESC")
         .map_err(|e| ApiError::database(e.to_string()))?;
 
-    let workflows = stmt
+    let rows = stmt
         .query_map([], |row| {
             Ok(Workflow {
                 id: row.get(0)?,
@@ -78,9 +78,8 @@ pub fn workflow_list(state: State<'_, AppState>) -> Result<WorkflowListResponse,
                 created_at: row.get(6)?,
             })
         })
-        .map_err(|e| ApiError::database(e.to_string()))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .map_err(|e| ApiError::database(e.to_string()))?;
+    let workflows = rows.filter_map(|r| r.ok()).collect();
 
     Ok(WorkflowListResponse { workflows })
 }
