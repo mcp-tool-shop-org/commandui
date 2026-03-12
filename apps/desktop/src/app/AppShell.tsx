@@ -57,6 +57,7 @@ import { SettingsDrawer } from "../components/SettingsDrawer";
 import { MemorySuggestions } from "../components/MemorySuggestions";
 import { MemoryDrawer } from "../components/MemoryDrawer";
 import { WorkflowDrawer } from "../components/WorkflowDrawer";
+import { isTauriRuntime } from "../lib/tauriInvoke";
 
 const APP_VERSION = "0.0.1";
 
@@ -123,6 +124,7 @@ export function AppShell() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [browserPreview] = useState(() => !isTauriRuntime());
   const [historyOpen, setHistoryOpen] = useState(false);
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
@@ -155,6 +157,8 @@ export function AppShell() {
   // --- Boot / hydration ---
   useEffect(() => {
     async function boot() {
+      if (browserPreview) return; // Skip Tauri calls in browser-only mode
+
       try {
         // Settings
         try {
@@ -235,6 +239,7 @@ export function AppShell() {
 
   // --- Terminal event subscriptions ---
   useEffect(() => {
+    if (browserPreview) return;
     const unlisteners: Array<() => void> = [];
 
     subscribeToTerminalLines((event) => {
@@ -278,6 +283,7 @@ export function AppShell() {
 
   // --- Settings persistence ---
   useEffect(() => {
+    if (browserPreview) return;
     void settingsUpdate({
       settings: {
         productMode,
@@ -756,6 +762,13 @@ export function AppShell() {
           </button>
         </div>
       </header>
+
+      {browserPreview && (
+        <div className="preview-banner">
+          Browser preview mode — backend commands disabled. Run{" "}
+          <code>pnpm tauri:dev</code> for the full experience.
+        </div>
+      )}
 
       <main
         className={`main-layout ${!showPlanColumn ? "classic-no-plan" : ""}`}
