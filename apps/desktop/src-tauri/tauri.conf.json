@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "identifier": "com.commandui.desktop",
   "build": {
-    "beforeDevCommand": "pnpm --dir .. dev",
+    "beforeDevCommand": "pnpm dev",
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173"
   },

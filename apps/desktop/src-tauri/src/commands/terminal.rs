@@ -23,8 +23,11 @@ pub struct ExecutionSummary {
     pub session_id: String,
     pub command: String,
     pub source: String,
+    pub linked_plan_id: Option<String>,
     pub status: String,
     pub started_at: String,
+    pub finished_at: Option<String>,
+    pub exit_code: Option<i32>,
 }
 
 #[derive(Serialize)]
@@ -93,8 +96,11 @@ pub fn terminal_execute(
         session_id: request.session_id.clone(),
         command: request.command,
         source: request.source,
+        linked_plan_id: request.linked_plan_id,
         status: "running".to_string(),
         started_at: now,
+        finished_at: None,
+        exit_code: None,
     };
 
     let _ = app.emit(

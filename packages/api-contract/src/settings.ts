@@ -1,9 +1,11 @@
+import type { SettingsSnapshot } from "@commandui/domain";
+
 export type SettingsGetResponse = {
-  settings: Record<string, unknown>;
+  settings: SettingsSnapshot;
 };
 
 export type SettingsUpdateRequest = {
-  settings: Record<string, unknown>;
+  settings: Partial<SettingsSnapshot>;
 };
 
 export type SettingsUpdateResponse = {
