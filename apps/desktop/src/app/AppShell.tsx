@@ -58,6 +58,7 @@ import { MemorySuggestions } from "../components/MemorySuggestions";
 import { MemoryDrawer } from "../components/MemoryDrawer";
 import { WorkflowDrawer } from "../components/WorkflowDrawer";
 import { isTauriRuntime } from "../lib/tauriInvoke";
+import { onMockEvent } from "../lib/mockBridge";
 
 const APP_VERSION = "0.0.1";
 
@@ -240,7 +241,39 @@ export function AppShell() {
 
   // --- Terminal event subscriptions ---
   useEffect(() => {
-    if (browserPreview) return;
+    if (browserPreview) {
+      // Use mock event bus in browser preview mode
+      const unlisteners = [
+        onMockEvent<{ sessionId: string; text: string }>(
+          "terminal:line",
+          (event) => appendTerminalLine(event.sessionId, event.text),
+        ),
+        onMockEvent<{ execution: { id: string } }>(
+          "terminal:execution_started",
+          (event) => {
+            setActiveExecution(event.execution.id);
+            setExecutionStatus("running");
+          },
+        ),
+        onMockEvent<{ executionId: string; status: string; exitCode: number }>(
+          "terminal:execution_finished",
+          (event) => {
+            setActiveExecution(null);
+            setLastExecutionId(event.executionId);
+            const status = event.status as "success" | "failure";
+            setExecutionStatus(status);
+
+            const historyId =
+              executionToHistoryRef.current[event.executionId] ?? event.executionId;
+            updateHistoryItem(historyId, { status, exitCode: event.exitCode });
+            void historyUpdate({ historyId, status, exitCode: event.exitCode });
+          },
+        ),
+      ];
+      return () => { for (const u of unlisteners) u(); };
+    }
+
+    // Tauri runtime — use real event listeners
     const unlisteners: Array<() => void> = [];
 
     subscribeToTerminalLines((event) => {

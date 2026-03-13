@@ -1,9 +1,57 @@
 /**
  * Mock bridge for browser preview mode.
  * Returns plausible stub data so the UI is interactive without the Tauri backend.
+ * Emits CustomEvents on window to simulate Tauri's event system.
  */
 
 let sessionCounter = 0;
+
+/** Emit a mock Tauri-style event that AppShell can subscribe to */
+function emitMockEvent(eventName: string, payload: unknown) {
+  window.dispatchEvent(
+    new CustomEvent(`mock:${eventName}`, { detail: payload }),
+  );
+}
+
+/** Subscribe to mock events (mirrors Tauri listen() API) */
+export function onMockEvent<T>(
+  eventName: string,
+  callback: (payload: T) => void,
+): () => void {
+  const handler = (e: Event) => callback((e as CustomEvent).detail as T);
+  window.addEventListener(`mock:${eventName}`, handler);
+  return () => window.removeEventListener(`mock:${eventName}`, handler);
+}
+
+/** Fake command output for common commands */
+function mockCommandOutput(command: string): string[] {
+  const cmd = command.trim().toLowerCase();
+  if (cmd.startsWith("echo ")) {
+    return [command.slice(5)];
+  }
+  if (cmd === "ls" || cmd === "dir") {
+    return [
+      "README.md    package.json    src/",
+      "node_modules/    tsconfig.json    .gitignore",
+    ];
+  }
+  if (cmd === "pwd" || cmd === "cd") {
+    return ["~/projects"];
+  }
+  if (cmd.startsWith("git status")) {
+    return [
+      "On branch main",
+      "nothing to commit, working tree clean",
+    ];
+  }
+  if (cmd.startsWith("git log")) {
+    return [
+      "abc1234 fix: browser preview mode (2 hours ago)",
+      "def5678 feat: initial v0 scaffold (3 hours ago)",
+    ];
+  }
+  return [`[mock] ${command}`, "(browser preview — command not executed)"];
+}
 
 function uuid(): string {
   return crypto.randomUUID?.() ?? `mock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -48,7 +96,46 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
 
   terminal_execute(args) {
     const req = (args.request ?? {}) as Record<string, unknown>;
-    return { executionId: req.executionId ?? uuid(), command: req.command ?? "echo mock" };
+    const executionId = (req.executionId as string) ?? uuid();
+    const sessionId = req.sessionId as string;
+    const command = (req.command as string) ?? "echo mock";
+
+    // Simulate async PTY output
+    setTimeout(() => {
+      emitMockEvent("terminal:execution_started", {
+        execution: { id: executionId, sessionId, command },
+      });
+
+      // Emit the command echo
+      emitMockEvent("terminal:line", {
+        sessionId,
+        text: `$ ${command}`,
+      });
+    }, 50);
+
+    // Emit output lines with staggered timing
+    const outputLines = mockCommandOutput(command);
+    outputLines.forEach((line, i) => {
+      setTimeout(() => {
+        emitMockEvent("terminal:line", { sessionId, text: line });
+      }, 150 + i * 80);
+    });
+
+    // Emit prompt + execution finished
+    setTimeout(() => {
+      emitMockEvent("terminal:line", {
+        sessionId,
+        text: "~/projects $",
+      });
+      emitMockEvent("terminal:execution_finished", {
+        executionId,
+        sessionId,
+        status: "success",
+        exitCode: 0,
+      });
+    }, 200 + outputLines.length * 80);
+
+    return { executionId, command };
   },
 
   terminal_resize() {
