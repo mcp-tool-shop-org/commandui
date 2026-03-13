@@ -11,6 +11,10 @@ import type {
   TerminalResizeResponse,
   TerminalWriteRequest,
   TerminalWriteResponse,
+  TerminalInterruptRequest,
+  TerminalInterruptResponse,
+  TerminalResyncRequest,
+  TerminalResyncResponse,
 } from "@commandui/api-contract";
 
 export function createSession(
@@ -45,4 +49,16 @@ export function writeTerminal(
   request: TerminalWriteRequest,
 ): Promise<TerminalWriteResponse> {
   return tauriInvoke("terminal_write", { request });
+}
+
+export function interruptTerminal(
+  request: TerminalInterruptRequest,
+): Promise<TerminalInterruptResponse> {
+  return tauriInvoke("terminal_interrupt", { request });
+}
+
+export function resyncTerminal(
+  request: TerminalResyncRequest,
+): Promise<TerminalResyncResponse> {
+  return tauriInvoke("terminal_resync", { request });
 }

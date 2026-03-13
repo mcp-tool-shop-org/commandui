@@ -4,6 +4,8 @@ import type {
   TerminalExecutionStartedEvent,
   TerminalExecutionFinishedEvent,
   SessionCwdChangedEvent,
+  SessionReadyEvent,
+  SessionExecStateChangedEvent,
 } from "@commandui/api-contract";
 
 export function subscribeToTerminalLines(
@@ -35,5 +37,22 @@ export function subscribeToSessionCwdChanged(
 ): Promise<() => void> {
   return listen<SessionCwdChangedEvent>("session:cwd_changed", (e) =>
     onChanged(e.payload),
+  );
+}
+
+export function subscribeToSessionReady(
+  onReady: (event: SessionReadyEvent) => void,
+): Promise<() => void> {
+  return listen<SessionReadyEvent>("session:ready", (e) =>
+    onReady(e.payload),
+  );
+}
+
+export function subscribeToExecStateChanged(
+  onChanged: (event: SessionExecStateChangedEvent) => void,
+): Promise<() => void> {
+  return listen<SessionExecStateChangedEvent>(
+    "session:exec_state_changed",
+    (e) => onChanged(e.payload),
   );
 }

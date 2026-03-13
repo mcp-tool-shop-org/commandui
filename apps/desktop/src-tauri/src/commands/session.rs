@@ -1,7 +1,7 @@
 use crate::shell::pty_manager::{
     bootstrap_prompt, default_shell, spawn_reader_loop, spawn_shell, write_raw, PROMPT_MARKER,
 };
-use crate::shell::session_registry::SessionRecord;
+use crate::shell::session_registry::{SessionExecState, SessionRecord};
 use crate::state::AppState;
 use crate::types::errors::ApiError;
 use serde::{Deserialize, Serialize};
@@ -64,6 +64,8 @@ pub struct SessionCwdUpdateResponse {
     pub ok: bool,
 }
 
+// --- Events ---
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalLineEvent {
@@ -92,6 +94,36 @@ pub struct ExecutionFinishedEvent {
     pub status: String,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionReadyEvent {
+    pub session_id: String,
+    pub cwd: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionExecStateChangedEvent {
+    pub session_id: String,
+    pub exec_state: String,
+    pub changed_at: String,
+}
+
+// --- Helper: emit exec state change ---
+
+fn emit_exec_state_changed(app: &AppHandle, session_id: &str, state: &SessionExecState) {
+    let _ = app.emit(
+        "session:exec_state_changed",
+        SessionExecStateChangedEvent {
+            session_id: session_id.to_string(),
+            exec_state: state.to_string(),
+            changed_at: chrono::Utc::now().to_rfc3339(),
+        },
+    );
+}
+
+// --- Commands ---
+
 #[tauri::command]
 pub fn session_create(
     request: SessionCreateRequest,
@@ -114,9 +146,26 @@ pub fn session_create(
     let state_sessions = state.sessions.clone();
 
     spawn_reader_loop(&pair, move |text| {
-        // Check for prompt marker
-        for line in text.lines() {
+        // Line buffer: split chunk into lines, process each one.
+        // Lines containing PROMPT_MARKER are consumed for state — NOT forwarded to xterm.
+        let mut display_text = String::new();
+
+        // Read current execution_id and exec_state for attribution
+        let (current_exec_id, _current_exec_state) = state_sessions
+            .lock()
+            .ok()
+            .and_then(|reg| {
+                let record = reg.get(&session_id_for_reader)?;
+                Some((
+                    record.pending_execution_id.clone(),
+                    record.exec_state.clone(),
+                ))
+            })
+            .unwrap_or((None, SessionExecState::Booting));
+
+        for line in text.split_inclusive('\n') {
             if line.contains(PROMPT_MARKER) {
+                // Parse marker: __COMMANDUI_PROMPT__|cwd|exitcode
                 let parts: Vec<&str> = line.split('|').collect();
                 if parts.len() >= 2 {
                     let cwd = parts[1].to_string();
@@ -126,29 +175,67 @@ pub fn session_create(
                         0
                     };
 
-                    // Update session cwd
-                    if let Ok(mut reg) = state_sessions.lock() {
-                        if let Some(record) = reg.get_mut(&session_id_for_reader) {
-                            record.cwd = cwd.clone();
-                        }
-                    }
+                    // Update session cwd + check boot status
+                    let (was_booting, pending_exec, was_interrupting) = {
+                        if let Ok(mut reg) = state_sessions.lock() {
+                            if let Some(record) = reg.get_mut(&session_id_for_reader) {
+                                record.cwd = cwd.clone();
+                                let was_boot = !record.boot_prompt_received;
+                                let was_int =
+                                    record.exec_state == SessionExecState::Interrupting;
+                                let pending = record.pending_execution_id.clone();
 
+                                if was_boot {
+                                    record.boot_prompt_received = true;
+                                }
+
+                                // Transition to Ready
+                                record.exec_state = SessionExecState::Ready;
+                                record.command_sent_at = None;
+
+                                (was_boot, pending, was_int)
+                            } else {
+                                (false, None, false)
+                            }
+                        } else {
+                            (false, None, false)
+                        }
+                    };
+
+                    // Emit cwd changed
                     let _ = app_for_reader.emit(
                         "session:cwd_changed",
                         SessionCwdChangedEvent {
                             session_id: session_id_for_reader.clone(),
-                            cwd,
+                            cwd: cwd.clone(),
                         },
                     );
 
-                    // Check for pending execution
-                    let pending = state_sessions
-                        .lock()
-                        .ok()
-                        .and_then(|reg| reg.pending_execution_id(&session_id_for_reader));
+                    // Boot detection — first prompt marker
+                    if was_booting {
+                        let _ = app_for_reader.emit(
+                            "session:ready",
+                            SessionReadyEvent {
+                                session_id: session_id_for_reader.clone(),
+                                cwd: cwd.clone(),
+                            },
+                        );
+                        eprintln!(
+                            "[session] {} ready (cwd: {})",
+                            session_id_for_reader, cwd
+                        );
+                    }
 
-                    if let Some(exec_id) = pending {
-                        let status = if exit_code == 0 { "success" } else { "failure" };
+                    // Execution completion
+                    if let Some(exec_id) = pending_exec {
+                        let status = if was_interrupting {
+                            "interrupted"
+                        } else if exit_code == 0 {
+                            "success"
+                        } else {
+                            "failure"
+                        };
+
                         let _ = app_for_reader.emit(
                             "terminal:execution_finished",
                             ExecutionFinishedEvent {
@@ -161,24 +248,39 @@ pub fn session_create(
                         );
 
                         if let Ok(mut reg) = state_sessions.lock() {
-                            let _ = reg.set_pending_execution(&session_id_for_reader, None);
+                            let _ =
+                                reg.set_pending_execution(&session_id_for_reader, None);
                         }
                     }
+
+                    // Emit state change to Ready
+                    emit_exec_state_changed(
+                        &app_for_reader,
+                        &session_id_for_reader,
+                        &SessionExecState::Ready,
+                    );
                 }
+                // Marker line is NOT added to display_text — stripped from output
+            } else {
+                // Non-marker line — forward to display
+                display_text.push_str(line);
             }
         }
 
-        let _ = app_for_reader.emit(
-            "terminal:line",
-            TerminalLineEvent {
-                id: uuid::Uuid::new_v4().to_string(),
-                session_id: session_id_for_reader.clone(),
-                execution_id: None,
-                kind: "stdout".to_string(),
-                text,
-                timestamp: chrono::Utc::now().to_rfc3339(),
-            },
-        );
+        // Emit display text (if any) to xterm
+        if !display_text.is_empty() {
+            let _ = app_for_reader.emit(
+                "terminal:line",
+                TerminalLineEvent {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    session_id: session_id_for_reader.clone(),
+                    execution_id: current_exec_id,
+                    kind: "stdout".to_string(),
+                    text: display_text,
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                },
+            );
+        }
     });
 
     // Inject prompt marker
@@ -195,6 +297,9 @@ pub fn session_create(
         pty_pair: pair,
         writer,
         pending_execution_id: None,
+        exec_state: SessionExecState::Booting,
+        boot_prompt_received: false,
+        command_sent_at: None,
         created_at: now.clone(),
         last_active_at: now.clone(),
     };

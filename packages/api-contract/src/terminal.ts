@@ -14,7 +14,7 @@ export type ExecutionSummary = {
   command: string;
   source: "raw" | "semantic";
   linkedPlanId?: string;
-  status: "queued" | "running" | "success" | "failure";
+  status: "queued" | "running" | "success" | "failure" | "interrupted";
   startedAt: string;
   finishedAt?: string;
   exitCode?: number;
@@ -48,5 +48,21 @@ export type TerminalWriteRequest = {
 };
 
 export type TerminalWriteResponse = {
+  ok: boolean;
+};
+
+export type TerminalInterruptRequest = {
+  sessionId: string;
+};
+
+export type TerminalInterruptResponse = {
+  ok: boolean;
+};
+
+export type TerminalResyncRequest = {
+  sessionId: string;
+};
+
+export type TerminalResyncResponse = {
   ok: boolean;
 };

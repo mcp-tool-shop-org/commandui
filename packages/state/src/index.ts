@@ -27,24 +27,33 @@ export const useComposerStore = create<ComposerState>((set) => ({
 
 // --- Execution Store ---
 
+import type { SessionExecState } from "@commandui/api-contract";
+
 type ExecutionState = {
   activeExecutionId: string | null;
   lastExecutionId: string | null;
-  executionStatus: "idle" | "running" | "success" | "failure";
+  executionStatus: "idle" | "running" | "success" | "failure" | "interrupted";
+  sessionExecStates: Record<string, SessionExecState>;
   setActiveExecution: (executionId: string | null) => void;
   setExecutionStatus: (
-    status: "idle" | "running" | "success" | "failure",
+    status: "idle" | "running" | "success" | "failure" | "interrupted",
   ) => void;
   setLastExecutionId: (executionId: string | null) => void;
+  setSessionExecState: (sessionId: string, state: SessionExecState) => void;
 };
 
 export const useExecutionStore = create<ExecutionState>((set) => ({
   activeExecutionId: null,
   lastExecutionId: null,
   executionStatus: "idle",
+  sessionExecStates: {},
   setActiveExecution: (activeExecutionId) => set({ activeExecutionId }),
   setExecutionStatus: (executionStatus) => set({ executionStatus }),
   setLastExecutionId: (lastExecutionId) => set({ lastExecutionId }),
+  setSessionExecState: (sessionId, state) =>
+    set((prev) => ({
+      sessionExecStates: { ...prev.sessionExecStates, [sessionId]: state },
+    })),
 }));
 
 // --- History Store ---

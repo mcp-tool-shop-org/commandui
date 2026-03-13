@@ -7,7 +7,7 @@ export type HistoryItem = {
   executedCommand?: string;
   linkedPlanId?: string;
   plannerRequestId?: string;
-  status: "planned" | "rejected" | "success" | "failure";
+  status: "planned" | "rejected" | "success" | "failure" | "interrupted" | "unknown";
   exitCode?: number;
   createdAt: string;
 };

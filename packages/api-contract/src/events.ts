@@ -23,10 +23,28 @@ export type TerminalExecutionFinishedEvent = {
   sessionId: string;
   exitCode: number;
   finishedAt: string;
-  status: "success" | "failure";
+  status: "success" | "failure" | "interrupted";
 };
 
 export type SessionCwdChangedEvent = {
   sessionId: string;
   cwd: string;
+};
+
+export type SessionReadyEvent = {
+  sessionId: string;
+  cwd: string;
+};
+
+export type SessionExecState =
+  | "booting"
+  | "ready"
+  | "running"
+  | "interrupting"
+  | "desynced";
+
+export type SessionExecStateChangedEvent = {
+  sessionId: string;
+  execState: SessionExecState;
+  changedAt: string;
 };

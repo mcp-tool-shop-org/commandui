@@ -61,6 +61,7 @@ const mockSessions: Record<string, Record<string, unknown>> = {};
 const mockHistory: Array<Record<string, unknown>> = [];
 const mockWorkflows: Array<Record<string, unknown>> = [];
 const mockMemoryItems: Array<Record<string, unknown>> = [];
+const mockRunningExecs = new Set<string>();
 
 const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   session_create(args) {
@@ -77,6 +78,20 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       lastActiveAt: now,
     };
     mockSessions[session.id] = session;
+
+    // Simulate boot → ready
+    setTimeout(() => {
+      emitMockEvent("session:exec_state_changed", {
+        sessionId: session.id,
+        execState: "ready",
+        changedAt: new Date().toISOString(),
+      });
+      emitMockEvent("session:ready", {
+        sessionId: session.id,
+        cwd: session.cwd,
+      });
+    }, 100);
+
     return { session };
   },
 
@@ -100,8 +115,17 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     const sessionId = req.sessionId as string;
     const command = (req.command as string) ?? "echo mock";
 
+    // Track for interrupt support
+    const execKey = `${sessionId}:${executionId}`;
+    mockRunningExecs.add(execKey);
+
     // Simulate async PTY output
     setTimeout(() => {
+      emitMockEvent("session:exec_state_changed", {
+        sessionId,
+        execState: "running",
+        changedAt: new Date().toISOString(),
+      });
       emitMockEvent("terminal:execution_started", {
         execution: { id: executionId, sessionId, command },
       });
@@ -109,7 +133,8 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       // Emit the command echo
       emitMockEvent("terminal:line", {
         sessionId,
-        text: `$ ${command}`,
+        executionId,
+        text: `$ ${command}\r\n`,
       });
     }, 50);
 
@@ -117,25 +142,69 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     const outputLines = mockCommandOutput(command);
     outputLines.forEach((line, i) => {
       setTimeout(() => {
-        emitMockEvent("terminal:line", { sessionId, text: line });
+        if (!mockRunningExecs.has(execKey)) return;
+        emitMockEvent("terminal:line", { sessionId, executionId, text: `${line}\r\n` });
       }, 150 + i * 80);
     });
 
     // Emit prompt + execution finished
     setTimeout(() => {
+      const wasInterrupted = !mockRunningExecs.has(execKey);
+      mockRunningExecs.delete(execKey);
+
       emitMockEvent("terminal:line", {
         sessionId,
-        text: "~/projects $",
+        text: "~/projects $ ",
       });
       emitMockEvent("terminal:execution_finished", {
         executionId,
         sessionId,
-        status: "success",
-        exitCode: 0,
+        status: wasInterrupted ? "interrupted" : "success",
+        exitCode: wasInterrupted ? 130 : 0,
+      });
+      emitMockEvent("session:exec_state_changed", {
+        sessionId,
+        execState: "ready",
+        changedAt: new Date().toISOString(),
       });
     }, 200 + outputLines.length * 80);
 
     return { executionId, command };
+  },
+
+  terminal_interrupt(args) {
+    const req = (args.request ?? {}) as Record<string, unknown>;
+    const sessionId = req.sessionId as string;
+
+    // Mark all running execs for this session as interrupted
+    for (const key of mockRunningExecs) {
+      if (key.startsWith(`${sessionId}:`)) {
+        mockRunningExecs.delete(key);
+      }
+    }
+
+    emitMockEvent("session:exec_state_changed", {
+      sessionId,
+      execState: "interrupting",
+      changedAt: new Date().toISOString(),
+    });
+
+    return { ok: true };
+  },
+
+  terminal_resync(args) {
+    const req = (args.request ?? {}) as Record<string, unknown>;
+    const sessionId = req.sessionId as string;
+
+    setTimeout(() => {
+      emitMockEvent("session:exec_state_changed", {
+        sessionId,
+        execState: "ready",
+        changedAt: new Date().toISOString(),
+      });
+    }, 200);
+
+    return { ok: true };
   },
 
   terminal_resize() {

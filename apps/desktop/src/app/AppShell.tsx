@@ -6,7 +6,7 @@ import type {
   SessionSummary,
   Workflow,
 } from "@commandui/domain";
-import type { PlannerGeneratePlanResponse } from "@commandui/api-contract";
+import type { PlannerGeneratePlanResponse, SessionExecState } from "@commandui/api-contract";
 import {
   useComposerStore,
   useExecutionStore,
@@ -24,12 +24,16 @@ import {
   executeCommand,
   resizeTerminal,
   writeTerminal,
+  interruptTerminal,
+  resyncTerminal,
 } from "../features/terminal/terminalClient";
 import {
   subscribeToTerminalLines,
   subscribeToExecutionStarted,
   subscribeToExecutionFinished,
   subscribeToSessionCwdChanged,
+  subscribeToSessionReady,
+  subscribeToExecStateChanged,
 } from "../features/terminal/terminalEvents";
 import { generatePlan } from "../features/planner/plannerClient";
 import {
@@ -51,6 +55,7 @@ import {
 import { InputComposer } from "../components/InputComposer";
 import { PlanPanel } from "../components/PlanPanel";
 import { TerminalPane } from "../components/TerminalPane";
+import type { TerminalPaneHandle } from "../components/TerminalPane";
 import { HistoryDrawer } from "../components/HistoryDrawer";
 import { SessionTabs } from "../components/SessionTabs";
 import { SettingsDrawer } from "../components/SettingsDrawer";
@@ -82,6 +87,8 @@ export function AppShell() {
     setExecutionStatus,
     setLastExecutionId,
     executionStatus,
+    sessionExecStates,
+    setSessionExecState,
   } = useExecutionStore();
   const { items: historyItems, appendHistoryItem, updateHistoryItem } =
     useHistoryStore();
@@ -131,17 +138,24 @@ export function AppShell() {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Background buffer for session-switch replay
   const [terminalLinesBySession, setTerminalLinesBySession] = useState<
     Record<string, string[]>
   >({});
   const executionToHistoryRef = useRef<Record<string, string>>({});
   const bootedRef = useRef(false);
+  const terminalPaneRef = useRef<TerminalPaneHandle>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
+
+  // Keep ref in sync with state (for use in event callbacks)
+  activeSessionIdRef.current = activeSessionId;
 
   const session =
     sessions.find((s) => s.id === activeSessionId) ?? null;
-  const terminalLines = activeSessionId
-    ? terminalLinesBySession[activeSessionId] ?? []
-    : [];
+
+  const activeExecState: SessionExecState =
+    (activeSessionId ? sessionExecStates[activeSessionId] : undefined) ?? "booting";
+  const isRunning = executionStatus === "running";
 
   const visibleHistoryItems = activeSessionId
     ? historyItems.filter((h) => h.sessionId === activeSessionId)
@@ -150,10 +164,17 @@ export function AppShell() {
   // --- Helpers ---
   function appendTerminalLine(sessionId: string, line: string) {
     if (reducedClutter && (line.startsWith("[exec:") || line.startsWith("[active]"))) return;
+
+    // Store in background buffer
     setTerminalLinesBySession((prev) => ({
       ...prev,
       [sessionId]: [...(prev[sessionId] ?? []), line],
     }));
+
+    // Write to terminal if this is the active session
+    if (sessionId === activeSessionIdRef.current) {
+      terminalPaneRef.current?.write(line);
+    }
   }
 
   // --- Boot / hydration ---
@@ -193,7 +214,7 @@ export function AppShell() {
           addSession(res.session);
           appendTerminalLine(
             res.session.id,
-            `Welcome to CommandUI — ${res.session.label}`,
+            `Welcome to CommandUI — ${res.session.label}\r\n`,
           );
         }
 
@@ -244,7 +265,7 @@ export function AppShell() {
     if (browserPreview) {
       // Use mock event bus in browser preview mode
       const unlisteners = [
-        onMockEvent<{ sessionId: string; text: string }>(
+        onMockEvent<{ sessionId: string; executionId?: string; text: string }>(
           "terminal:line",
           (event) => appendTerminalLine(event.sessionId, event.text),
         ),
@@ -260,13 +281,25 @@ export function AppShell() {
           (event) => {
             setActiveExecution(null);
             setLastExecutionId(event.executionId);
-            const status = event.status as "success" | "failure";
-            setExecutionStatus(status);
+            const status = event.status as "success" | "failure" | "interrupted";
+            setExecutionStatus(status === "interrupted" ? "idle" : status);
 
             const historyId =
               executionToHistoryRef.current[event.executionId] ?? event.executionId;
             updateHistoryItem(historyId, { status, exitCode: event.exitCode });
             void historyUpdate({ historyId, status, exitCode: event.exitCode });
+          },
+        ),
+        onMockEvent<{ sessionId: string; cwd: string }>(
+          "session:ready",
+          (event) => {
+            setSessionExecState(event.sessionId, "ready");
+          },
+        ),
+        onMockEvent<{ sessionId: string; execState: SessionExecState }>(
+          "session:exec_state_changed",
+          (event) => {
+            setSessionExecState(event.sessionId, event.execState);
           },
         ),
       ];
@@ -289,7 +322,7 @@ export function AppShell() {
       setActiveExecution(null);
       setLastExecutionId(event.executionId);
       const status = event.status;
-      setExecutionStatus(status);
+      setExecutionStatus(status === "interrupted" ? "idle" : status);
 
       const historyId =
         executionToHistoryRef.current[event.executionId] ?? event.executionId;
@@ -309,11 +342,32 @@ export function AppShell() {
       updateSession(event.sessionId, { cwd: event.cwd });
     }).then((u) => unlisteners.push(u));
 
+    subscribeToSessionReady((event) => {
+      setSessionExecState(event.sessionId, "ready");
+    }).then((u) => unlisteners.push(u));
+
+    subscribeToExecStateChanged((event) => {
+      setSessionExecState(event.sessionId, event.execState);
+    }).then((u) => unlisteners.push(u));
+
     return () => {
       for (const u of unlisteners) u();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // --- Replay buffer on session switch ---
+  useEffect(() => {
+    if (!activeSessionId) return;
+    const pane = terminalPaneRef.current;
+    if (!pane) return;
+
+    pane.clear();
+    const buffer = terminalLinesBySession[activeSessionId] ?? [];
+    for (const line of buffer) {
+      pane.write(line);
+    }
+  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Settings persistence ---
   useEffect(() => {
@@ -439,8 +493,8 @@ export function AppShell() {
         void historyAppend({ item: historyItem });
         void planStore({ plan: res.plan });
 
-        appendTerminalLine(session.id, `? ${value}`);
-        appendTerminalLine(session.id, `[plan] ${res.plan.command}`);
+        appendTerminalLine(session.id, `? ${value}\r\n`);
+        appendTerminalLine(session.id, `[plan] ${res.plan.command}\r\n`);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -502,7 +556,7 @@ export function AppShell() {
         }
       }
 
-      appendTerminalLine(session.id, `[approved] ${approvedCommand}`);
+      appendTerminalLine(session.id, `[approved] ${approvedCommand}\r\n`);
 
       await executeCommand({
         executionId,
@@ -533,7 +587,7 @@ export function AppShell() {
       });
     }
 
-    appendTerminalLine(session.id, "[rejected]");
+    appendTerminalLine(session.id, "[rejected]\r\n");
     setPlan(null);
     setCurrentPlanHistoryId(null);
   }
@@ -553,7 +607,7 @@ export function AppShell() {
 
     addWorkflow(workflow);
     void workflowAdd({ workflow });
-    appendTerminalLine(session.id, `[workflow:saved] ${workflow.label}`);
+    appendTerminalLine(session.id, `[workflow:saved] ${workflow.label}\r\n`);
   }
 
   // --- Terminal handlers ---
@@ -573,6 +627,26 @@ export function AppShell() {
     [activeSessionId],
   );
 
+  // --- Interrupt handler ---
+  async function handleInterrupt() {
+    if (!activeSessionId) return;
+    try {
+      await interruptTerminal({ sessionId: activeSessionId });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // --- Resync handler ---
+  async function handleResync() {
+    if (!activeSessionId) return;
+    try {
+      await resyncTerminal({ sessionId: activeSessionId });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   // --- Session handlers ---
   async function handleCreateSession() {
     try {
@@ -580,7 +654,7 @@ export function AppShell() {
       const res = await createSession({ label });
       addSession(res.session);
       setActiveSessionId(res.session.id);
-      appendTerminalLine(res.session.id, `[session] ${res.session.label}`);
+      appendTerminalLine(res.session.id, `[session] ${res.session.label}\r\n`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -686,7 +760,7 @@ export function AppShell() {
 
     addWorkflow(workflow);
     void workflowAdd({ workflow });
-    appendTerminalLine(session.id, `[workflow:saved] ${workflow.label}`);
+    appendTerminalLine(session.id, `[workflow:saved] ${workflow.label}\r\n`);
     setHistoryOpen(false);
   }
 
@@ -816,9 +890,18 @@ export function AppShell() {
             onClose={handleCloseSession}
           />
 
+          {activeExecState === "desynced" && (
+            <div className="desync-banner">
+              <span>Terminal appears desynced.</span>
+              <button type="button" onClick={handleResync}>
+                Resync
+              </button>
+            </div>
+          )}
+
           <TerminalPane
+            ref={terminalPaneRef}
             sessionId={activeSessionId}
-            lines={terminalLines}
             executionStatus={executionStatus}
             onResize={handleTerminalResize}
             onData={handleTerminalData}
@@ -849,6 +932,8 @@ export function AppShell() {
             onModeChange={setInputMode}
             onSubmit={handleSubmit}
             busy={busy}
+            isRunning={isRunning}
+            onInterrupt={handleInterrupt}
           />
         </section>
 

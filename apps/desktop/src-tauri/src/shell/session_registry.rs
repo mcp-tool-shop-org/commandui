@@ -1,6 +1,29 @@
 use crate::shell::pty_manager::PtyHandle;
 use portable_pty::{PtyPair, PtySize};
+use serde::Serialize;
 use std::collections::HashMap;
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionExecState {
+    Booting,
+    Ready,
+    Running,
+    Interrupting,
+    Desynced,
+}
+
+impl std::fmt::Display for SessionExecState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Booting => write!(f, "booting"),
+            Self::Ready => write!(f, "ready"),
+            Self::Running => write!(f, "running"),
+            Self::Interrupting => write!(f, "interrupting"),
+            Self::Desynced => write!(f, "desynced"),
+        }
+    }
+}
 
 pub struct SessionRecord {
     pub id: String,
@@ -11,6 +34,9 @@ pub struct SessionRecord {
     pub pty_pair: PtyPair,
     pub writer: PtyHandle,
     pub pending_execution_id: Option<String>,
+    pub exec_state: SessionExecState,
+    pub boot_prompt_received: bool,
+    pub command_sent_at: Option<String>,
     pub created_at: String,
     pub last_active_at: String,
 }
@@ -83,5 +109,42 @@ impl SessionRegistry {
         self.sessions
             .get(session_id)
             .and_then(|r| r.pending_execution_id.clone())
+    }
+
+    pub fn set_exec_state(
+        &mut self,
+        session_id: &str,
+        state: SessionExecState,
+    ) -> Result<(), String> {
+        let record = self
+            .sessions
+            .get_mut(session_id)
+            .ok_or_else(|| format!("Session not found: {session_id}"))?;
+        record.exec_state = state;
+        Ok(())
+    }
+
+    pub fn exec_state(&self, session_id: &str) -> Option<SessionExecState> {
+        self.sessions.get(session_id).map(|r| r.exec_state.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_exec_state_display() {
+        assert_eq!(SessionExecState::Booting.to_string(), "booting");
+        assert_eq!(SessionExecState::Ready.to_string(), "ready");
+        assert_eq!(SessionExecState::Running.to_string(), "running");
+        assert_eq!(SessionExecState::Interrupting.to_string(), "interrupting");
+        assert_eq!(SessionExecState::Desynced.to_string(), "desynced");
+    }
+
+    #[test]
+    fn test_exec_state_serialize() {
+        let json = serde_json::to_string(&SessionExecState::Running).unwrap();
+        assert_eq!(json, "\"running\"");
     }
 }

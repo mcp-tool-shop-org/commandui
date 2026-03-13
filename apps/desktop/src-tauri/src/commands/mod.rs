@@ -13,5 +13,5 @@ pub use memory::{
 pub use planner::planner_generate_plan;
 pub use session::{session_close, session_create, session_list, session_update_cwd};
 pub use settings::{settings_get, settings_update};
-pub use terminal::{terminal_execute, terminal_resize, terminal_write};
+pub use terminal::{terminal_execute, terminal_interrupt, terminal_resize, terminal_resync, terminal_write};
 pub use workflow::{workflow_add, workflow_list};

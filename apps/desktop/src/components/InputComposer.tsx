@@ -5,6 +5,8 @@ type Props = {
   onModeChange: (mode: "command" | "ask") => void;
   onSubmit: (value: string) => void;
   busy?: boolean;
+  isRunning?: boolean;
+  onInterrupt?: () => void;
 };
 
 export function InputComposer({
@@ -12,6 +14,8 @@ export function InputComposer({
   onModeChange,
   onSubmit,
   busy = false,
+  isRunning = false,
+  onInterrupt,
 }: Props) {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -22,7 +26,7 @@ export function InputComposer({
 
   function handleSubmit() {
     const trimmed = value.trim();
-    if (!trimmed || busy) return;
+    if (!trimmed || busy || isRunning) return;
     onSubmit(trimmed);
     setValue("");
     inputRef.current?.focus();
@@ -57,15 +61,28 @@ export function InputComposer({
           if (e.key === "Enter") handleSubmit();
         }}
         placeholder={
-          mode === "command"
-            ? "Submit a command explicitly…"
-            : "Describe what you want to do…"
+          isRunning
+            ? "Command running…"
+            : mode === "command"
+              ? "Submit a command explicitly…"
+              : "Describe what you want to do…"
         }
+        disabled={isRunning}
       />
 
-      <button type="button" onClick={handleSubmit} disabled={busy}>
-        {busy ? "Working…" : "Run"}
-      </button>
+      {isRunning ? (
+        <button
+          type="button"
+          className="btn-stop"
+          onClick={() => onInterrupt?.()}
+        >
+          Stop
+        </button>
+      ) : (
+        <button type="button" onClick={handleSubmit} disabled={busy}>
+          {busy ? "Working…" : "Run"}
+        </button>
+      )}
     </div>
   );
 }
