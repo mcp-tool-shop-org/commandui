@@ -7,6 +7,7 @@ type Props = {
   command: string;
   risk: "low" | "medium" | "high";
   explanation: string;
+  contextSources?: string[];
   requireMediumRiskConfirmation?: boolean;
   onApprove: (command: string) => void;
   onReject: () => void;
@@ -19,6 +20,7 @@ export function PlanPanel({
   command,
   risk,
   explanation,
+  contextSources,
   requireMediumRiskConfirmation = true,
   onApprove,
   onReject,
@@ -121,6 +123,12 @@ export function PlanPanel({
           Save Workflow
         </button>
       </div>
+
+      {contextSources && contextSources.length > 0 && (
+        <div className="plan-context-sources">
+          Context: {contextSources.join(", ")}
+        </div>
+      )}
     </div>
   );
 }

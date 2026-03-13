@@ -96,6 +96,26 @@ pub fn build_planner_prompt(context: &PlannerContext, user_intent: &str) -> Stri
         format!("\n## Known preferences\n{}", items.join("\n"))
     };
 
+    let workflow_context = {
+        let wf_facts: Vec<&crate::commands::planner::ProjectFact> = context
+            .project_facts
+            .iter()
+            .filter(|f| f.kind == "workflow")
+            .collect();
+        if wf_facts.is_empty() {
+            String::new()
+        } else {
+            let items: Vec<String> = wf_facts
+                .iter()
+                .map(|f| format!("- \"{}\": {}", f.label, f.value))
+                .collect();
+            format!(
+                "\n## Known workflows\n{}\nIf the user's intent matches a known workflow, suggest using it by name and output its exact commands.",
+                items.join("\n")
+            )
+        }
+    };
+
     format!(
         r#"You are a shell command planner for a desktop terminal application.
 
@@ -103,7 +123,7 @@ pub fn build_planner_prompt(context: &PlannerContext, user_intent: &str) -> Stri
 - OS: {os}
 - Shell: {shell}
 - Working directory: {cwd}
-- Recent commands: {recent}{memory_context}
+- Recent commands: {recent}{memory_context}{workflow_context}
 
 ## Task
 The user wants: "{intent}"
@@ -121,6 +141,7 @@ The user wants: "{intent}"
 7. Set touches_network=true if the command makes network requests.
 8. Set escalates_privileges=true if the command uses sudo, runas, or similar.
 9. Confidence should reflect how certain you are the command is correct (0.0-1.0).
+10. If the user's intent closely matches a known workflow, prefer that workflow's commands over inventing new ones.
 
 ## Response format
 Return ONLY a JSON object with these exact fields:
@@ -143,6 +164,7 @@ Return ONLY a JSON object with these exact fields:
         cwd = context.cwd,
         recent = recent,
         memory_context = memory_context,
+        workflow_context = workflow_context,
         intent = user_intent,
     )
 }

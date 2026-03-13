@@ -337,6 +337,14 @@ select {
   flex-wrap: wrap;
 }
 
+.plan-context-sources {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
 .confirm-row {
   display: flex;
   align-items: center;

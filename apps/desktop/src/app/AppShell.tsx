@@ -20,10 +20,10 @@ import {
   useWorkflowStore,
   useWorkflowRunStore,
   useFocusStore,
-  resolveEffectiveMemory,
 } from "@commandui/state";
 import type { ShortcutDef } from "../lib/shortcuts";
 import type { ShortcutContext } from "../lib/shortcuts";
+import { buildPlannerContext } from "../lib/buildPlannerContext";
 import { useShortcuts } from "../hooks/useShortcuts";
 import {
   createSession,
@@ -575,31 +575,22 @@ export function AppShell() {
       } else {
         // --- Semantic flow ---
         const historyId = crypto.randomUUID();
-        const effectiveMemory = resolveEffectiveMemory(
+
+        const context = buildPlannerContext({
+          sessionId: session.id,
+          cwd: session.cwd ?? ".",
+          shell: session.shell ?? "unknown",
+          os: detectOS(),
           memoryItems,
-          session.cwd,
-        );
+          workflows,
+          lastRunByWorkflowId,
+          recentHistory: visibleHistoryItems,
+        });
 
         const res = await generatePlan({
           sessionId: session.id,
           userIntent: value,
-          context: {
-            sessionId: session.id,
-            cwd: session.cwd ?? ".",
-            projectRoot: session.cwd,
-            os: detectOS(),
-            shell: session.shell ?? "unknown",
-            recentCommands: visibleHistoryItems
-              .slice(0, 5)
-              .map((h) => h.executedCommand ?? h.userInput),
-            memoryItems: effectiveMemory.map((m) => ({
-              kind: m.kind,
-              key: m.key,
-              value: m.value,
-              confidence: m.confidence,
-            })),
-            projectFacts: [],
-          },
+          context,
         });
 
         setPlan(res);
@@ -1298,6 +1289,7 @@ export function AppShell() {
                 command={plan.plan.command}
                 risk={plan.plan.risk}
                 explanation={displayExplanation}
+                contextSources={plan.review.retrievedContext}
                 requireMediumRiskConfirmation={confirmMediumRisk}
                 onApprove={handleApprovePlan}
                 onReject={handleRejectPlan}

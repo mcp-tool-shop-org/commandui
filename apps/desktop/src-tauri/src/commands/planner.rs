@@ -132,6 +132,9 @@ fn build_response_from_llm(
     if let Some(ref root) = request.context.project_root {
         retrieved_context.push(format!("projectRoot: {root}"));
     }
+    for fact in &request.context.project_facts {
+        retrieved_context.push(format!("{}:{}", fact.kind, fact.label));
+    }
 
     let plan = CommandPlanPayload {
         id: plan_id.clone(),
@@ -229,6 +232,9 @@ pub fn mock_plan(request: &PlannerGeneratePlanRequest) -> PlannerGeneratePlanRes
     }
     if let Some(ref root) = request.context.project_root {
         retrieved_context.push(format!("projectRoot: {root}"));
+    }
+    for fact in &request.context.project_facts {
+        retrieved_context.push(format!("{}:{}", fact.kind, fact.label));
     }
 
     let review = PlanReviewPayload {

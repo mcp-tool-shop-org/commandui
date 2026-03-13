@@ -218,18 +218,41 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
 
   planner_generate_plan(args) {
     const req = (args.request ?? {}) as Record<string, unknown>;
+    const context = (req.context ?? {}) as Record<string, unknown>;
     const intent = (req.userIntent as string) || "do something";
     const planId = uuid();
+    const projectFacts = (context.projectFacts ?? []) as Array<Record<string, string>>;
+    const memoryItems = (context.memoryItems ?? []) as Array<Record<string, string>>;
+
+    // Check if any workflow matches the intent
+    let command = `echo "mock plan for: ${intent}"`;
+    let explanation = `[Browser Preview] This would execute a plan for "${intent}". In Tauri mode, the AI planner generates real commands.`;
+
+    const wfFact = projectFacts.find(
+      (f) => f.kind === "workflow" && intent.toLowerCase().includes(f.label.toLowerCase()),
+    );
+    if (wfFact) {
+      command = wfFact.value.replace(/ \(last run:.*\)$/, "");
+      explanation = `Matched known workflow "${wfFact.label}".`;
+    }
+
+    // Build retrievedContext from project facts
+    const retrievedContext: string[] = [];
+    if (context.cwd) retrievedContext.push(`cwd: ${context.cwd}`);
+    for (const fact of projectFacts) {
+      retrievedContext.push(`${fact.kind}:${fact.label}`);
+    }
+
     return {
       plan: {
         id: planId,
         sessionId: req.sessionId ?? "mock",
         source: "semantic",
         userIntent: intent,
-        command: `echo "mock plan for: ${intent}"`,
-        explanation: `[Browser Preview] This would execute a plan for "${intent}". In Tauri mode, the AI planner generates real commands.`,
+        command,
+        explanation,
         assumptions: [],
-        confidence: 0.85,
+        confidence: wfFact ? 0.95 : 0.85,
         risk: "low",
         destructive: false,
         requiresConfirmation: false,
@@ -242,8 +265,8 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
         planId,
         ambiguityFlags: [],
         safetyFlags: [],
-        memoryUsed: [],
-        retrievedContext: [],
+        memoryUsed: memoryItems.map((m) => `${m.kind}:${m.key}`),
+        retrievedContext,
       },
     };
   },
