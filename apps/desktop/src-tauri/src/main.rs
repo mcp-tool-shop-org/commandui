@@ -1,12 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use commandui_desktop::commands::{
-    history_append, history_list, history_update, memory_accept_suggestion, memory_add,
-    memory_delete, memory_dismiss_suggestion, memory_list, plan_store, planner_generate_plan,
-    session_close, session_create, session_list, session_update_cwd, settings_get, settings_update,
-    terminal_execute, terminal_resize, terminal_write, workflow_add, workflow_list,
-};
 use commandui_desktop::state::AppState;
+use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
@@ -30,27 +25,27 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            session_create,
-            session_list,
-            session_close,
-            session_update_cwd,
-            terminal_execute,
-            terminal_resize,
-            terminal_write,
-            planner_generate_plan,
-            history_append,
-            history_list,
-            history_update,
-            plan_store,
-            settings_get,
-            settings_update,
-            workflow_add,
-            workflow_list,
-            memory_list,
-            memory_add,
-            memory_accept_suggestion,
-            memory_dismiss_suggestion,
-            memory_delete,
+            commandui_desktop::commands::session::session_create,
+            commandui_desktop::commands::session::session_list,
+            commandui_desktop::commands::session::session_close,
+            commandui_desktop::commands::session::session_update_cwd,
+            commandui_desktop::commands::terminal::terminal_execute,
+            commandui_desktop::commands::terminal::terminal_resize,
+            commandui_desktop::commands::terminal::terminal_write,
+            commandui_desktop::commands::planner::planner_generate_plan,
+            commandui_desktop::commands::history::history_append,
+            commandui_desktop::commands::history::history_list,
+            commandui_desktop::commands::history::history_update,
+            commandui_desktop::commands::history::plan_store,
+            commandui_desktop::commands::settings::settings_get,
+            commandui_desktop::commands::settings::settings_update,
+            commandui_desktop::commands::workflow::workflow_add,
+            commandui_desktop::commands::workflow::workflow_list,
+            commandui_desktop::commands::memory::memory_list,
+            commandui_desktop::commands::memory::memory_add,
+            commandui_desktop::commands::memory::memory_accept_suggestion,
+            commandui_desktop::commands::memory::memory_dismiss_suggestion,
+            commandui_desktop::commands::memory::memory_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CommandUI");

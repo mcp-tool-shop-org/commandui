@@ -109,7 +109,6 @@ pub fn session_create(
     let (pair, writer) =
         spawn_shell(&shell, Some(&cwd)).map_err(|e| ApiError::execution(e))?;
 
-    let session_id = id.clone();
     let session_id_for_reader = id.clone();
     let app_for_reader = app.clone();
     let state_sessions = state.sessions.clone();

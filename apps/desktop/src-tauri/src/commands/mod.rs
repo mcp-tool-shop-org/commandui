@@ -1,10 +1,10 @@
-mod history;
-mod memory;
-mod planner;
-mod session;
-mod settings;
-mod terminal;
-mod workflow;
+pub mod history;
+pub mod memory;
+pub mod planner;
+pub mod session;
+pub mod settings;
+pub mod terminal;
+pub mod workflow;
 
 pub use history::{history_append, history_list, history_update, plan_store};
 pub use memory::{
