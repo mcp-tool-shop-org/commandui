@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { HistoryItem } from "@commandui/domain";
 import type { SessionSummary } from "@commandui/domain";
 
@@ -13,6 +13,8 @@ type Props = {
   onReopenPlan: (item: HistoryItem) => void;
   onSaveWorkflow: (item: HistoryItem) => void;
   onCopyCommand: (command: string) => void;
+  onViewWorkflowRun?: (workflowRunId: string) => void;
+  initialExpandedId?: string | null;
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -52,10 +54,19 @@ export function HistoryDrawer({
   onReopenPlan,
   onSaveWorkflow,
   onCopyCommand,
+  onViewWorkflowRun,
+  initialExpandedId,
 }: Props) {
   const [search, setSearch] = useState("");
   const [sessionFilter, setSessionFilter] = useState<string>("current");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Allow AppShell to programmatically expand a specific history item
+  useEffect(() => {
+    if (initialExpandedId) {
+      setExpandedId(initialExpandedId);
+    }
+  }, [initialExpandedId]);
 
   if (!isOpen) return null;
 
@@ -139,6 +150,17 @@ export function HistoryDrawer({
 
                 <div className="history-meta">
                   <span className="history-source">{sourceLabel}</span>
+                  {item.workflowRunId && onViewWorkflowRun && (
+                    <span
+                      className="history-wf-badge"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewWorkflowRun(item.workflowRunId!);
+                      }}
+                    >
+                      WF
+                    </span>
+                  )}
                   {duration && (
                     <span className="history-duration">{duration}</span>
                   )}
@@ -200,6 +222,18 @@ export function HistoryDrawer({
                       <span className="detail-label">Time</span>
                       <span>{new Date(item.createdAt).toLocaleString()}</span>
                     </div>
+                    {item.workflowRunId && onViewWorkflowRun && (
+                      <div className="history-detail-row">
+                        <span className="detail-label">Workflow</span>
+                        <button
+                          type="button"
+                          className="link-btn"
+                          onClick={() => onViewWorkflowRun(item.workflowRunId!)}
+                        >
+                          View workflow run
+                        </button>
+                      </div>
+                    )}
 
                     <div className="history-actions">
                       <button

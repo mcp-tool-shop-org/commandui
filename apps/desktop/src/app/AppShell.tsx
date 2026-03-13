@@ -96,7 +96,7 @@ function detectOS(): "windows" | "macos" | "linux" {
 
 export function AppShell() {
   // --- Stores ---
-  const { inputMode, setInputMode } = useComposerStore();
+  const { inputMode, setInputMode, setInputValue } = useComposerStore();
   const {
     setActiveExecution,
     setExecutionStatus,
@@ -153,6 +153,8 @@ export function AppShell() {
   const [browserPreview] = useState(() => !isTauriRuntime());
   const [historyOpen, setHistoryOpen] = useState(false);
   const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [expandedRunWorkflowId, setExpandedRunWorkflowId] = useState<string | null>(null);
+  const [historyInitialExpandedId, setHistoryInitialExpandedId] = useState<string | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -1042,6 +1044,34 @@ export function AppShell() {
     }
   }
 
+  // --- Cross-drawer navigation (Phase 6D) ---
+
+  function handleViewWorkflowRun(workflowRunId: string) {
+    // Find which workflow owns this run
+    const entry = Object.entries(lastRunByWorkflowId).find(
+      ([, run]) => run.id === workflowRunId,
+    );
+    if (!entry) return;
+    const [workflowId] = entry;
+    setHistoryOpen(false);
+    setWorkflowOpen(true);
+    setExpandedRunWorkflowId(workflowId);
+  }
+
+  function handleRetryFailedStep(command: string) {
+    setInputValue(command);
+    setWorkflowOpen(false);
+    setExpandedRunWorkflowId(null);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }
+
+  function handleViewHistoryItemFromRun(historyItemId: string) {
+    setWorkflowOpen(false);
+    setExpandedRunWorkflowId(null);
+    setHistoryInitialExpandedId(historyItemId);
+    setHistoryOpen(true);
+  }
+
   // --- Memory handlers ---
   async function handleAcceptSuggestion(suggestionId: string) {
     // For workflow_pattern suggestions, open the editor instead of immediately creating
@@ -1312,24 +1342,33 @@ export function AppShell() {
         activeSessionId={activeSessionId}
         onClose={() => {
           setHistoryOpen(false);
+          setHistoryInitialExpandedId(null);
           requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         onRerun={handleRerunHistoryItem}
         onReopenPlan={handleReopenPlan}
         onSaveWorkflow={handleSaveWorkflowFromHistory}
         onCopyCommand={(cmd) => { void navigator.clipboard.writeText(cmd); }}
+        onViewWorkflowRun={handleViewWorkflowRun}
+        initialExpandedId={historyInitialExpandedId}
       />
 
       <WorkflowDrawer
         isOpen={workflowOpen}
         workflows={workflows}
         lastRunByWorkflowId={lastRunByWorkflowId}
+        expandedRunWorkflowId={expandedRunWorkflowId}
         onClose={() => {
           setWorkflowOpen(false);
+          setExpandedRunWorkflowId(null);
           requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         onRun={handleRunWorkflow}
         onDelete={handleDeleteWorkflow}
+        onExpandRun={setExpandedRunWorkflowId}
+        onRetryStep={handleRetryFailedStep}
+        onCopyCommand={(cmd) => void navigator.clipboard.writeText(cmd)}
+        onViewHistoryItem={handleViewHistoryItemFromRun}
       />
 
       <MemoryDrawer
