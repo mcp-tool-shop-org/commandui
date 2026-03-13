@@ -249,16 +249,32 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
 
   history_append(args) {
     const req = (args.request ?? {}) as Record<string, unknown>;
-    const item = { id: uuid(), ...req, createdAt: new Date().toISOString() };
+    const item = req.item as Record<string, unknown> ?? { id: uuid(), ...req, createdAt: new Date().toISOString() };
     mockHistory.unshift(item);
-    return { item };
+    return { ok: true };
   },
 
-  history_list() {
-    return { items: mockHistory };
+  history_list(args) {
+    const req = (args.request ?? {}) as Record<string, unknown>;
+    const sessionId = req.sessionId as string | undefined;
+    const items = sessionId
+      ? mockHistory.filter((h) => (h as Record<string, unknown>).sessionId === sessionId)
+      : mockHistory;
+    return { items };
   },
 
-  history_update() {
+  history_update(args) {
+    const req = (args.request ?? {}) as Record<string, unknown>;
+    const id = req.historyId as string;
+    const idx = mockHistory.findIndex((h) => (h as Record<string, unknown>).id === id);
+    if (idx >= 0) {
+      const item = mockHistory[idx] as Record<string, unknown>;
+      if (req.status !== undefined) item.status = req.status;
+      if (req.exitCode !== undefined) item.exitCode = req.exitCode;
+      if (req.executedCommand !== undefined) item.executedCommand = req.executedCommand;
+      if (req.finishedAt !== undefined) item.finishedAt = req.finishedAt;
+      if (req.durationMs !== undefined) item.durationMs = req.durationMs;
+    }
     return { ok: true };
   },
 

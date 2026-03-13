@@ -18,6 +18,10 @@ pub struct HistoryItem {
     pub status: String,
     pub exit_code: Option<i32>,
     pub created_at: String,
+    pub finished_at: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub cwd: Option<String>,
+    pub planner_source: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -52,6 +56,8 @@ pub struct HistoryUpdateRequest {
     pub status: Option<String>,
     pub exit_code: Option<i32>,
     pub executed_command: Option<String>,
+    pub finished_at: Option<String>,
+    pub duration_ms: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -101,11 +107,12 @@ pub fn history_append(
     let item = &request.item;
 
     conn.execute(
-        "INSERT OR REPLACE INTO history_items (id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT OR REPLACE INTO history_items (id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at, finished_at, duration_ms, cwd, planner_source) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         rusqlite::params![
             item.id, item.session_id, item.source, item.user_input,
             item.generated_command, item.executed_command, item.linked_plan_id,
             item.planner_request_id, item.status, item.exit_code, item.created_at,
+            item.finished_at, item.duration_ms, item.cwd, item.planner_source,
         ],
     ).map_err(|e| ApiError::database(e.to_string()))?;
 
@@ -123,7 +130,7 @@ pub fn history_list(
     let items = if let Some(ref sid) = request.session_id {
         let mut stmt = conn
             .prepare(
-                "SELECT id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at FROM history_items WHERE session_id = ?1 ORDER BY created_at DESC LIMIT ?2",
+                "SELECT id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at, finished_at, duration_ms, cwd, planner_source FROM history_items WHERE session_id = ?1 ORDER BY created_at DESC LIMIT ?2",
             )
             .map_err(|e| ApiError::database(e.to_string()))?;
 
@@ -133,7 +140,7 @@ pub fn history_list(
     } else {
         let mut stmt = conn
             .prepare(
-                "SELECT id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at FROM history_items ORDER BY created_at DESC LIMIT ?1",
+                "SELECT id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at, finished_at, duration_ms, cwd, planner_source FROM history_items ORDER BY created_at DESC LIMIT ?1",
             )
             .map_err(|e| ApiError::database(e.to_string()))?;
 
@@ -158,6 +165,10 @@ fn map_history_row(row: &rusqlite::Row) -> rusqlite::Result<HistoryItem> {
         status: row.get(8)?,
         exit_code: row.get(9)?,
         created_at: row.get(10)?,
+        finished_at: row.get(11)?,
+        duration_ms: row.get(12)?,
+        cwd: row.get(13)?,
+        planner_source: row.get(14)?,
     })
 }
 
@@ -169,11 +180,13 @@ pub fn history_update(
     let conn = get_conn(&state)?;
 
     conn.execute(
-        "UPDATE history_items SET status = COALESCE(?1, status), exit_code = COALESCE(?2, exit_code), executed_command = COALESCE(?3, executed_command) WHERE id = ?4",
+        "UPDATE history_items SET status = COALESCE(?1, status), exit_code = COALESCE(?2, exit_code), executed_command = COALESCE(?3, executed_command), finished_at = COALESCE(?4, finished_at), duration_ms = COALESCE(?5, duration_ms) WHERE id = ?6",
         rusqlite::params![
             request.status,
             request.exit_code,
             request.executed_command,
+            request.finished_at,
+            request.duration_ms,
             request.history_id,
         ],
     )

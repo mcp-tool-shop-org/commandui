@@ -22,6 +22,8 @@ export type HistoryUpdateRequest = {
   status?: string;
   exitCode?: number;
   executedCommand?: string;
+  finishedAt?: string;
+  durationMs?: number;
 };
 
 export type HistoryUpdateResponse = {

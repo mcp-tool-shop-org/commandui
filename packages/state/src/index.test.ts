@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   useExecutionStore,
+  useFocusStore,
   useHistoryStore,
   useMemoryStore,
   useSettingsStore,
@@ -73,6 +74,41 @@ describe("HistoryStore", () => {
       .getState()
       .updateHistoryItem("1", { status: "success", exitCode: 0 });
     expect(useHistoryStore.getState().items[0].status).toBe("success");
+  });
+
+  it("loads history items (bulk replace)", () => {
+    useHistoryStore.getState().appendHistoryItem({
+      id: "old",
+      sessionId: "s1",
+      source: "raw",
+      userInput: "stale",
+      status: "success",
+      createdAt: "2025-01-01",
+    });
+
+    useHistoryStore.getState().loadHistory([
+      {
+        id: "new1",
+        sessionId: "s1",
+        source: "semantic",
+        userInput: "fresh",
+        status: "success",
+        createdAt: "2025-01-02",
+      },
+      {
+        id: "new2",
+        sessionId: "s1",
+        source: "raw",
+        userInput: "also fresh",
+        status: "failure",
+        createdAt: "2025-01-03",
+      },
+    ]);
+
+    const items = useHistoryStore.getState().items;
+    expect(items.length).toBe(2);
+    expect(items[0].id).toBe("new1");
+    expect(items[1].id).toBe("new2");
   });
 });
 
@@ -170,6 +206,31 @@ describe("SessionStore", () => {
 
     useSessionStore.getState().removeSession("s1");
     expect(useSessionStore.getState().activeSessionId).toBe("s2");
+  });
+});
+
+describe("FocusStore", () => {
+  beforeEach(() => {
+    useFocusStore.setState({ currentZone: null, previousZone: null });
+  });
+
+  it("sets focus zone and tracks previous", () => {
+    useFocusStore.getState().setFocusZone("composer");
+    expect(useFocusStore.getState().currentZone).toBe("composer");
+    expect(useFocusStore.getState().previousZone).toBeNull();
+
+    useFocusStore.getState().setFocusZone("terminal");
+    expect(useFocusStore.getState().currentZone).toBe("terminal");
+    expect(useFocusStore.getState().previousZone).toBe("composer");
+  });
+
+  it("restores previous zone", () => {
+    useFocusStore.getState().setFocusZone("composer");
+    useFocusStore.getState().setFocusZone("drawer");
+    useFocusStore.getState().restorePreviousZone();
+
+    expect(useFocusStore.getState().currentZone).toBe("composer");
+    expect(useFocusStore.getState().previousZone).toBeNull();
   });
 });
 

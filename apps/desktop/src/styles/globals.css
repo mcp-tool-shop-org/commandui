@@ -259,7 +259,7 @@ select {
 /* === Composer === */
 .composer {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   flex-shrink: 0;
 }
@@ -279,6 +279,11 @@ select {
   font-size: 14px;
   font-family: "Cascadia Code", "Fira Code", monospace;
   outline: none;
+  resize: none;
+  overflow: hidden;
+  min-height: 38px;
+  max-height: 150px;
+  line-height: 1.4;
 }
 
 .composer-input:focus {
@@ -390,19 +395,50 @@ select {
   overflow-y: auto;
 }
 
+.history-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.history-search {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.history-search::placeholder { color: var(--text-muted); }
+
+.history-filter {
+  padding: 6px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 12px;
+  min-width: 120px;
+}
+
 .history-item {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 12px;
   margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s;
 }
+.history-item:hover { border-color: var(--text-muted); }
+.history-item-expanded { border-color: var(--accent); }
 
 .history-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  gap: 8px;
 }
 
 .history-source {
@@ -416,16 +452,73 @@ select {
 .history-status {
   font-size: 12px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .history-main {
   font-size: 14px;
-  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.history-duration {
+  color: var(--accent);
+}
+
+.history-cwd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
 }
 
 .history-sub {
   font-size: 12px;
-  margin-bottom: 2px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-detail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.history-detail-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.detail-label {
+  color: var(--text-muted);
+  min-width: 70px;
+  flex-shrink: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-top: 2px;
+}
+
+.history-detail code {
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  word-break: break-all;
 }
 
 .history-actions {
@@ -531,4 +624,76 @@ select {
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
+}
+
+/* === Command Palette === */
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 15vh;
+  z-index: 100;
+}
+
+.palette-panel {
+  width: 480px;
+  max-height: 400px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.palette-search {
+  width: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  font-size: 15px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  outline: none;
+}
+
+.palette-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.palette-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.palette-item:hover,
+.palette-item-selected {
+  background: var(--bg-card);
+}
+
+.palette-item-label {
+  color: var(--text-primary);
+}
+
+.palette-item-shortcut {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: "Cascadia Code", "Fira Code", monospace;
+}
+
+.palette-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
 }

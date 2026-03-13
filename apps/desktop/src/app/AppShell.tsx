@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CommandPlan,
   HistoryItem,
@@ -15,8 +15,12 @@ import {
   useMemoryStore,
   useSettingsStore,
   useWorkflowStore,
+  useFocusStore,
   resolveEffectiveMemory,
 } from "@commandui/state";
+import type { ShortcutDef } from "../lib/shortcuts";
+import type { ShortcutContext } from "../lib/shortcuts";
+import { useShortcuts } from "../hooks/useShortcuts";
 import {
   createSession,
   listSessions,
@@ -53,9 +57,12 @@ import {
   memoryDelete,
 } from "../features/memory/memoryClient";
 import { InputComposer } from "../components/InputComposer";
+import type { InputComposerHandle } from "../components/InputComposer";
 import { PlanPanel } from "../components/PlanPanel";
 import { TerminalPane } from "../components/TerminalPane";
 import type { TerminalPaneHandle } from "../components/TerminalPane";
+import { CommandPalette } from "../components/CommandPalette";
+import type { PaletteAction } from "../components/CommandPalette";
 import { HistoryDrawer } from "../components/HistoryDrawer";
 import { SessionTabs } from "../components/SessionTabs";
 import { SettingsDrawer } from "../components/SettingsDrawer";
@@ -90,7 +97,7 @@ export function AppShell() {
     sessionExecStates,
     setSessionExecState,
   } = useExecutionStore();
-  const { items: historyItems, appendHistoryItem, updateHistoryItem } =
+  const { items: historyItems, loadHistory, appendHistoryItem, updateHistoryItem } =
     useHistoryStore();
   const {
     sessions,
@@ -123,6 +130,7 @@ export function AppShell() {
     setDefaultInputMode,
   } = useSettingsStore();
   const { items: workflows, setWorkflows, addWorkflow } = useWorkflowStore();
+  const { restorePreviousZone } = useFocusStore();
 
   // --- Local state ---
   const [plan, setPlan] = useState<PlannerGeneratePlanResponse | null>(null);
@@ -137,6 +145,7 @@ export function AppShell() {
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Background buffer for session-switch replay
   const [terminalLinesBySession, setTerminalLinesBySession] = useState<
@@ -145,6 +154,7 @@ export function AppShell() {
   const executionToHistoryRef = useRef<Record<string, string>>({});
   const bootedRef = useRef(false);
   const terminalPaneRef = useRef<TerminalPaneHandle>(null);
+  const composerRef = useRef<InputComposerHandle>(null);
   const activeSessionIdRef = useRef<string | null>(null);
 
   // Keep ref in sync with state (for use in event callbacks)
@@ -222,9 +232,7 @@ export function AppShell() {
         try {
           const histRes = await historyList({ limit: 100 });
           if (histRes.items?.length) {
-            for (const item of [...histRes.items].reverse()) {
-              appendHistoryItem(item);
-            }
+            loadHistory(histRes.items);
           }
         } catch {
           // history not critical
@@ -286,8 +294,15 @@ export function AppShell() {
 
             const historyId =
               executionToHistoryRef.current[event.executionId] ?? event.executionId;
-            updateHistoryItem(historyId, { status, exitCode: event.exitCode });
-            void historyUpdate({ historyId, status, exitCode: event.exitCode });
+
+            const finishedAt = new Date().toISOString();
+            const found = useHistoryStore.getState().items.find((h) => h.id === historyId);
+            const durationMs = found
+              ? Date.now() - new Date(found.createdAt).getTime()
+              : undefined;
+
+            updateHistoryItem(historyId, { status, exitCode: event.exitCode, finishedAt, durationMs });
+            void historyUpdate({ historyId, status, exitCode: event.exitCode, finishedAt, durationMs });
           },
         ),
         onMockEvent<{ sessionId: string; cwd: string }>(
@@ -326,15 +341,27 @@ export function AppShell() {
 
       const historyId =
         executionToHistoryRef.current[event.executionId] ?? event.executionId;
+
+      // Compute duration from createdAt
+      const finishedAt = new Date().toISOString();
+      const historyItem = useHistoryStore.getState().items.find((h) => h.id === historyId);
+      const durationMs = historyItem
+        ? Date.now() - new Date(historyItem.createdAt).getTime()
+        : undefined;
+
       updateHistoryItem(historyId, {
         status,
         exitCode: event.exitCode,
+        finishedAt,
+        durationMs,
       });
 
       void historyUpdate({
         historyId,
         status,
         exitCode: event.exitCode,
+        finishedAt,
+        durationMs,
       });
     }).then((u) => unlisteners.push(u));
 
@@ -383,37 +410,105 @@ export function AppShell() {
     });
   }, [productMode, reducedClutter, simplifiedSummaries, confirmMediumRisk, defaultInputMode]);
 
-  // --- Keyboard shortcuts ---
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.ctrlKey && e.key === "h") {
-        e.preventDefault();
-        setHistoryOpen((v) => !v);
-      } else if (e.ctrlKey && e.key === "w") {
-        e.preventDefault();
-        setWorkflowOpen((v) => !v);
-      } else if (e.ctrlKey && e.key === "m") {
-        e.preventDefault();
-        setMemoryOpen((v) => !v);
-      } else if (e.ctrlKey && e.key === ",") {
-        e.preventDefault();
-        setSettingsOpen((v) => !v);
-      } else if (e.ctrlKey && e.key === "1") {
-        e.preventDefault();
-        setInputMode("command");
-      } else if (e.ctrlKey && e.key === "2") {
-        e.preventDefault();
-        setInputMode("ask");
-      } else if (e.key === "Escape") {
-        setHistoryOpen(false);
-        setWorkflowOpen(false);
-        setMemoryOpen(false);
-        setSettingsOpen(false);
-      }
+  // --- Centralized keyboard shortcuts ---
+  const anyDrawerOpen = historyOpen || workflowOpen || memoryOpen || settingsOpen;
+
+  function closeAllOverlays() {
+    if (paletteOpen) { setPaletteOpen(false); return; }
+    if (anyDrawerOpen) {
+      setHistoryOpen(false);
+      setWorkflowOpen(false);
+      setMemoryOpen(false);
+      setSettingsOpen(false);
+      requestAnimationFrame(() => {
+        restorePreviousZone();
+        composerRef.current?.focus();
+      });
+      return;
     }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setInputMode]);
+    if (plan) {
+      handleRejectPlan();
+      return;
+    }
+  }
+
+  function focusComposer() {
+    composerRef.current?.focus();
+  }
+
+  const shortcuts = useMemo<ShortcutDef[]>(() => {
+    const defs: ShortcutDef[] = [
+      { id: "palette",       combo: "ctrl+k",       context: ["global"], action: () => setPaletteOpen(true) },
+      { id: "focus-composer", combo: "ctrl+j",       context: ["global"], action: focusComposer },
+      { id: "clear-terminal", combo: "ctrl+l",       context: ["global"], action: () => terminalPaneRef.current?.clear() },
+      { id: "new-session",   combo: "ctrl+t",        context: ["global"], action: handleCreateSession },
+      { id: "history",       combo: "ctrl+h",        context: ["global"], action: () => setHistoryOpen((v) => !v) },
+      { id: "workflows",     combo: "ctrl+shift+w",  context: ["global"], action: () => setWorkflowOpen((v) => !v) },
+      { id: "memory",        combo: "ctrl+m",        context: ["global"], action: () => setMemoryOpen((v) => !v) },
+      { id: "settings",      combo: "ctrl+,",        context: ["global"], action: () => setSettingsOpen((v) => !v) },
+      { id: "escape",        combo: "escape",        context: ["global"], action: closeAllOverlays },
+      // Plan shortcuts (zone-specific, bare keys only fire when plan is focused)
+      { id: "plan-approve",  combo: "a",             context: ["plan"],   when: () => plan !== null, action: () => plan && handleApprovePlan(plan.plan.command) },
+      { id: "plan-approve-global", combo: "ctrl+enter", context: ["global"], when: () => plan !== null, action: () => plan && handleApprovePlan(plan.plan.command) },
+      { id: "plan-reject",   combo: "r",             context: ["plan"],   when: () => plan !== null, action: handleRejectPlan },
+      { id: "plan-edit",     combo: "e",             context: ["plan"],   when: () => plan !== null, action: () => {
+        // Focus the command textarea in PlanPanel
+        const el = document.querySelector(".plan-command-input") as HTMLTextAreaElement | null;
+        el?.focus();
+      }},
+      // Session jump: Ctrl+1..9
+      ...sessions.slice(0, 9).map((s, i) => ({
+        id: `session-${i + 1}`,
+        combo: `ctrl+${i + 1}`,
+        context: ["global"] as ShortcutContext[],
+        action: () => setActiveSessionId(s.id),
+      })),
+    ];
+
+    // Ctrl+W close session only in Tauri mode (conflicts with browser tab close)
+    if (!browserPreview) {
+      defs.push({
+        id: "close-session",
+        combo: "ctrl+w",
+        context: ["global"],
+        action: () => activeSessionId && handleCloseSession(activeSessionId),
+      });
+    }
+
+    return defs;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions, activeSessionId, plan, browserPreview]);
+
+  useShortcuts(shortcuts);
+
+  // --- Command palette actions ---
+  const paletteActions = useMemo<PaletteAction[]>(() => {
+    const actions: PaletteAction[] = [
+      { id: "new-session",    label: "New Session",        shortcut: "Ctrl+T",       action: handleCreateSession },
+      { id: "focus-composer",  label: "Focus Composer",    shortcut: "Ctrl+J",       action: focusComposer },
+      { id: "clear-terminal",  label: "Clear Terminal",    shortcut: "Ctrl+L",       action: () => terminalPaneRef.current?.clear() },
+      { id: "open-history",    label: "Open History",      shortcut: "Ctrl+H",       action: () => setHistoryOpen(true) },
+      { id: "open-workflows",  label: "Open Workflows",   shortcut: "Ctrl+Shift+W", action: () => setWorkflowOpen(true) },
+      { id: "open-memory",     label: "Open Memory",      shortcut: "Ctrl+M",       action: () => setMemoryOpen(true) },
+      { id: "open-settings",   label: "Open Settings",    shortcut: "Ctrl+,",       action: () => setSettingsOpen(true) },
+      ...sessions.map((s, i) => ({
+        id: `switch-session-${s.id}`,
+        label: `Switch to ${s.label ?? `Session ${i + 1}`}`,
+        shortcut: i < 9 ? `Ctrl+${i + 1}` : undefined,
+        action: () => setActiveSessionId(s.id),
+      })),
+    ];
+
+    if (isRunning) {
+      actions.push({ id: "interrupt", label: "Interrupt Command", action: handleInterrupt });
+    }
+    if (activeExecState === "desynced") {
+      actions.push({ id: "resync", label: "Resync Terminal", action: handleResync });
+    }
+
+    return actions;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions, isRunning, activeExecState]);
 
   // --- Submit handler ---
   async function handleSubmit(value: string) {
@@ -433,6 +528,7 @@ export function AppShell() {
           executedCommand: value,
           status: "planned",
           createdAt: new Date().toISOString(),
+          cwd: session.cwd,
         };
         appendHistoryItem(historyItem);
         executionToHistoryRef.current[executionId] = executionId;
@@ -487,6 +583,8 @@ export function AppShell() {
           linkedPlanId: res.plan.id,
           status: "planned",
           createdAt: new Date().toISOString(),
+          cwd: session.cwd,
+          plannerSource: browserPreview ? "mock" : "ollama",
         };
         appendHistoryItem(historyItem);
 
@@ -687,6 +785,8 @@ export function AppShell() {
         linkedPlanId: item.linkedPlanId,
         status: "planned",
         createdAt: new Date().toISOString(),
+        cwd: session.cwd,
+        plannerSource: item.plannerSource,
       };
       appendHistoryItem(historyItem);
       executionToHistoryRef.current[executionId] = executionId;
@@ -928,12 +1028,14 @@ export function AppShell() {
           )}
 
           <InputComposer
+            ref={composerRef}
             mode={inputMode}
             onModeChange={setInputMode}
             onSubmit={handleSubmit}
             busy={busy}
             isRunning={isRunning}
             onInterrupt={handleInterrupt}
+            disabled={activeExecState !== "ready" && activeExecState !== "booting"}
           />
         </section>
 
@@ -963,29 +1065,57 @@ export function AppShell() {
       <HistoryDrawer
         isOpen={historyOpen}
         items={visibleHistoryItems}
-        onClose={() => setHistoryOpen(false)}
+        allItems={historyItems}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onClose={() => {
+          setHistoryOpen(false);
+          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
+        }}
         onRerun={handleRerunHistoryItem}
         onReopenPlan={handleReopenPlan}
         onSaveWorkflow={handleSaveWorkflowFromHistory}
+        onCopyCommand={(cmd) => { void navigator.clipboard.writeText(cmd); }}
       />
 
       <WorkflowDrawer
         isOpen={workflowOpen}
         workflows={workflows}
-        onClose={() => setWorkflowOpen(false)}
+        onClose={() => {
+          setWorkflowOpen(false);
+          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
+        }}
         onRun={handleRunWorkflow}
       />
 
       <MemoryDrawer
         isOpen={memoryOpen}
         items={memoryItems}
-        onClose={() => setMemoryOpen(false)}
+        onClose={() => {
+          setMemoryOpen(false);
+          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
+        }}
         onDelete={handleDeleteMemory}
+      />
+
+      <CommandPalette
+        isOpen={paletteOpen}
+        onClose={() => {
+          setPaletteOpen(false);
+          requestAnimationFrame(() => {
+            restorePreviousZone();
+            composerRef.current?.focus();
+          });
+        }}
+        actions={paletteActions}
       />
 
       <SettingsDrawer
         isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        onClose={() => {
+          setSettingsOpen(false);
+          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
+        }}
         productMode={productMode}
         onProductModeChange={setProductMode}
         defaultInputMode={defaultInputMode}

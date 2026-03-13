@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useFocusStore } from "@commandui/state";
 
 type Props = {
   sessionId: string;
@@ -25,11 +26,25 @@ export function PlanPanel({
 }: Props) {
   const [editedCommand, setEditedCommand] = useState(command);
   const [confirmRisk, setConfirmRisk] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const commandTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const setFocusZone = useFocusStore((s) => s.setFocusZone);
 
   useEffect(() => {
     setEditedCommand(command);
     setConfirmRisk(false);
   }, [command]);
+
+  /** Focus the command edit textarea (for keyboard shortcut "E") */
+  function focusCommandEdit() {
+    commandTextareaRef.current?.focus();
+  }
+
+  // Expose focusCommandEdit on the panel ref for AppShell shortcut wiring
+  useEffect(() => {
+    const el = panelRef.current;
+    if (el) (el as unknown as Record<string, unknown>).__focusEdit = focusCommandEdit;
+  });
 
   if (!command) {
     return (
@@ -45,7 +60,12 @@ export function PlanPanel({
     editedCommand.trim().length > 0 && (!needsConfirmation || confirmRisk);
 
   return (
-    <div className="plan-panel">
+    <div
+      ref={panelRef}
+      className="plan-panel"
+      tabIndex={0}
+      onFocus={() => setFocusZone("plan")}
+    >
       <div className="plan-section">
         <span className="plan-label">Intent</span>
         <p>{intent}</p>
@@ -54,6 +74,7 @@ export function PlanPanel({
       <div className="plan-edit-block">
         <span className="plan-label">Command</span>
         <textarea
+          ref={commandTextareaRef}
           className="plan-command-input"
           value={editedCommand}
           onChange={(e) => setEditedCommand(e.target.value)}

@@ -60,6 +60,7 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
 
 type HistoryState = {
   items: HistoryItem[];
+  loadHistory: (items: HistoryItem[]) => void;
   appendHistoryItem: (item: HistoryItem) => void;
   updateHistoryItem: (id: string, patch: Partial<HistoryItem>) => void;
   clearHistory: () => void;
@@ -67,6 +68,7 @@ type HistoryState = {
 
 export const useHistoryStore = create<HistoryState>((set) => ({
   items: [],
+  loadHistory: (items) => set({ items }),
   appendHistoryItem: (item) =>
     set((state) => ({ items: [item, ...state.items] })),
   updateHistoryItem: (id, patch) =>
@@ -196,6 +198,32 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ simplifiedSummaries }),
   setConfirmMediumRisk: (confirmMediumRisk) => set({ confirmMediumRisk }),
   setDefaultInputMode: (defaultInputMode) => set({ defaultInputMode }),
+}));
+
+// --- Focus Store ---
+
+export type FocusZone = "composer" | "terminal" | "plan" | "drawer" | "palette";
+
+type FocusState = {
+  currentZone: FocusZone | null;
+  previousZone: FocusZone | null;
+  setFocusZone: (zone: FocusZone) => void;
+  restorePreviousZone: () => void;
+};
+
+export const useFocusStore = create<FocusState>((set) => ({
+  currentZone: null,
+  previousZone: null,
+  setFocusZone: (zone) =>
+    set((state) => ({
+      currentZone: zone,
+      previousZone: state.currentZone,
+    })),
+  restorePreviousZone: () =>
+    set((state) => ({
+      currentZone: state.previousZone,
+      previousZone: null,
+    })),
 }));
 
 // --- Workflow Store ---

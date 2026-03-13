@@ -1,11 +1,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { useFocusStore } from "@commandui/state";
 import "@xterm/xterm/css/xterm.css";
 
 export type TerminalPaneHandle = {
   write: (data: string) => void;
   clear: () => void;
+  focus: () => void;
 };
 
 type Props = {
@@ -31,7 +33,9 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
     const terminalRef = useRef<Terminal | null>(null);
     const fitRef = useRef<FitAddon | null>(null);
 
-    // Expose imperative write/clear to parent
+    const setFocusZone = useFocusStore((s) => s.setFocusZone);
+
+    // Expose imperative write/clear/focus to parent
     useImperativeHandle(
       ref,
       () => ({
@@ -43,6 +47,9 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
           if (!term) return;
           term.clear();
           term.reset();
+        },
+        focus() {
+          terminalRef.current?.focus();
         },
       }),
       [],
@@ -83,14 +90,24 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
         onData?.(data);
       });
 
+      // Track focus zone for shortcut context
+      const textarea = term.textarea;
+      const handleFocus = () => setFocusZone("terminal");
+      if (textarea) {
+        textarea.addEventListener("focus", handleFocus);
+      }
+
       return () => {
         disposable.dispose();
+        if (textarea) {
+          textarea.removeEventListener("focus", handleFocus);
+        }
         resizeObserver.disconnect();
         term.dispose();
         terminalRef.current = null;
         fitRef.current = null;
       };
-    }, [onData, onResize]);
+    }, [onData, onResize, setFocusZone]);
 
     // Clear and reset on session change
     useEffect(() => {

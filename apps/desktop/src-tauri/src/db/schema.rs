@@ -19,7 +19,11 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
             planner_request_id TEXT,
             status TEXT NOT NULL,
             exit_code INTEGER,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            finished_at TEXT,
+            duration_ms INTEGER,
+            cwd TEXT,
+            planner_source TEXT
         );
 
         CREATE TABLE IF NOT EXISTS workflows (
@@ -72,6 +76,18 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| format!("Schema init failed: {e}"))?;
 
+    // Migration: add columns for existing databases that lack them.
+    // SQLite errors on duplicate columns, so we ignore failures.
+    let migrations = [
+        "ALTER TABLE history_items ADD COLUMN finished_at TEXT",
+        "ALTER TABLE history_items ADD COLUMN duration_ms INTEGER",
+        "ALTER TABLE history_items ADD COLUMN cwd TEXT",
+        "ALTER TABLE history_items ADD COLUMN planner_source TEXT",
+    ];
+    for sql in migrations {
+        let _ = conn.execute(sql, []);
+    }
+
     Ok(())
 }
 
@@ -93,5 +109,13 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_migration_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_schema(&conn).unwrap();
+        // Running again should not fail
+        init_schema(&conn).unwrap();
     }
 }

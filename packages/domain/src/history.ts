@@ -10,4 +10,8 @@ export type HistoryItem = {
   status: "planned" | "rejected" | "success" | "failure" | "interrupted" | "unknown";
   exitCode?: number;
   createdAt: string;
+  finishedAt?: string;
+  durationMs?: number;
+  cwd?: string;
+  plannerSource?: "ollama" | "mock";
 };
