@@ -1,3 +1,5 @@
+use crate::ollama::{self, LlmPlanResponse};
+use crate::state::AppState;
 use crate::types::errors::ApiError;
 use serde::{Deserialize, Serialize};
 
@@ -79,19 +81,102 @@ pub struct PlanReviewPayload {
     pub retrieved_context: Vec<String>,
 }
 
+// --- Main command: try Ollama, fallback to mock ---
+
 #[tauri::command]
-pub fn planner_generate_plan(
+pub async fn planner_generate_plan(
     request: PlannerGeneratePlanRequest,
+    state: tauri::State<'_, AppState>,
 ) -> Result<PlannerGeneratePlanResponse, ApiError> {
     if request.user_intent.is_empty() {
         return Err(ApiError::validation("user_intent cannot be empty"));
     }
 
+    // Try Ollama first
+    match ollama::generate_plan(&state.ollama, &request.context, &request.user_intent).await {
+        Ok(llm_plan) => {
+            eprintln!("[planner] Ollama returned plan for: {}", request.user_intent);
+            Ok(build_response_from_llm(&request, llm_plan))
+        }
+        Err(e) => {
+            eprintln!("[planner] Ollama failed, using mock fallback: {e}");
+            Ok(mock_plan(&request))
+        }
+    }
+}
+
+// --- Convert LLM response to our contract ---
+
+fn build_response_from_llm(
+    request: &PlannerGeneratePlanRequest,
+    llm: LlmPlanResponse,
+) -> PlannerGeneratePlanResponse {
+    let plan_id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+
+    let mut safety_flags = vec![];
+    if llm.destructive {
+        safety_flags.push("DESTRUCTIVE_OPERATION".to_string());
+    }
+    if llm.escalates_privileges {
+        safety_flags.push("PRIVILEGE_ESCALATION".to_string());
+    }
+    if llm.touches_network {
+        safety_flags.push("NETWORK_ACCESS".to_string());
+    }
+
+    let mut retrieved_context = vec![];
+    if !request.context.cwd.is_empty() {
+        retrieved_context.push(format!("cwd: {}", request.context.cwd));
+    }
+    if let Some(ref root) = request.context.project_root {
+        retrieved_context.push(format!("projectRoot: {root}"));
+    }
+
+    let plan = CommandPlanPayload {
+        id: plan_id.clone(),
+        session_id: request.session_id.clone(),
+        source: "ollama".to_string(),
+        user_intent: llm.intent_summary,
+        command: llm.command,
+        cwd: Some(request.context.cwd.clone()),
+        env: None,
+        explanation: llm.explanation,
+        assumptions: llm.assumptions,
+        confidence: llm.confidence,
+        risk: llm.risk,
+        destructive: llm.destructive,
+        requires_confirmation: llm.requires_approval,
+        touches_files: llm.touches_files,
+        touches_network: llm.touches_network,
+        escalates_privileges: llm.escalates_privileges,
+        expected_output: llm.expected_output,
+        generated_at: now,
+    };
+
+    let review = PlanReviewPayload {
+        plan_id,
+        ambiguity_flags: vec![],
+        safety_flags,
+        memory_used: request
+            .context
+            .memory_items
+            .iter()
+            .map(|m| format!("{}:{}", m.kind, m.key))
+            .collect(),
+        retrieved_context,
+    };
+
+    PlannerGeneratePlanResponse { plan, review }
+}
+
+// --- Mock fallback ---
+
+pub fn mock_plan(request: &PlannerGeneratePlanRequest) -> PlannerGeneratePlanResponse {
     let plan_id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
     let intent_lower = request.user_intent.to_lowercase();
 
-    // Mock planner: infer command from intent
     let (command, explanation, risk) = if intent_lower.contains("changed files")
         || intent_lower.contains("git status")
     {
@@ -119,9 +204,9 @@ pub fn planner_generate_plan(
 
     let plan = CommandPlanPayload {
         id: plan_id.clone(),
-        session_id: request.session_id,
-        source: "semantic".to_string(),
-        user_intent: request.user_intent,
+        session_id: request.session_id.clone(),
+        source: "mock".to_string(),
+        user_intent: request.user_intent.clone(),
         command,
         cwd: Some(request.context.cwd.clone()),
         env: None,
@@ -159,18 +244,17 @@ pub fn planner_generate_plan(
         retrieved_context,
     };
 
-    Ok(PlannerGeneratePlanResponse { plan, review })
+    PlannerGeneratePlanResponse { plan, review }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_mock_planner_git_status() {
-        let request = PlannerGeneratePlanRequest {
+    fn make_request(intent: &str) -> PlannerGeneratePlanRequest {
+        PlannerGeneratePlanRequest {
             session_id: "test".to_string(),
-            user_intent: "show me changed files".to_string(),
+            user_intent: intent.to_string(),
             context: PlannerContext {
                 session_id: "test".to_string(),
                 cwd: "/tmp".to_string(),
@@ -181,8 +265,82 @@ mod tests {
                 memory_items: vec![],
                 project_facts: vec![],
             },
-        };
-        let res = planner_generate_plan(request).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_mock_planner_git_status() {
+        let request = make_request("show me changed files");
+        let res = mock_plan(&request);
         assert_eq!(res.plan.command, "git status --short");
+        assert_eq!(res.plan.source, "mock");
+    }
+
+    #[test]
+    fn test_mock_planner_destructive() {
+        let request = make_request("delete the old logs");
+        let res = mock_plan(&request);
+        assert_eq!(res.plan.risk, "high");
+    }
+
+    #[test]
+    fn test_mock_planner_generic() {
+        let request = make_request("check disk space");
+        let res = mock_plan(&request);
+        assert!(res.plan.command.contains("planner stub"));
+        assert_eq!(res.plan.risk, "low");
+    }
+
+    #[test]
+    fn test_llm_response_conversion() {
+        let request = make_request("list files");
+        let llm = LlmPlanResponse {
+            intent_summary: "List all files in current directory".to_string(),
+            command: "ls -la".to_string(),
+            risk: "low".to_string(),
+            explanation: "Lists all files including hidden ones with details".to_string(),
+            assumptions: vec!["User wants the current directory".to_string()],
+            requires_approval: false,
+            destructive: false,
+            touches_files: true,
+            touches_network: false,
+            escalates_privileges: false,
+            confidence: 0.95,
+            expected_output: Some("file listing with permissions".to_string()),
+        };
+
+        let res = build_response_from_llm(&request, llm);
+        assert_eq!(res.plan.command, "ls -la");
+        assert_eq!(res.plan.source, "ollama");
+        assert_eq!(res.plan.risk, "low");
+        assert_eq!(res.plan.confidence, 0.95);
+        assert!(res.plan.touches_files);
+        assert!(!res.plan.requires_confirmation);
+        assert_eq!(res.plan.assumptions.len(), 1);
+        assert!(res.review.safety_flags.is_empty());
+    }
+
+    #[test]
+    fn test_llm_response_safety_flags() {
+        let request = make_request("delete everything");
+        let llm = LlmPlanResponse {
+            intent_summary: "Delete all files".to_string(),
+            command: "rm -rf ./*".to_string(),
+            risk: "high".to_string(),
+            explanation: "Deletes all files in current directory".to_string(),
+            assumptions: vec![],
+            requires_approval: true,
+            destructive: true,
+            touches_files: true,
+            touches_network: false,
+            escalates_privileges: false,
+            confidence: 0.7,
+            expected_output: None,
+        };
+
+        let res = build_response_from_llm(&request, llm);
+        assert!(res.review.safety_flags.contains(&"DESTRUCTIVE_OPERATION".to_string()));
+        assert!(res.plan.requires_confirmation);
+        assert!(res.plan.destructive);
     }
 }
