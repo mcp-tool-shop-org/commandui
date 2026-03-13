@@ -134,6 +134,7 @@ export function AppShell() {
     Record<string, string[]>
   >({});
   const executionToHistoryRef = useRef<Record<string, string>>({});
+  const bootedRef = useRef(false);
 
   const session =
     sessions.find((s) => s.id === activeSessionId) ?? null;
@@ -157,8 +158,8 @@ export function AppShell() {
   // --- Boot / hydration ---
   useEffect(() => {
     async function boot() {
-      if (browserPreview) return; // Skip Tauri calls in browser-only mode
-
+      if (bootedRef.current) return;
+      bootedRef.current = true;
       try {
         // Settings
         try {
@@ -191,7 +192,7 @@ export function AppShell() {
           addSession(res.session);
           appendTerminalLine(
             res.session.id,
-            "Welcome to CommandUI. Use Command mode for explicit commands and Ask mode for semantic review.",
+            `Welcome to CommandUI — ${res.session.label}`,
           );
         }
 

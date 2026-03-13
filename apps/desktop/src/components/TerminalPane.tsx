@@ -83,9 +83,7 @@ export function TerminalPane({
     const term = terminalRef.current;
     if (!term) return;
 
-    if (lastRenderedLineCountRef.current === 0 && sessionId) {
-      term.writeln(`[session] ${sessionId}`);
-    }
+    // Skip the session header — welcome message handles this
 
     const nextLines = lines.slice(lastRenderedLineCountRef.current);
     for (const line of nextLines) {

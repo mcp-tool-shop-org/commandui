@@ -4,13 +4,12 @@
  */
 
 let sessionCounter = 0;
-let historyCounter = 0;
 
 function uuid(): string {
   return crypto.randomUUID?.() ?? `mock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-const mockSessions: Record<string, { id: string; label: string; cwd: string; createdAt: string }> = {};
+const mockSessions: Record<string, Record<string, unknown>> = {};
 const mockHistory: Array<Record<string, unknown>> = [];
 const mockWorkflows: Array<Record<string, unknown>> = [];
 const mockMemoryItems: Array<Record<string, unknown>> = [];
@@ -19,11 +18,15 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   session_create(args) {
     const req = (args.request ?? {}) as Record<string, unknown>;
     sessionCounter++;
+    const now = new Date().toISOString();
     const session = {
       id: uuid(),
       label: (req.label as string) || `Session ${sessionCounter}`,
       cwd: (req.cwd as string) || "~/projects",
-      createdAt: new Date().toISOString(),
+      shell: "mock-shell",
+      status: "active" as const,
+      createdAt: now,
+      lastActiveAt: now,
     };
     mockSessions[session.id] = session;
     return { session };
@@ -45,8 +48,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
 
   terminal_execute(args) {
     const req = (args.request ?? {}) as Record<string, unknown>;
-    historyCounter++;
-    return { executionId: uuid(), command: req.command ?? "echo mock" };
+    return { executionId: req.executionId ?? uuid(), command: req.command ?? "echo mock" };
   },
 
   terminal_resize() {
@@ -59,13 +61,32 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
 
   planner_generate_plan(args) {
     const req = (args.request ?? {}) as Record<string, unknown>;
-    const intent = (req.userInput as string) || "do something";
+    const intent = (req.userIntent as string) || "do something";
+    const planId = uuid();
     return {
       plan: {
-        intent,
+        id: planId,
+        sessionId: req.sessionId ?? "mock",
+        source: "semantic",
+        userIntent: intent,
         command: `echo "mock plan for: ${intent}"`,
-        risk: "low",
         explanation: `[Browser Preview] This would execute a plan for "${intent}". In Tauri mode, the AI planner generates real commands.`,
+        assumptions: [],
+        confidence: 0.85,
+        risk: "low",
+        destructive: false,
+        requiresConfirmation: false,
+        touchesFiles: false,
+        touchesNetwork: false,
+        escalatesPrivileges: false,
+        generatedAt: new Date().toISOString(),
+      },
+      review: {
+        planId,
+        ambiguityFlags: [],
+        safetyFlags: [],
+        memoryUsed: [],
+        retrievedContext: [],
       },
     };
   },
@@ -117,7 +138,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   },
 
   memory_list() {
-    return { items: mockMemoryItems };
+    return { items: mockMemoryItems, suggestions: [] };
   },
 
   memory_add(args) {
@@ -127,8 +148,21 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     return { item };
   },
 
-  memory_accept_suggestion() {
-    return { ok: true };
+  memory_accept_suggestion(args) {
+    const req = (args.request ?? {}) as Record<string, unknown>;
+    return {
+      createdItem: {
+        id: uuid(),
+        scope: "project",
+        kind: "accepted_substitution",
+        key: "mock-key",
+        value: "mock-value",
+        confidence: 0.9,
+        source: "suggestion",
+        suggestionId: req.suggestionId,
+        createdAt: new Date().toISOString(),
+      },
+    };
   },
 
   memory_dismiss_suggestion() {
