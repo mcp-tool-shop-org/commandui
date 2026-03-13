@@ -81,6 +81,18 @@ pub struct MemoryDismissSuggestionResponse {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MemoryStoreSuggestionRequest {
+    pub suggestion: MemorySuggestion,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryStoreSuggestionResponse {
+    pub ok: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MemoryDeleteRequest {
     pub memory_id: String,
 }
@@ -272,4 +284,27 @@ pub fn memory_delete(
     .map_err(|e| ApiError::database(e.to_string()))?;
 
     Ok(MemoryDeleteResponse { ok: true })
+}
+
+#[tauri::command]
+pub fn memory_store_suggestion(
+    request: MemoryStoreSuggestionRequest,
+    state: State<'_, AppState>,
+) -> Result<MemoryStoreSuggestionResponse, ApiError> {
+    let conn = get_conn(&state)?;
+    let s = &request.suggestion;
+
+    let ids_json =
+        serde_json::to_string(&s.derived_from_history_ids).unwrap_or_else(|_| "[]".to_string());
+
+    conn.execute(
+        "INSERT OR IGNORE INTO memory_suggestions (id, scope, project_root, kind, label, proposed_key, proposed_value, confidence, derived_from_history_ids_json, status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        rusqlite::params![
+            s.id, s.scope, s.project_root, s.kind, s.label,
+            s.proposed_key, s.proposed_value, s.confidence,
+            ids_json, s.status, s.created_at,
+        ],
+    ).map_err(|e| ApiError::database(e.to_string()))?;
+
+    Ok(MemoryStoreSuggestionResponse { ok: true })
 }

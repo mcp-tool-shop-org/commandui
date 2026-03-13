@@ -5,6 +5,9 @@ import type {
   MemorySuggestion,
   SessionSummary,
   Workflow,
+  WorkflowRun,
+  WorkflowRunStatus,
+  WorkflowStepRun,
 } from "@commandui/domain";
 
 export * from "./memorySelectors";
@@ -149,11 +152,14 @@ export const useMemoryStore = create<MemoryState>((set) => ({
           ? suggestions(state.suggestions)
           : suggestions;
 
-      const seen = new Set<string>();
+      const seenIds = new Set<string>();
+      const seenKeys = new Set<string>();
       const deduped = next.filter((s) => {
+        if (seenIds.has(s.id)) return false;
+        seenIds.add(s.id);
         const key = `${s.scope}:${s.projectRoot ?? ""}:${s.kind}:${s.proposedKey}:${s.proposedValue}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
+        if (seenKeys.has(key)) return false;
+        seenKeys.add(key);
         return true;
       });
 
@@ -232,11 +238,63 @@ type WorkflowState = {
   items: Workflow[];
   setWorkflows: (workflows: Workflow[]) => void;
   addWorkflow: (workflow: Workflow) => void;
+  removeWorkflow: (id: string) => void;
 };
 
 export const useWorkflowStore = create<WorkflowState>((set) => ({
   items: [],
   setWorkflows: (items) => set({ items }),
   addWorkflow: (workflow) =>
-    set((state) => ({ items: [workflow, ...state.items] })),
+    set((state) =>
+      state.items.some((w) => w.id === workflow.id)
+        ? state
+        : { items: [workflow, ...state.items] },
+    ),
+  removeWorkflow: (id) =>
+    set((state) => ({ items: state.items.filter((w) => w.id !== id) })),
+}));
+
+// --- Workflow Run Store (Phase 6C) ---
+
+type WorkflowRunState = {
+  activeRun: WorkflowRun | null;
+  lastRunByWorkflowId: Record<string, WorkflowRun>;
+  setActiveRun: (run: WorkflowRun | null) => void;
+  updateActiveRunStep: (
+    stepIndex: number,
+    patch: Partial<WorkflowStepRun>,
+  ) => void;
+  completeActiveRun: (status: WorkflowRunStatus) => void;
+};
+
+export const useWorkflowRunStore = create<WorkflowRunState>((set) => ({
+  activeRun: null,
+  lastRunByWorkflowId: {},
+  setActiveRun: (activeRun) => set({ activeRun }),
+  updateActiveRunStep: (stepIndex, patch) =>
+    set((state) => {
+      if (!state.activeRun) return state;
+      const steps = state.activeRun.steps.map((s) =>
+        s.index === stepIndex ? { ...s, ...patch } : s,
+      );
+      const currentStepIndex =
+        patch.status === "running" ? stepIndex : state.activeRun.currentStepIndex;
+      return { activeRun: { ...state.activeRun, steps, currentStepIndex } };
+    }),
+  completeActiveRun: (status) =>
+    set((state) => {
+      if (!state.activeRun) return state;
+      const completed: WorkflowRun = {
+        ...state.activeRun,
+        status,
+        finishedAt: Date.now(),
+      };
+      return {
+        activeRun: null,
+        lastRunByWorkflowId: {
+          ...state.lastRunByWorkflowId,
+          [completed.workflowId]: completed,
+        },
+      };
+    }),
 }));

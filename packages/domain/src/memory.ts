@@ -7,7 +7,12 @@ export type MemoryItem = {
     | "preferred_search_tool"
     | "preferred_test_command"
     | "accepted_substitution"
-    | "common_directory";
+    | "common_directory"
+    | "preferred_cwd"
+    | "recurring_command"
+    | "workflow_pattern"
+    | "tool_preference"
+    | "preferred_mode";
   key: string;
   value: string;
   confidence: number;
@@ -15,6 +20,8 @@ export type MemoryItem = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type MemorySuggestionKind = MemoryItem["kind"];
 
 export type MemorySuggestion = {
   id: string;

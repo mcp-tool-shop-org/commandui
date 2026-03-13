@@ -10,6 +10,8 @@ import type {
   PlanStoreResponse,
   WorkflowAddRequest,
   WorkflowAddResponse,
+  WorkflowDeleteRequest,
+  WorkflowDeleteResponse,
   WorkflowListResponse,
   SettingsGetResponse,
   SettingsUpdateRequest,
@@ -48,6 +50,12 @@ export function workflowAdd(
 
 export function workflowList(): Promise<WorkflowListResponse> {
   return tauriInvoke("workflow_list", {});
+}
+
+export function workflowDelete(
+  request: WorkflowDeleteRequest,
+): Promise<WorkflowDeleteResponse> {
+  return tauriInvoke("workflow_delete", { request });
 }
 
 export function settingsGet(): Promise<SettingsGetResponse> {

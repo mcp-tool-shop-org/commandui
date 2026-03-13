@@ -5,7 +5,10 @@ import type {
   MemorySuggestion,
   SessionSummary,
   Workflow,
+  WorkflowRun,
+  WorkflowStepRun,
 } from "@commandui/domain";
+import { runDetectors } from "@commandui/domain";
 import type { PlannerGeneratePlanResponse, SessionExecState } from "@commandui/api-contract";
 import {
   useComposerStore,
@@ -15,6 +18,7 @@ import {
   useMemoryStore,
   useSettingsStore,
   useWorkflowStore,
+  useWorkflowRunStore,
   useFocusStore,
   resolveEffectiveMemory,
 } from "@commandui/state";
@@ -46,6 +50,7 @@ import {
   historyUpdate,
   planStore,
   workflowAdd,
+  workflowDelete,
   workflowList,
   settingsGet,
   settingsUpdate,
@@ -55,6 +60,7 @@ import {
   memoryAcceptSuggestion,
   memoryDismissSuggestion,
   memoryDelete,
+  memoryStoreSuggestion,
 } from "../features/memory/memoryClient";
 import { InputComposer } from "../components/InputComposer";
 import type { InputComposerHandle } from "../components/InputComposer";
@@ -69,6 +75,8 @@ import { SettingsDrawer } from "../components/SettingsDrawer";
 import { MemorySuggestions } from "../components/MemorySuggestions";
 import { MemoryDrawer } from "../components/MemoryDrawer";
 import { WorkflowDrawer } from "../components/WorkflowDrawer";
+import { WorkflowEditor } from "../components/WorkflowEditor";
+import { WorkflowRunBanner } from "../components/WorkflowRunBanner";
 import { isTauriRuntime } from "../lib/tauriInvoke";
 import { onMockEvent } from "../lib/mockBridge";
 
@@ -129,7 +137,9 @@ export function AppShell() {
     setConfirmMediumRisk,
     setDefaultInputMode,
   } = useSettingsStore();
-  const { items: workflows, setWorkflows, addWorkflow } = useWorkflowStore();
+  const { items: workflows, setWorkflows, addWorkflow, removeWorkflow } = useWorkflowStore();
+  const { setActiveRun, updateActiveRunStep, completeActiveRun } = useWorkflowRunStore();
+  const lastRunByWorkflowId = useWorkflowRunStore((s) => s.lastRunByWorkflowId);
   const { restorePreviousZone } = useFocusStore();
 
   // --- Local state ---
@@ -146,6 +156,13 @@ export function AppShell() {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [workflowEditorData, setWorkflowEditorData] = useState<{
+    workflowId: string;
+    suggestionId: string;
+    label: string;
+    steps: string[];
+    projectRoot?: string;
+  } | null>(null);
 
   // Background buffer for session-switch replay
   const [terminalLinesBySession, setTerminalLinesBySession] = useState<
@@ -247,6 +264,13 @@ export function AppShell() {
           // memory not critical
         }
 
+        // Run pattern detectors on boot
+        try {
+          await generateSuggestions();
+        } catch {
+          // suggestion generation not critical
+        }
+
         // Workflows
         try {
           const wfRes = await workflowList();
@@ -303,6 +327,9 @@ export function AppShell() {
 
             updateHistoryItem(historyId, { status, exitCode: event.exitCode, finishedAt, durationMs });
             void historyUpdate({ historyId, status, exitCode: event.exitCode, finishedAt, durationMs });
+
+            // Run pattern detectors after execution completes
+            void generateSuggestions();
           },
         ),
         onMockEvent<{ sessionId: string; cwd: string }>(
@@ -363,6 +390,9 @@ export function AppShell() {
         finishedAt,
         durationMs,
       });
+
+      // Run pattern detectors after execution completes
+      void generateSuggestions();
     }).then((u) => unlisteners.push(u));
 
     subscribeToSessionCwdChanged((event) => {
@@ -414,6 +444,7 @@ export function AppShell() {
   const anyDrawerOpen = historyOpen || workflowOpen || memoryOpen || settingsOpen;
 
   function closeAllOverlays() {
+    if (workflowEditorData) { setWorkflowEditorData(null); return; }
     if (paletteOpen) { setPaletteOpen(false); return; }
     if (anyDrawerOpen) {
       setHistoryOpen(false);
@@ -864,63 +895,253 @@ export function AppShell() {
     setHistoryOpen(false);
   }
 
+  // --- Workflow run helpers ---
+  function waitForStepCompletion(executionId: string): Promise<HistoryItem> {
+    return new Promise((resolve) => {
+      const check = () => {
+        const item = useHistoryStore.getState().items.find((h) => h.id === executionId);
+        if (item && item.status !== "planned") resolve(item);
+        else setTimeout(check, 100);
+      };
+      setTimeout(check, 100);
+    });
+  }
+
+  function formatRunDuration(ms: number): string {
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+  }
+
+  function writeRunSummary(sessionId: string, run: WorkflowRun, finalStatus: "success" | "failed" | "interrupted") {
+    const succeeded = run.steps.filter((s) => s.status === "success").length;
+    const total = run.steps.length;
+    const duration = run.finishedAt ? formatRunDuration(run.finishedAt - run.startedAt) : "";
+    const durSuffix = duration ? ` (${duration})` : "";
+
+    if (finalStatus === "success") {
+      appendTerminalLine(sessionId, `[workflow:done] ${run.workflowName} — ${succeeded}/${total} succeeded${durSuffix}\r\n`);
+    } else if (finalStatus === "failed") {
+      const failedStep = run.steps.find((s) => s.status === "failed");
+      appendTerminalLine(sessionId, `[workflow:failed] ${run.workflowName} — ${succeeded}/${total} succeeded, failed on step ${(failedStep?.index ?? 0) + 1}${durSuffix}\r\n`);
+    } else {
+      const skipped = run.steps.filter((s) => s.status === "skipped").length;
+      const interruptedStep = run.steps.find((s) => s.status === "interrupted");
+      appendTerminalLine(sessionId, `[workflow:interrupted] ${run.workflowName} — interrupted during step ${(interruptedStep?.index ?? 0) + 1}; ${skipped} skipped${durSuffix}\r\n`);
+    }
+  }
+
   // --- Workflow run handler ---
   async function handleRunWorkflow(workflow: Workflow) {
     if (!session) return;
     setBusy(true);
+    setWorkflowOpen(false);
+
+    const runId = crypto.randomUUID();
+    const commands = workflow.steps?.map((s) => s.command) ?? [workflow.command];
+    const historySource: "raw" | "semantic" = workflow.source === "semantic" ? "semantic" : "raw";
+
+    const runSteps: WorkflowStepRun[] = commands.map((cmd, i) => ({
+      index: i,
+      command: cmd,
+      label: workflow.steps?.[i]?.label,
+      status: "pending" as const,
+    }));
+
+    const run: WorkflowRun = {
+      id: runId,
+      workflowId: workflow.id,
+      workflowName: workflow.label,
+      startedAt: Date.now(),
+      status: "running",
+      currentStepIndex: 0,
+      steps: runSteps,
+    };
+    setActiveRun(run);
 
     try {
-      const executionId = crypto.randomUUID();
-      const historyItem: HistoryItem = {
-        id: executionId,
-        sessionId: session.id,
-        source: workflow.source,
-        userInput: workflow.originalIntent ?? workflow.label,
-        executedCommand: workflow.command,
-        status: "planned",
-        createdAt: new Date().toISOString(),
-      };
-      appendHistoryItem(historyItem);
-      executionToHistoryRef.current[executionId] = executionId;
-      void historyAppend({ item: historyItem });
+      for (let i = 0; i < commands.length; i++) {
+        const cmd = commands[i];
+        const executionId = crypto.randomUUID();
 
-      await executeCommand({
-        executionId,
-        sessionId: session.id,
-        command: workflow.command,
-        source: workflow.source,
-      });
+        // Mark step running
+        updateActiveRunStep(i, { status: "running", startedAt: Date.now() });
 
-      setWorkflowOpen(false);
+        // Create history item linked to this workflow run
+        const stepLabel = commands.length > 1 ? ` [${i + 1}/${commands.length}]` : "";
+        const historyItem: HistoryItem = {
+          id: executionId,
+          sessionId: session.id,
+          source: historySource,
+          userInput: `${workflow.label}${stepLabel}`,
+          executedCommand: cmd,
+          status: "planned",
+          createdAt: new Date().toISOString(),
+          cwd: session.cwd,
+          workflowRunId: runId,
+        };
+        appendHistoryItem(historyItem);
+        executionToHistoryRef.current[executionId] = executionId;
+        void historyAppend({ item: historyItem });
+
+        await executeCommand({
+          executionId,
+          sessionId: session.id,
+          command: cmd,
+          source: historySource,
+        });
+
+        // Wait for step completion
+        const finished = await waitForStepCompletion(executionId);
+        const stepStatus = finished.status as "success" | "failure" | "interrupted";
+        const mappedStatus = stepStatus === "failure" ? "failed" : stepStatus;
+
+        updateActiveRunStep(i, {
+          status: mappedStatus,
+          finishedAt: Date.now(),
+          historyItemId: executionId,
+        });
+
+        // Stop on failure or interruption
+        if (mappedStatus !== "success") {
+          // Mark remaining steps as skipped
+          for (let j = i + 1; j < commands.length; j++) {
+            updateActiveRunStep(j, { status: "skipped" });
+          }
+          // Read latest run state before completing
+          const latestRun = useWorkflowRunStore.getState().activeRun;
+          completeActiveRun(mappedStatus === "interrupted" ? "interrupted" : "failed");
+          if (latestRun) {
+            writeRunSummary(session.id, { ...latestRun, finishedAt: Date.now() }, mappedStatus === "interrupted" ? "interrupted" : "failed");
+          }
+          return;
+        }
+      }
+
+      // All steps succeeded
+      const latestRun = useWorkflowRunStore.getState().activeRun;
+      completeActiveRun("success");
+      if (latestRun) {
+        writeRunSummary(session.id, { ...latestRun, finishedAt: Date.now() }, "success");
+      }
     } catch (e: unknown) {
+      // Mark remaining steps as skipped on unexpected error
+      const latestRun = useWorkflowRunStore.getState().activeRun;
+      if (latestRun) {
+        for (const step of latestRun.steps) {
+          if (step.status === "pending" || step.status === "running") {
+            updateActiveRunStep(step.index, { status: "skipped" });
+          }
+        }
+      }
+      completeActiveRun("failed");
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   }
 
-  // --- Memory handlers ---
-  async function handleAcceptSuggestion(suggestionId: string) {
+  // --- Workflow delete handler ---
+  async function handleDeleteWorkflow(workflowId: string) {
     try {
-      const res = await memoryAcceptSuggestion({ suggestionId });
-      if (res.createdItem) {
-        addMemoryItem(res.createdItem);
-      }
-      removeSuggestion(suggestionId);
-
-      // Reload full memory for truth sync
-      const memRes = await memoryList();
-      setMemoryItems(memRes.items ?? []);
-      setMemorySuggestions(memRes.suggestions ?? []);
+      await workflowDelete({ id: workflowId });
+      removeWorkflow(workflowId);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
 
+  // --- Memory handlers ---
+  async function handleAcceptSuggestion(suggestionId: string) {
+    // For workflow_pattern suggestions, open the editor instead of immediately creating
+    // Read directly from store to avoid stale closure
+    const suggestion = useMemoryStore.getState().suggestions.find((s) => s.id === suggestionId);
+    if (suggestion?.kind === "workflow_pattern") {
+      try {
+        const commands: string[] = JSON.parse(suggestion.proposedValue);
+        setWorkflowEditorData({
+          workflowId: crypto.randomUUID(),
+          suggestionId,
+          label: suggestion.proposedKey,
+          steps: commands,
+          projectRoot: suggestion.projectRoot,
+        });
+      } catch {
+        // invalid JSON — fall through to normal accept
+      }
+      return;
+    }
+
+    try {
+      const res = await memoryAcceptSuggestion({ suggestionId });
+      if (res.createdItem) {
+        addMemoryItem(res.createdItem);
+      }
+      // Mark as accepted in store (don't remove — detectors need accepted state to avoid re-suggesting)
+      setMemorySuggestions((prev) =>
+        prev.map((s) =>
+          s.id === suggestionId ? { ...s, status: "accepted" as const } : s,
+        ),
+      );
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  const confirmingRef = useRef(false);
+  async function handleWorkflowEditorConfirm(label: string, steps: string[]) {
+    if (!workflowEditorData || confirmingRef.current) return;
+    confirmingRef.current = true;
+    const { workflowId, suggestionId, projectRoot } = workflowEditorData;
+    setWorkflowEditorData(null);
+
+    try {
+      // 1. Accept the memory suggestion
+      const res = await memoryAcceptSuggestion({ suggestionId });
+      if (res.createdItem) {
+        addMemoryItem(res.createdItem);
+      }
+      setMemorySuggestions((prev) =>
+        prev.map((s) =>
+          s.id === suggestionId ? { ...s, status: "accepted" as const } : s,
+        ),
+      );
+
+      // 2. Create and persist the workflow with edited data
+      const workflow: Workflow = {
+        id: workflowId,
+        label,
+        source: "promoted",
+        command: steps.join(" && "),
+        steps: steps.map((cmd) => ({ command: cmd })),
+        projectRoot,
+        createdAt: new Date().toISOString(),
+      };
+      await workflowAdd({ workflow });
+      addWorkflow(workflow);
+      if (session) {
+        appendTerminalLine(session.id, `[workflow:promoted] ${workflow.label}\r\n`);
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      confirmingRef.current = false;
+    }
+  }
+
+  function handleWorkflowEditorCancel() {
+    setWorkflowEditorData(null);
+  }
+
   async function handleDismissSuggestion(suggestionId: string) {
     try {
       await memoryDismissSuggestion({ suggestionId });
-      removeSuggestion(suggestionId);
+      // Mark as dismissed in store (don't remove — detectors need dismissed state to avoid re-suggesting)
+      setMemorySuggestions((prev) =>
+        prev.map((s) =>
+          s.id === suggestionId ? { ...s, status: "dismissed" as const } : s,
+        ),
+      );
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -932,6 +1153,33 @@ export function AppShell() {
       removeMemoryItem(memoryId);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // --- Suggestion generation ---
+  async function generateSuggestions() {
+    const history = useHistoryStore.getState().items;
+    const { items: mem, suggestions: sug } = useMemoryStore.getState();
+    const session = sessions.find((s) => s.id === activeSessionId);
+
+    const candidates = runDetectors({
+      history,
+      existingSuggestions: sug,
+      existingMemory: mem,
+      projectRoot: session?.cwd,
+    });
+
+    for (const candidate of candidates) {
+      try {
+        await memoryStoreSuggestion({ suggestion: candidate });
+      } catch {
+        // persistence not critical
+      }
+    }
+
+    if (candidates.length > 0) {
+      // Use function-form setter so the store's built-in dedup runs on latest state
+      setMemorySuggestions((prev) => [...prev, ...candidates]);
     }
   }
 
@@ -998,6 +1246,8 @@ export function AppShell() {
               </button>
             </div>
           )}
+
+          <WorkflowRunBanner />
 
           <TerminalPane
             ref={terminalPaneRef}
@@ -1081,11 +1331,13 @@ export function AppShell() {
       <WorkflowDrawer
         isOpen={workflowOpen}
         workflows={workflows}
+        lastRunByWorkflowId={lastRunByWorkflowId}
         onClose={() => {
           setWorkflowOpen(false);
           requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         onRun={handleRunWorkflow}
+        onDelete={handleDeleteWorkflow}
       />
 
       <MemoryDrawer
@@ -1127,6 +1379,16 @@ export function AppShell() {
         confirmMediumRisk={confirmMediumRisk}
         onConfirmMediumRiskChange={setConfirmMediumRisk}
       />
+
+      {workflowEditorData && (
+        <WorkflowEditor
+          initialLabel={workflowEditorData.label}
+          initialSteps={workflowEditorData.steps}
+          projectRoot={workflowEditorData.projectRoot}
+          onConfirm={handleWorkflowEditorConfirm}
+          onCancel={handleWorkflowEditorCancel}
+        />
+      )}
     </div>
   );
 }

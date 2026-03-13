@@ -7,6 +7,8 @@ import type {
   MemoryAcceptSuggestionResponse,
   MemoryDismissSuggestionRequest,
   MemoryDismissSuggestionResponse,
+  MemoryStoreSuggestionRequest,
+  MemoryStoreSuggestionResponse,
   MemoryDeleteRequest,
   MemoryDeleteResponse,
 } from "@commandui/api-contract";
@@ -31,6 +33,12 @@ export function memoryDismissSuggestion(
   request: MemoryDismissSuggestionRequest,
 ): Promise<MemoryDismissSuggestionResponse> {
   return tauriInvoke("memory_dismiss_suggestion", { request });
+}
+
+export function memoryStoreSuggestion(
+  request: MemoryStoreSuggestionRequest,
+): Promise<MemoryStoreSuggestionResponse> {
+  return tauriInvoke("memory_store_suggestion", { request });
 }
 
 export function memoryDelete(

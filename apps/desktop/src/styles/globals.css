@@ -580,25 +580,67 @@ select {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  flex-shrink: 0;
+  max-height: 30vh;
+  overflow-y: auto;
 }
 
 .memory-item {
   background: var(--bg-primary);
   border-radius: var(--radius-md);
   padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.memory-kind-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  opacity: 0.8;
 }
 
 .memory-label {
   font-weight: 600;
   font-size: 14px;
-  margin-bottom: 4px;
+}
+
+.memory-evidence {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.memory-confidence-wrap {
+  flex: 0 0 48px;
+  height: 4px;
+  background: var(--bg-card);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.memory-confidence-bar {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+
+.memory-confidence-pct {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 28px;
 }
 
 .memory-actions {
   display: flex;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 /* === Preview Banner === */
@@ -696,4 +738,272 @@ select {
   text-align: center;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+/* === Workflow Steps === */
+.workflow-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workflow-badge-promoted {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--bg-primary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.workflow-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0;
+  padding-left: 4px;
+  border-left: 2px solid var(--border);
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.workflow-step code {
+  color: var(--text-primary);
+}
+
+.workflow-step-num {
+  color: var(--text-muted);
+  font-size: 11px;
+  min-width: 16px;
+  text-align: right;
+}
+
+.workflow-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.btn-danger {
+  color: var(--failure);
+  border-color: var(--failure);
+}
+
+.btn-danger:hover {
+  background: rgba(255, 180, 192, 0.1);
+}
+
+/* === Workflow Editor Modal === */
+.workflow-editor-panel {
+  width: 520px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.workflow-editor-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.workflow-editor-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.workflow-editor-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workflow-editor-field label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.workflow-editor-name {
+  width: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.workflow-editor-name:focus {
+  border-color: var(--accent);
+}
+
+.workflow-editor-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.workflow-editor-step-input {
+  flex: 1;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  outline: none;
+}
+
+.workflow-editor-step-input:focus {
+  border-color: var(--accent);
+}
+
+.workflow-editor-step button {
+  padding: 4px 8px;
+  font-size: 11px;
+  min-width: unset;
+}
+
+.workflow-editor-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workflow-editor-confirm {
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.workflow-editor-confirm:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.workflow-editor-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* === Workflow Run Banner === */
+.workflow-run-banner {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.workflow-run-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.workflow-run-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.workflow-run-progress {
+  color: var(--text-muted);
+}
+
+.workflow-run-step-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.wf-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.wf-dot--pending {
+  background: var(--border);
+}
+
+.wf-dot--running {
+  background: var(--accent);
+  animation: wf-pulse 1s infinite;
+}
+
+.wf-dot--success {
+  background: var(--success);
+}
+
+.wf-dot--failed {
+  background: var(--failure);
+}
+
+.wf-dot--interrupted {
+  background: var(--failure);
+  opacity: 0.6;
+}
+
+.wf-dot--skipped {
+  background: var(--border);
+  opacity: 0.4;
+}
+
+@keyframes wf-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* === Workflow Last Run (Drawer) === */
+.workflow-last-run {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.workflow-last-run-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.workflow-last-run-dot--success {
+  background: var(--success);
+}
+
+.workflow-last-run-dot--failed {
+  background: var(--failure);
+}
+
+.workflow-last-run-dot--interrupted {
+  background: var(--failure);
+  opacity: 0.6;
 }

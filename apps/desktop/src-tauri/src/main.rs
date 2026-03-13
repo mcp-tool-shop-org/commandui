@@ -42,12 +42,14 @@ fn main() {
             commandui_desktop::commands::settings::settings_get,
             commandui_desktop::commands::settings::settings_update,
             commandui_desktop::commands::workflow::workflow_add,
+            commandui_desktop::commands::workflow::workflow_delete,
             commandui_desktop::commands::workflow::workflow_list,
             commandui_desktop::commands::memory::memory_list,
             commandui_desktop::commands::memory::memory_add,
             commandui_desktop::commands::memory::memory_accept_suggestion,
             commandui_desktop::commands::memory::memory_dismiss_suggestion,
             commandui_desktop::commands::memory::memory_delete,
+            commandui_desktop::commands::memory::memory_store_suggestion,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CommandUI");

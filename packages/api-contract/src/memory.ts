@@ -30,6 +30,14 @@ export type MemoryDismissSuggestionResponse = {
   ok: boolean;
 };
 
+export type MemoryStoreSuggestionRequest = {
+  suggestion: MemorySuggestion;
+};
+
+export type MemoryStoreSuggestionResponse = {
+  ok: boolean;
+};
+
 export type MemoryDeleteRequest = {
   memoryId: string;
 };

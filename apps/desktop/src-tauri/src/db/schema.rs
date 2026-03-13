@@ -83,6 +83,7 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
         "ALTER TABLE history_items ADD COLUMN duration_ms INTEGER",
         "ALTER TABLE history_items ADD COLUMN cwd TEXT",
         "ALTER TABLE history_items ADD COLUMN planner_source TEXT",
+        "ALTER TABLE workflows ADD COLUMN steps_json TEXT",
     ];
     for sql in migrations {
         let _ = conn.execute(sql, []);

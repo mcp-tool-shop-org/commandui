@@ -11,3 +11,11 @@ export type WorkflowAddResponse = {
 export type WorkflowListResponse = {
   workflows: Workflow[];
 };
+
+export type WorkflowDeleteRequest = {
+  id: string;
+};
+
+export type WorkflowDeleteResponse = {
+  ok: boolean;
+};

@@ -14,4 +14,5 @@ export type HistoryItem = {
   durationMs?: number;
   cwd?: string;
   plannerSource?: "ollama" | "mock";
+  workflowRunId?: string;
 };

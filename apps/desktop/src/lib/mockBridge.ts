@@ -61,6 +61,7 @@ const mockSessions: Record<string, Record<string, unknown>> = {};
 const mockHistory: Array<Record<string, unknown>> = [];
 const mockWorkflows: Array<Record<string, unknown>> = [];
 const mockMemoryItems: Array<Record<string, unknown>> = [];
+const mockMemorySuggestions: Array<Record<string, unknown>> = [];
 const mockRunningExecs = new Set<string>();
 
 const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
@@ -284,13 +285,31 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
 
   workflow_add(args) {
     const req = (args.request ?? {}) as Record<string, unknown>;
-    const wf = { id: uuid(), ...req, createdAt: new Date().toISOString() };
-    mockWorkflows.push(wf);
-    return { workflow: wf };
+    const wf = req.workflow as Record<string, unknown> ?? { id: uuid(), ...req, createdAt: new Date().toISOString() };
+    if (wf.steps) {
+      wf.stepsJson = JSON.stringify(wf.steps);
+    }
+    const existing = mockWorkflows.findIndex((w) => (w as Record<string, unknown>).id === wf.id);
+    if (existing >= 0) {
+      mockWorkflows[existing] = wf;
+    } else {
+      mockWorkflows.push(wf);
+    }
+    return { ok: true };
   },
 
   workflow_list() {
     return { workflows: mockWorkflows };
+  },
+
+  workflow_delete(args) {
+    const req = (args.request ?? {}) as Record<string, unknown>;
+    const id = req.id as string;
+    const idx = mockWorkflows.findIndex((w) => (w as Record<string, unknown>).id === id);
+    if (idx >= 0) {
+      mockWorkflows.splice(idx, 1);
+    }
+    return { ok: true };
   },
 
   settings_get() {
@@ -310,7 +329,10 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   },
 
   memory_list() {
-    return { items: mockMemoryItems, suggestions: [] };
+    const pending = mockMemorySuggestions.filter(
+      (s) => (s as Record<string, unknown>).status === "pending",
+    );
+    return { items: mockMemoryItems, suggestions: pending };
   },
 
   memory_add(args) {
@@ -320,28 +342,69 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     return { item };
   },
 
-  memory_accept_suggestion(args) {
+  memory_store_suggestion(args) {
     const req = (args.request ?? {}) as Record<string, unknown>;
-    return {
-      createdItem: {
-        id: uuid(),
-        scope: "project",
-        kind: "accepted_substitution",
-        key: "mock-key",
-        value: "mock-value",
-        confidence: 0.9,
-        source: "suggestion",
-        suggestionId: req.suggestionId,
-        createdAt: new Date().toISOString(),
-      },
-    };
-  },
-
-  memory_dismiss_suggestion() {
+    const suggestion = req.suggestion as Record<string, unknown>;
+    const exists = mockMemorySuggestions.some(
+      (s) => (s as Record<string, unknown>).id === suggestion.id,
+    );
+    if (!exists) {
+      mockMemorySuggestions.push(suggestion);
+    }
     return { ok: true };
   },
 
-  memory_delete() {
+  memory_accept_suggestion(args) {
+    const req = (args.request ?? {}) as Record<string, unknown>;
+    const id = req.suggestionId as string;
+    const idx = mockMemorySuggestions.findIndex(
+      (s) => (s as Record<string, unknown>).id === id,
+    );
+    const suggestion =
+      idx >= 0 ? (mockMemorySuggestions[idx] as Record<string, unknown>) : null;
+
+    if (suggestion) {
+      suggestion.status = "accepted";
+      const now = new Date().toISOString();
+      const createdItem = {
+        id: uuid(),
+        scope: suggestion.scope ?? "project",
+        kind: suggestion.kind ?? "accepted_substitution",
+        key: suggestion.proposedKey ?? "mock-key",
+        value: suggestion.proposedValue ?? "mock-value",
+        confidence: suggestion.confidence ?? 0.9,
+        source: "accepted",
+        createdAt: now,
+        updatedAt: now,
+      };
+      mockMemoryItems.push(createdItem);
+      return { ok: true, createdItem };
+    }
+
+    return { ok: true };
+  },
+
+  memory_dismiss_suggestion(args) {
+    const req = (args.request ?? {}) as Record<string, unknown>;
+    const id = req.suggestionId as string;
+    const idx = mockMemorySuggestions.findIndex(
+      (s) => (s as Record<string, unknown>).id === id,
+    );
+    if (idx >= 0) {
+      (mockMemorySuggestions[idx] as Record<string, unknown>).status = "dismissed";
+    }
+    return { ok: true };
+  },
+
+  memory_delete(args) {
+    const req = (args.request ?? {}) as Record<string, unknown>;
+    const id = req.memoryId as string;
+    const idx = mockMemoryItems.findIndex(
+      (m) => (m as Record<string, unknown>).id === id,
+    );
+    if (idx >= 0) {
+      mockMemoryItems.splice(idx, 1);
+    }
     return { ok: true };
   },
 };
