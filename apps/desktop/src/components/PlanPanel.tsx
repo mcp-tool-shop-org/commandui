@@ -8,6 +8,7 @@ type Props = {
   risk: "low" | "medium" | "high";
   explanation: string;
   contextSources?: string[];
+  plannerSource?: string;
   requireMediumRiskConfirmation?: boolean;
   onApprove: (command: string) => void;
   onReject: () => void;
@@ -21,6 +22,7 @@ export function PlanPanel({
   risk,
   explanation,
   contextSources,
+  plannerSource,
   requireMediumRiskConfirmation = true,
   onApprove,
   onReject,
@@ -68,6 +70,12 @@ export function PlanPanel({
       tabIndex={0}
       onFocus={() => setFocusZone("plan")}
     >
+      {plannerSource === "mock" && (
+        <div className="plan-mock-notice muted">
+          Mock planner — Ollama not connected
+        </div>
+      )}
+
       <div className="plan-section">
         <span className="plan-label">Intent</span>
         <p>{intent}</p>

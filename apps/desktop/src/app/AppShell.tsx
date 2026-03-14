@@ -80,7 +80,7 @@ import { WorkflowRunBanner } from "../components/WorkflowRunBanner";
 import { isTauriRuntime } from "../lib/tauriInvoke";
 import { onMockEvent } from "../lib/mockBridge";
 
-const APP_VERSION = "0.0.1";
+const APP_VERSION = "1.0.0";
 
 function simplifyText(text: string): string {
   const first = text.split(/[.!?]\s/)[0];
@@ -149,6 +149,8 @@ export function AppShell() {
   >(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bootPhase, setBootPhase] = useState<"booting" | "ready" | "failed">("booting");
+  const [bootError, setBootError] = useState<string | null>(null);
 
   const [browserPreview] = useState(() => !isTauriRuntime());
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -280,8 +282,12 @@ export function AppShell() {
         } catch {
           // workflows not critical
         }
+
+        setBootPhase("ready");
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
+        setBootError(msg);
+        setBootPhase("failed");
         setError(`Boot failed: ${msg}`);
       }
     }
@@ -1213,6 +1219,34 @@ export function AppShell() {
       ? simplifyText(plan.plan.explanation)
       : plan?.plan.explanation ?? "";
 
+  // --- Boot failure screen ---
+  if (bootPhase === "failed") {
+    return (
+      <div className="app-shell">
+        <div className="boot-failure">
+          <h2>CommandUI could not start</h2>
+          <p className="muted">{bootError}</p>
+          <div className="boot-failure-actions">
+            <button type="button" onClick={() => window.location.reload()}>
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(bootError ?? "Unknown error");
+              }}
+            >
+              Copy Error
+            </button>
+          </div>
+          <p className="muted boot-failure-hint">
+            If this persists, check that your Tauri backend is running.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // --- Render ---
   return (
     <div className="app-shell">
@@ -1270,6 +1304,10 @@ export function AppShell() {
 
           <WorkflowRunBanner />
 
+          {bootPhase === "booting" && (
+            <div className="boot-loading">Starting CommandUI...</div>
+          )}
+
           <TerminalPane
             ref={terminalPaneRef}
             sessionId={activeSessionId}
@@ -1320,6 +1358,7 @@ export function AppShell() {
                 risk={plan.plan.risk}
                 explanation={displayExplanation}
                 contextSources={plan.review.retrievedContext}
+                plannerSource={plan.plan.source}
                 requireMediumRiskConfirmation={confirmMediumRisk}
                 onApprove={handleApprovePlan}
                 onReject={handleRejectPlan}

@@ -247,7 +247,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       plan: {
         id: planId,
         sessionId: req.sessionId ?? "mock",
-        source: "semantic",
+        source: "mock",
         userIntent: intent,
         command,
         explanation,
