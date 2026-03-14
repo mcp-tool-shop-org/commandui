@@ -4,3 +4,4 @@ coverage
 target
 .DS_Store
 *.log
+site/.astro/
