@@ -27,7 +27,11 @@ AI-native shell environment with semantic command review.
 
 - Not a chatbot or autonomous agent
 - Not a terminal emulator replacement
-- Not production-hardened (early v0)
+- Not production-hardened yet
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for the threat model and vulnerability reporting.
 
 ## Workspace layout
 
@@ -62,4 +66,4 @@ cargo test
 
 ## Current status
 
-Early v0 with a real shell spine. 21-piece bootstrap delivering: PTY sessions, semantic review loop, persistence, memory, workflows, accessibility settings, multi-session tabs, xterm.js terminal, prompt-marker completion detection.
+v1.0.0 — real shell spine with PTY sessions, semantic review loop, persistence, memory, workflows, accessibility settings, multi-session tabs, xterm.js terminal, and prompt-marker completion detection.
