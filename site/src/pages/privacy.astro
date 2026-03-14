@@ -1,0 +1,73 @@
+---
+import '../styles/global.css';
+import BaseLayout from '@mcptoolshop/site-theme/components/BaseLayout.astro';
+import { config } from '../site-config';
+---
+
+<BaseLayout
+  title={`Privacy Policy — ${config.title}`}
+  description="Privacy policy for CommandUI"
+  logoBadge={config.logoBadge}
+  brandName={config.brandName}
+  repoUrl={config.repoUrl}
+  footerText={config.footerText}
+  nav={[{ href: '/', label: 'Home' }]}
+>
+  <section style="max-width:48rem;margin:0 auto;padding:4rem 1.5rem;">
+    <h1 style="font-size:2rem;font-weight:700;margin-bottom:1.5rem;color:var(--color-heading);">Privacy Policy</h1>
+    <p style="color:var(--color-muted);margin-bottom:0.5rem;">Effective date: March 14, 2026</p>
+    <hr style="border-color:var(--color-border);margin:1.5rem 0;" />
+
+    <h2 style="font-size:1.25rem;font-weight:600;margin:1.5rem 0 0.75rem;color:var(--color-heading);">Summary</h2>
+    <p style="color:var(--color-body);line-height:1.7;">
+      CommandUI does not collect, transmit, or store any personal data. The application runs entirely on your local machine.
+    </p>
+
+    <h2 style="font-size:1.25rem;font-weight:600;margin:1.5rem 0 0.75rem;color:var(--color-heading);">Data Collection</h2>
+    <p style="color:var(--color-body);line-height:1.7;">
+      CommandUI collects <strong>no data</strong>. Specifically:
+    </p>
+    <ul style="color:var(--color-body);line-height:1.7;padding-left:1.5rem;margin-top:0.5rem;">
+      <li>No telemetry or analytics</li>
+      <li>No crash reports sent externally</li>
+      <li>No network requests to our servers</li>
+      <li>No cookies or tracking identifiers</li>
+      <li>No personal information collected</li>
+    </ul>
+
+    <h2 style="font-size:1.25rem;font-weight:600;margin:1.5rem 0 0.75rem;color:var(--color-heading);">Local Storage</h2>
+    <p style="color:var(--color-body);line-height:1.7;">
+      CommandUI stores the following data locally on your machine only:
+    </p>
+    <ul style="color:var(--color-body);line-height:1.7;padding-left:1.5rem;margin-top:0.5rem;">
+      <li><strong>Command history</strong> — your executed commands, stored in a local SQLite database</li>
+      <li><strong>Project memory</strong> — learned preferences and patterns, stored locally</li>
+      <li><strong>Workflows</strong> — saved command sequences, stored locally</li>
+      <li><strong>Settings</strong> — your configuration preferences, stored locally</li>
+    </ul>
+    <p style="color:var(--color-body);line-height:1.7;margin-top:0.75rem;">
+      This data never leaves your device. You can delete it at any time by removing the application data directory.
+    </p>
+
+    <h2 style="font-size:1.25rem;font-weight:600;margin:1.5rem 0 0.75rem;color:var(--color-heading);">AI / LLM Integration</h2>
+    <p style="color:var(--color-body);line-height:1.7;">
+      When configured, CommandUI communicates with a <strong>local</strong> Ollama instance running on your machine for command planning. No data is sent to cloud-based AI services. If Ollama is not running, CommandUI falls back to a built-in mock planner with no network activity.
+    </p>
+
+    <h2 style="font-size:1.25rem;font-weight:600;margin:1.5rem 0 0.75rem;color:var(--color-heading);">Third-Party Services</h2>
+    <p style="color:var(--color-body);line-height:1.7;">
+      CommandUI does not integrate with any third-party analytics, advertising, or tracking services.
+    </p>
+
+    <h2 style="font-size:1.25rem;font-weight:600;margin:1.5rem 0 0.75rem;color:var(--color-heading);">Changes</h2>
+    <p style="color:var(--color-body);line-height:1.7;">
+      If this policy changes, the updated version will be posted at this URL. Since CommandUI collects no data, meaningful changes are unlikely.
+    </p>
+
+    <h2 style="font-size:1.25rem;font-weight:600;margin:1.5rem 0 0.75rem;color:var(--color-heading);">Contact</h2>
+    <p style="color:var(--color-body);line-height:1.7;">
+      Questions? Open an issue at
+      <a href="https://github.com/mcp-tool-shop-org/commandui/issues" style="color:var(--color-accent);text-decoration:underline;">github.com/mcp-tool-shop-org/commandui</a>.
+    </p>
+  </section>
+</BaseLayout>
