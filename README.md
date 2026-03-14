@@ -8,13 +8,28 @@
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/commandui/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/commandui/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/mcp-tool-shop-org/commandui/releases/latest"><img src="https://img.shields.io/github/v/release/mcp-tool-shop-org/commandui?label=Release" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT License" /></a>
   <a href="https://mcp-tool-shop-org.github.io/commandui/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page" /></a>
+  <a href="https://mcp-tool-shop-org.github.io/commandui/handbook/"><img src="https://img.shields.io/badge/Handbook-26_chapters-blue" alt="Handbook" /></a>
 </p>
 
 # CommandUI
 
 AI-native shell environment with semantic command review.
+
+## Install
+
+**Windows (MSI installer)** — download from [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest)
+
+```powershell
+# Scoop
+scoop bucket add mcp-tool-shop https://github.com/mcp-tool-shop-org/scoop-bucket
+scoop install commandui
+
+# winget (after approval)
+winget install mcp-tool-shop.CommandUI
+```
 
 ## What it does
 

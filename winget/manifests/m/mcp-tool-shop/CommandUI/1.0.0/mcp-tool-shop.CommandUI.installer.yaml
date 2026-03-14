@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: mcp-tool-shop.CommandUI
+PackageVersion: 1.0.0
+Installers:
+  - Architecture: x64
+    InstallerType: msi
+    InstallerUrl: https://github.com/mcp-tool-shop-org/commandui/releases/download/v1.0.0/CommandUI_1.0.0_x64_en-US.msi
+    InstallerSha256: # TODO: fill after first release build
+    ProductCode: # TODO: fill from MSI after first build
+ManifestType: installer
+ManifestVersion: 1.6.0

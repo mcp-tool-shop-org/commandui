@@ -13,7 +13,7 @@ export const config: SiteConfig = {
     headline: 'CommandUI',
     headlineAccent: 'AI-native shell.',
     description: 'Real terminal. Semantic input. You review every command before it runs.',
-    primaryCta: { href: '#usage', label: 'Get started' },
+    primaryCta: { href: '#install', label: 'Download' },
     secondaryCta: { href: 'handbook/', label: 'Read the Handbook' },
     previews: [
       { label: 'Command', code: 'git status --short' },
@@ -23,6 +23,25 @@ export const config: SiteConfig = {
   },
 
   sections: [
+    {
+      kind: 'code-cards',
+      id: 'install',
+      title: 'Install',
+      cards: [
+        {
+          title: 'Windows (MSI)',
+          code: '# Download from GitHub Releases\nhttps://github.com/mcp-tool-shop-org/commandui/releases/latest',
+        },
+        {
+          title: 'Scoop',
+          code: 'scoop bucket add mcp-tool-shop https://github.com/mcp-tool-shop-org/scoop-bucket\nscoop install commandui',
+        },
+        {
+          title: 'winget',
+          code: 'winget install mcp-tool-shop.CommandUI',
+        },
+      ],
+    },
     {
       kind: 'features',
       id: 'features',

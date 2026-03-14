@@ -33,6 +33,16 @@
       "icons/icon.ico"
     ],
     "shortDescription": "AI-native shell environment with semantic command review",
-    "longDescription": "CommandUI is a terminal-first desktop shell that adds semantic intent review, memory, and workflow management on top of a real PTY shell session."
+    "longDescription": "CommandUI is a terminal-first desktop shell that adds semantic intent review, memory, and workflow management on top of a real PTY shell session.",
+    "windows": {
+      "certificateThumbprint": null,
+      "timestampUrl": null,
+      "wix": null,
+      "nsis": null,
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    },
+    "publisher": "mcp-tool-shop"
   }
 }
