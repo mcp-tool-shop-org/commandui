@@ -5,3 +5,5 @@ target
 .DS_Store
 *.log
 site/.astro/
+*.msi
+*.nsis
