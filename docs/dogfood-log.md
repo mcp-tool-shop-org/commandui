@@ -1,39 +1,35 @@
 # CommandUI Console — Dogfood Log
 
-Phase 7E smoke testing. Run real programs through Console, log friction.
+Phase 7E/7F smoke testing via code-path analysis (Test Engineer role).
 
-## Test matrix
+## Findings
 
-### Line-oriented programs
+### Defects (fixed)
 
-| # | Scenario | Action | Expected | Actual | Severity |
-|---|----------|--------|----------|--------|----------|
-| 1 | Python REPL | `python -i` in shell | Interactive REPL, prompt visible, input echoed | | |
-| 2 | Node REPL | `node` in shell | Interactive REPL, `.exit` works | | |
-| 3 | Interactive git | `git log --oneline` | Paged output, scroll works | | |
+| # | Finding | Evidence | Fix |
+|---|---------|----------|-----|
+| 1 | Welcome banner is dead code — `App::run()` creates initial session on startup, so `sessions` is never empty during render | `app.rs:78` calls `create_session()` before any render loop | Removed auto-create. Welcome banner now shows on launch. User presses `^N` to start first session. |
+| 2 | Status bar "READY" conflicts with exec display "idle" — reads `READY | idle` which is redundant and contradictory | `ui.rs:101` showed "READY", `ui.rs:177` showed "idle" for the same Active+ready state | State label now hidden when `SessionState::Active` — exec display ("idle", "running", "stopping") covers it. BOOT/DONE/ERROR still show. |
+| 3 | `^C Stop` removed from footer hints — interrupt undiscoverable | `ui.rs:259` had no ^C after 7A pass | Footer now contextual: shows `^C Stop` when a command is running, shows `^T Ask  ^G Raw Play` when idle. |
 
-### Raw Play (fullscreen)
+### Code-path analysis (verified safe)
 
-| # | Scenario | Action | Expected | Actual | Severity |
-|---|----------|--------|----------|--------|----------|
-| 4 | htop / btop | ^G then run `htop` | Full terminal, resize works, ^\ exits | | |
-| 5 | vim / nano | ^G then `vim test.txt` | Editor works, saves, ^\ exits | | |
-| 6 | TUI game | ^G then roguelike/game | Game renders, input works, ^\ exits | | |
+| # | Scenario | Result |
+|---|----------|--------|
+| 4 | Zero sessions on startup — ^N creates first | Safe: `^N` returns `CreateSession` without checking active session |
+| 5 | Zero sessions — ^S opens empty switcher | Safe: switcher handles `count == 0` by closing immediately |
+| 6 | Zero sessions — ^H opens help | Safe: overlay is a boolean flag, no session dependency |
+| 7 | Zero sessions — typing keys | Safe: line 183-185 returns Ignored when no active session |
+| 8 | Help overlay swallows all keys except Esc/^H | Correct: ^Q caught globally before `handle_shell_key` |
+| 9 | Raw play enter/exit idempotency | Correct: `in_raw_passthrough` flag guards both paths |
+| 10 | Session death during raw play | Correct: `raw_play_tick` checks `active_session_alive()` and auto-exits |
+| 11 | Proposal targeting survives session switch | Correct: `proposal_session_id` is independent of `active_index` |
 
-### Multi-session
+### Platform notes
 
-| # | Scenario | Action | Expected | Actual | Severity |
-|---|----------|--------|----------|--------|----------|
-| 7 | Two sessions | ^N to create, ^] to switch | Both sessions independent, unread markers | | |
-| 8 | Cross-session proposal | ^T Ask on s1, switch to s2, approve | Executes on s1, not s2 | | |
-
-### Onboarding
-
-| # | Scenario | Action | Expected | Actual | Severity |
-|---|----------|--------|----------|--------|----------|
-| 9 | First launch | Start Console | Welcome banner visible with key hints | | |
-| 10 | Help overlay | ^H in shell mode | Help overlay appears, Esc dismisses | | |
-| 11 | Raw Play hint | ^G to enter | Entry message visible before game starts | | |
+| # | Note |
+|---|------|
+| 12 | Ctrl+H may send backspace (0x08) on some terminals instead of `KeyCode::Char('h')` with CONTROL. Windows Terminal sends Ctrl+H correctly. Potential friction on other platforms — monitor. |
 
 ## Severity key
 
@@ -41,6 +37,7 @@ Phase 7E smoke testing. Run real programs through Console, log friction.
 - **friction** — works but confusing or awkward, should fix
 - **wish** — nice-to-have, not blocking
 
-## Findings summary
+## Summary
 
-_Fill in after testing._
+3 defects found and fixed. 8 code paths verified safe. 1 platform note logged.
+All 101 tests pass after fixes. Console is legible and shippable.

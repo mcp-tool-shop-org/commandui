@@ -96,12 +96,13 @@ fn render_switcher_layout(frame: &mut Frame, model: &Model) {
 fn render_status_bar(frame: &mut Frame, area: Rect, model: &Model) {
     let active = model.active_session();
 
+    // State label: only shown for non-Active states (exec display handles Active)
     let (state_label, state_color) = match active.map(|s| &s.session_state) {
-        Some(SessionState::Booting) => ("BOOT", Color::Yellow),
-        Some(SessionState::Active) => ("READY", Color::Green),
-        Some(SessionState::Closed) => ("DONE", Color::Red),
-        Some(SessionState::Error(_)) => ("ERROR", Color::Red),
-        None => ("NO SESSION", Color::Red),
+        Some(SessionState::Booting) => (Some("BOOT"), Color::Yellow),
+        Some(SessionState::Active) => (None, Color::Green), // exec display covers this
+        Some(SessionState::Closed) => (Some("DONE"), Color::Red),
+        Some(SessionState::Error(_)) => (Some("ERROR"), Color::Red),
+        None => (Some("NO SESSION"), Color::Red),
     };
 
     let exec_color = match active.map(|s| s.exec_state.as_str()) {
@@ -165,12 +166,15 @@ fn render_status_bar(frame: &mut Frame, area: Rect, model: &Model) {
             session_label,
             Style::default().fg(Color::White),
         ),
-        Span::raw(" "),
-        Span::styled(
-            state_label,
-            Style::default().fg(state_color).add_modifier(Modifier::BOLD),
-        ),
     ];
+
+    if let Some(label) = state_label {
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(
+            label,
+            Style::default().fg(state_color).add_modifier(Modifier::BOLD),
+        ));
+    }
 
     if active.map_or(false, |s| s.session_state == SessionState::Active) {
         let exec_display = match active.map(|s| s.exec_state.as_str()) {
@@ -278,8 +282,16 @@ fn render_shell_footer(frame: &mut Frame, area: Rect, model: &Model) {
         ),
     ];
 
+    let is_running = model
+        .active_session()
+        .map_or(false, |s| s.exec_state == "running" || s.exec_state == "interrupting");
+
     if model.can_accept_input() {
-        spans.push(Span::raw("  ^T Ask  ^G Raw Play  ^S Runs  ^H Help  ^Q Quit"));
+        if is_running {
+            spans.push(Span::raw("  ^C Stop  ^S Runs  ^H Help  ^Q Quit"));
+        } else {
+            spans.push(Span::raw("  ^T Ask  ^G Raw Play  ^S Runs  ^H Help  ^Q Quit"));
+        }
     } else {
         spans.push(Span::raw("  ^N New  ^Q Quit"));
     }

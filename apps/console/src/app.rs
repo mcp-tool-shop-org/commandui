@@ -74,8 +74,8 @@ impl App {
         let backend = CrosstermBackend::new(stdout());
         let mut terminal = Terminal::new(backend)?;
 
-        // Create initial session
-        self.create_session();
+        // No initial session — welcome banner shows first.
+        // User presses ^N to create their first session.
 
         // Initial resize
         self.sync_pane_size(&terminal);
