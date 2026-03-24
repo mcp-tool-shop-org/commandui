@@ -7,3 +7,4 @@ target
 site/.astro/
 *.msi
 *.nsis
+.polyglot-cache.json

@@ -1,12 +1,20 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use commandui_desktop::events::TauriEventSink;
 use commandui_desktop::state::AppState;
+use std::sync::Arc;
 use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
-        .manage(AppState::new())
         .setup(|app| {
+            // Create the event sink with the real AppHandle
+            let sink = Arc::new(TauriEventSink::new(app.handle().clone()));
+
+            // Create AppState with the sink
+            let state = AppState::new(sink);
+
+            // Initialize database
             let app_data = app
                 .path()
                 .app_data_dir()
@@ -14,13 +22,18 @@ fn main() {
             std::fs::create_dir_all(&app_data).ok();
 
             let db_path = app_data.join("commandui.sqlite");
-            let conn =
-                commandui_desktop::db::sqlite::open_database(&db_path).expect("failed to open SQLite database");
-            commandui_desktop::db::schema::init_schema(&conn).expect("failed to initialize database schema");
+            let conn = commandui_desktop::db::sqlite::open_database(&db_path)
+                .expect("failed to open SQLite database");
+            commandui_desktop::db::schema::init_schema(&conn)
+                .expect("failed to initialize database schema");
 
-            let state = app.state::<AppState>();
-            let mut path = state.db_path.lock().unwrap();
-            *path = Some(db_path);
+            {
+                let mut path = state.db_path.lock().unwrap();
+                *path = Some(db_path);
+            }
+
+            // Register state with Tauri
+            app.manage(state);
 
             Ok(())
         })

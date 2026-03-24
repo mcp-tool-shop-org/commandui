@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = [
+    "apps/console",
+    "apps/desktop/src-tauri",
+    "crates/runtime-core",
+    "crates/runtime-persistence",
+    "crates/runtime-planner",
+]

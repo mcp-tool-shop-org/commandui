@@ -15,3 +15,6 @@ uuid = { version = "1", features = ["v4"] }
 portable-pty = "0.8"
 rusqlite = { version = "0.31", features = ["bundled"] }
 reqwest = { version = "0.12", features = ["json"] }
+commandui-runtime-core = { path = "../../../crates/runtime-core" }
+commandui-runtime-persistence = { path = "../../../crates/runtime-persistence" }
+commandui-runtime-planner = { path = "../../../crates/runtime-planner" }
