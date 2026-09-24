@@ -1,0 +1,62 @@
+summary: ""
+boundaries:
+  - name: .claude
+    globs:
+      - .claude/**
+    role: docs
+  - name: .github
+    globs:
+      - .github/**
+    role: config
+  - name: api-contract
+    globs:
+      - packages/api-contract/**
+    role: code
+  - name: console
+    globs:
+      - apps/console/**
+    role: code
+  - name: desktop
+    globs:
+      - apps/desktop/**
+    role: code
+  - name: docs
+    globs:
+      - docs/**
+    role: docs
+  - name: domain
+    globs:
+      - packages/domain/**
+    role: code
+  - name: root
+    globs:
+      - "*"
+    role: config
+  - name: runtime-core
+    globs:
+      - crates/runtime-core/**
+    role: code
+  - name: runtime-persistence
+    globs:
+      - crates/runtime-persistence/**
+    role: code
+  - name: runtime-planner
+    globs:
+      - crates/runtime-planner/**
+    role: code
+  - name: site
+    globs:
+      - site/**
+    role: site
+  - name: state
+    globs:
+      - packages/state/**
+    role: code
+  - name: ui
+    globs:
+      - packages/ui/**
+    role: code
+  - name: winget
+    globs:
+      - winget/**
+    role: data

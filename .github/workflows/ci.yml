@@ -11,6 +11,7 @@ on:
       - 'site/package.json'
       - 'site/package-lock.json'
       - 'site/astro.config.mjs'
+      - 'atlas/**'
   # `check-and-test` is a REQUIRED status check on main, but no workflow in
   # this repo had a pull_request trigger -- so the job ran on push, never on a
   # PR head, and every pull request was unmergeable by construction with no
@@ -29,6 +30,7 @@ on:
       - 'site/package.json'
       - 'site/package-lock.json'
       - 'site/astro.config.mjs'
+      - 'atlas/**'
   workflow_dispatch:
 
 concurrency:
@@ -40,6 +42,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Atlas needs Node 22 or later and this job sets up no Node, so the
+      # check gets its own before the system packages and the Rust build.
+      - name: Set up Node for the Atlas check
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+
+      - name: Atlas check
+        run: npx --yes @dogfood-lab/atlas@1.19.0 check
 
       - name: Install system dependencies
         run: |
