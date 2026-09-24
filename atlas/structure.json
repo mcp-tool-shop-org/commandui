@@ -1,0 +1,3114 @@
+{
+  "boundaries": [
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "158a6deefff6a3a4089cca4f97ea47273b15f8482efe18850a1e4c2b84fb56dc",
+          "path": ".claude/README.md"
+        },
+        {
+          "hash": "05e1f0a90a17d12f4729e50b2ace433c64945ec18ef20507464974411cbd5974",
+          "path": ".claude/agents/core/critic-reviewer.md"
+        },
+        {
+          "hash": "b5d7b60df2ca77ef7a7908c542899468ac1614f4db3938f19a6ea52c3f24b9ff",
+          "path": ".claude/agents/core/orchestrator.md"
+        },
+        {
+          "hash": "6b58823b4ae517cf6e4018ab30cc82c20628c840ebe26df98a059f6ad5c18466",
+          "path": ".claude/agents/core/product-strategist.md"
+        },
+        {
+          "hash": "ef938c623398d1fbd0bfb9d7e8c80f99915a6122d7e041881a07f36229d41336",
+          "path": ".claude/agents/design/brand-guardian.md"
+        },
+        {
+          "hash": "8a8682c7ba069c9eecc988dfb533f68d37a47e0df4ad35ceb276de6855b25af5",
+          "path": ".claude/agents/design/ui-designer.md"
+        },
+        {
+          "hash": "adfa35c595d1e24451932c8aa461f24e99ae0f99864b8925f9c599c7d0236a2c",
+          "path": ".claude/agents/engineering/backend-engineer.md"
+        },
+        {
+          "hash": "6a7dee87f0f23c2bdc365190044659828f72a11c759389e23d0f130918ca5d82",
+          "path": ".claude/agents/engineering/dependency-auditor.md"
+        },
+        {
+          "hash": "e5a448d0f63a7f4b4687e76522effb140a509d008e23b8343fc6fde802460076",
+          "path": ".claude/agents/engineering/frontend-developer.md"
+        },
+        {
+          "hash": "756a5ce28d3876bc7f3f2d5a4cb018efc00b9e00cf31f1387cfabd159488565c",
+          "path": ".claude/agents/engineering/performance-engineer.md"
+        },
+        {
+          "hash": "4934e5b788900047d041afe4a7df2efb297303991c4ad20191a2985d6bd7cf49",
+          "path": ".claude/agents/engineering/refactor-engineer.md"
+        },
+        {
+          "hash": "b39c7f41260e17585d70b2030588af7592d71f6e856b52d8db26e766121c5fef",
+          "path": ".claude/agents/engineering/security-reviewer.md"
+        },
+        {
+          "hash": "5654a22c5e4830bf0509f1c9fbe2ef5988369dc79263894df506e464209cd82b",
+          "path": ".claude/agents/engineering/test-engineer.md"
+        },
+        {
+          "hash": "4ceadb3eeef43c85465b4fa8cebdbcbf9020d340dd14e27a78800f0a4c43c514",
+          "path": ".claude/agents/growth/community-manager.md"
+        },
+        {
+          "hash": "9b8e8a756b088be95c3120b9c4b6af132ee2987e77e21cd42da7396a0f5e7509",
+          "path": ".claude/agents/growth/content-strategist.md"
+        },
+        {
+          "hash": "c0888c37c4656c7f0ea888f45380462a9454c783718e36d37c6a7526fa1a031f",
+          "path": ".claude/agents/growth/launch-strategist.md"
+        },
+        {
+          "hash": "79dd9e3a6924141a8a36d61271194934dbfe96d091d9d640ff7d3d8737f7e805",
+          "path": ".claude/agents/growth/support-triage-lead.md"
+        },
+        {
+          "hash": "f222d010a977088716b08f26953a0f3146781a8d1e89e4c05ddf83867730554c",
+          "path": ".claude/agents/marketing/launch-copywriter.md"
+        },
+        {
+          "hash": "daf51f6c64ee2d71eb0b1d139533a5a9ef5fc161c372dc0ab01cb67da527a872",
+          "path": ".claude/agents/product/feedback-synthesizer.md"
+        },
+        {
+          "hash": "e14f75ef3ea0e04af8a2efd1fc1071740f42528b52345a61eb07c0f375738a3f",
+          "path": ".claude/agents/product/information-architect.md"
+        },
+        {
+          "hash": "5400c554716df37778f4c34a9a7fe9f369960382bd35daa9390ba0bc49cb9f6d",
+          "path": ".claude/agents/product/roadmap-prioritizer.md"
+        },
+        {
+          "hash": "f2c59b2402e5599d32a5a887e535c7c47dc243b585d31096ddcaaffcbb376859",
+          "path": ".claude/agents/product/spec-writer.md"
+        },
+        {
+          "hash": "9b55d050caf98d078888c0c0630fcf14b10c2fbf8ed22328256948807e626763",
+          "path": ".claude/agents/research/competitive-analyst.md"
+        },
+        {
+          "hash": "1c1ae32dbfdcf09c94c36fce488875d7df268ea6dbe132fda2d2b9b81ae4c25c",
+          "path": ".claude/agents/research/trend-researcher.md"
+        },
+        {
+          "hash": "a125d21ad9fb1551850ba00119e6497d514e15ecfb98235dc07ed98cd8c036e8",
+          "path": ".claude/agents/research/user-interview-synthesizer.md"
+        },
+        {
+          "hash": "865d237b66de59ec57c19605701cd9c7d4f3ac4df3e6ec731424ed62ef0d0ad4",
+          "path": ".claude/agents/research/ux-researcher.md"
+        },
+        {
+          "hash": "c7fa7f242310095eaa31288587f6077b40641254c8d463bc3a3f0a99d4cbeaa9",
+          "path": ".claude/agents/treatment/coverage-auditor.md"
+        },
+        {
+          "hash": "ef14326ed0d7dd1cec25e19ec1f2f2e245e1db59907768ffaaedba78ff5a31a1",
+          "path": ".claude/agents/treatment/deployment-verifier.md"
+        },
+        {
+          "hash": "366904341a80d44d761dcfc30e79157f6754f1f2fd70ca4c16518369773888b1",
+          "path": ".claude/agents/treatment/docs-architect.md"
+        },
+        {
+          "hash": "5b9c83dbcb24b984a372b3edd3aac6d65b6d14a7910bd149721bf6aaefaa56a0",
+          "path": ".claude/agents/treatment/metadata-curator.md"
+        },
+        {
+          "hash": "e1756416f5d0932f265c139e9cfb3621a18bb714d697dfee9347bb53e0bdab53",
+          "path": ".claude/agents/treatment/release-engineer.md"
+        },
+        {
+          "hash": "26ed181415209aa3e404334290683bb75d682d853512b5b07f0199463fc3b05a",
+          "path": ".claude/agents/treatment/repo-researcher.md"
+        },
+        {
+          "hash": "00428fc7e4c776815099c1160932383c39acc33b8a55f3cf09aaf0d636de7929",
+          "path": ".claude/agents/treatment/repo-translator.md"
+        },
+        {
+          "hash": "068850d1f1efdd8df61f11b7b2bdbea2af2f09d0a19b98c18d4927b54e83f68a",
+          "path": ".claude/context/brand-rules.md"
+        },
+        {
+          "hash": "a287bdfe265bf3b47c4f5b3b9b756028c4615e36ba1b9c621a45628b70550f94",
+          "path": ".claude/context/current-priorities.md"
+        },
+        {
+          "hash": "a8648ea68372d72746549e286230760d03c874bf7fb3dc3840fe13a2fd84fdcf",
+          "path": ".claude/context/product-brief.md"
+        },
+        {
+          "hash": "ff301dd235174bc4ffd872854d2d4214c107a2d8ad53a10e19a55a31d3367c12",
+          "path": ".claude/context/repo-map.md"
+        },
+        {
+          "hash": "4b11b65a09d8ac2915f85c8eab1630931ff01fe68eb751fa01e9971ca14b38ca",
+          "path": ".claude/examples/feature-packet.md"
+        },
+        {
+          "hash": "0350e2bf29256b79863fab5ca28851edaf125c487d64059a26c8a1a6f2336ca4",
+          "path": ".claude/examples/identity-packet.md"
+        },
+        {
+          "hash": "4b51704a87c3c0db31294ccdc992c256e9102c907a572340aac452e275561c29",
+          "path": ".claude/examples/integration-packet.md"
+        },
+        {
+          "hash": "e82dc44673009b0ccb58721bd5c3e83d5fba5f4d7a05071dff5a8f30e8019625",
+          "path": ".claude/handbook.md"
+        },
+        {
+          "hash": "deaa85707700dbbaafda1d28253c4ae79a80128c6f1c619d514edfc4c1319b87",
+          "path": ".claude/launch.json"
+        },
+        {
+          "hash": "5c8554bd32206e9b33add51abb8ba009df9a9a4ec74a23202975d94bc25fc07f",
+          "path": ".claude/packets/2026-03-24-not-provided.md"
+        },
+        {
+          "hash": "454160eeb425a4d5b4f472411c8b1544b9e33a9e62ee0772517fdf30504ca224",
+          "path": ".claude/packets/2026-03-24-not-provided.verdict.md"
+        },
+        {
+          "hash": "c1d743de32d9bf53717099c41f17a0ccd98688e1ea95f609accac15e96a0c08c",
+          "path": ".claude/packets/CMDUI-001-raw-play-integrity-guard.md"
+        },
+        {
+          "hash": "4427322c0e3f78b440058f554a66c0653653427332fa4075ff2ca2a1be071ca8",
+          "path": ".claude/packets/CMDUI-001-raw-play-integrity-guard.verdict.md"
+        },
+        {
+          "hash": "1fd5df3c7ac78a9e816b4c6c89615882542ee0fd223b729303a3ab75604bcd81",
+          "path": ".claude/policy/done-definition.md"
+        },
+        {
+          "hash": "3f55fc37123f26446b7346f84e1c999fc7d9cc37c849ff7475f884867e6f9d58",
+          "path": ".claude/policy/escalation-rules.md"
+        },
+        {
+          "hash": "2404f9505ed427f41a04df566f872af5b05232274c8b2d487a430e6e686fae1b",
+          "path": ".claude/policy/routing-rules.md"
+        },
+        {
+          "hash": "d3beccab15e5f6edb7e08a4a23223a7ae7b67a5fc42051bf56b683312fcbd34b",
+          "path": ".claude/policy/tool-permissions.md"
+        },
+        {
+          "hash": "035499e31539c656b063078a84025b8c32d01d29177d0447e98a937350388d1f",
+          "path": ".claude/schemas/handoff.md"
+        },
+        {
+          "hash": "4d2320f4714f012170a85eb1d713cd45ee81d0cd820e44566b2e5bbfab236b3a",
+          "path": ".claude/schemas/review-verdict.md"
+        },
+        {
+          "hash": "4e005a5c28cf2afaf71644a8bb72e479af1078c4694dc8a1b17ff2bf95c7d854",
+          "path": ".claude/schemas/task-packet.md"
+        },
+        {
+          "hash": "1eaec4e9122993393576658d12cd7c5ce23d14d8723c176344dbd35327a3ac59",
+          "path": ".claude/workflows/fix-bug.md"
+        },
+        {
+          "hash": "18d187df95b192da63b71b6e25d6a04609a772b51c79a19ce22769b018fbc754",
+          "path": ".claude/workflows/full-treatment.md"
+        },
+        {
+          "hash": "1ed242cb05768926f8339e853b94dd067861de5e99faff52359e35a4b68a0e61",
+          "path": ".claude/workflows/harden-raw-play.md"
+        },
+        {
+          "hash": "24d942d7920f4afacdbf12a4d9c38bf5d0020ae78dd1abde4b3fc93ce6b26444",
+          "path": ".claude/workflows/launch-update.md"
+        },
+        {
+          "hash": "3077eb58698cbb81d3a998140a5b5b08d1eda2780f784841ce7d605c8d9de319",
+          "path": ".claude/workflows/ship-feature.md"
+        }
+      ],
+      "globs": [
+        ".claude/**"
+      ],
+      "importConfidence": "full",
+      "name": ".claude",
+      "origin": "authored",
+      "role": "docs",
+      "testedBy": 0,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "5a9692aa9c38bc0ad82ece479880b466a0ad6bd2a4fb217d24b521cf57ac2510",
+          "path": ".github/workflows/ci.yml"
+        },
+        {
+          "hash": "93dc62c74dfddae3a1dc3291b236a3e266cc0f9963100f2967357b3f3833b310",
+          "path": ".github/workflows/pages.yml"
+        },
+        {
+          "hash": "76e57bc0c8ef1f4860ba089971a691239abdb49a9983c5a4c2630055ae9451f4",
+          "path": ".github/workflows/release-desktop.yml"
+        }
+      ],
+      "globs": [
+        ".github/**"
+      ],
+      "importConfidence": "full",
+      "name": ".github",
+      "origin": "authored",
+      "role": "config",
+      "testedBy": 0,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [
+        "packages/api-contract/src/index.ts"
+      ],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "11f11fc3237b4f7a0f10019c0a67972791ac962e465204afe61875e8e15550b4",
+          "path": "packages/api-contract/package.json"
+        },
+        {
+          "hash": "f2c3401820713fbe6cd276cfcffa840784cdf422e01d15c2c114d169e23fe34b",
+          "importsFiles": [
+            "packages/api-contract/src/index.ts"
+          ],
+          "path": "packages/api-contract/src/contracts.test.ts"
+        },
+        {
+          "hash": "2564e3456a8ebbb960700a385d10b91bc308f3f4801465774726883684fa5f6e",
+          "path": "packages/api-contract/src/errors.ts"
+        },
+        {
+          "hash": "5629bc669b14fafdc0ac285892861fcc89162c733190800b92405ce52590619c",
+          "path": "packages/api-contract/src/events.ts"
+        },
+        {
+          "hash": "1fbcb04dc43bceb9d24cb2b907ba1b5a49422db31eb924c42f49e1a35b8767e7",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "packages/api-contract/src/history.ts"
+        },
+        {
+          "hash": "5509ecc17f54a59d1e948f6c596d13c7d43db6942e0275c8a1e3802e7bb35f52",
+          "importsFiles": [
+            "packages/api-contract/src/errors.ts",
+            "packages/api-contract/src/events.ts",
+            "packages/api-contract/src/history.ts",
+            "packages/api-contract/src/memory.ts",
+            "packages/api-contract/src/persistence.ts",
+            "packages/api-contract/src/plan-store.ts",
+            "packages/api-contract/src/planner.ts",
+            "packages/api-contract/src/session.ts",
+            "packages/api-contract/src/settings.ts",
+            "packages/api-contract/src/terminal.ts",
+            "packages/api-contract/src/workflow.ts"
+          ],
+          "path": "packages/api-contract/src/index.ts",
+          "reexportsAll": [
+            "packages/api-contract/src/errors.ts",
+            "packages/api-contract/src/events.ts",
+            "packages/api-contract/src/history.ts",
+            "packages/api-contract/src/memory.ts",
+            "packages/api-contract/src/persistence.ts",
+            "packages/api-contract/src/plan-store.ts",
+            "packages/api-contract/src/planner.ts",
+            "packages/api-contract/src/session.ts",
+            "packages/api-contract/src/settings.ts",
+            "packages/api-contract/src/terminal.ts",
+            "packages/api-contract/src/workflow.ts"
+          ],
+          "reexportsOnly": true
+        },
+        {
+          "hash": "e6043563b974fd54f084a55d5ec661d7e609923e6bc34fa6464dc2abb1760458",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "packages/api-contract/src/memory.ts"
+        },
+        {
+          "hash": "ef106d9565db78661e8629757315a64b71494de20e0176d3d6935742a7e3609f",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "packages/api-contract/src/persistence.ts"
+        },
+        {
+          "hash": "07220fc34195476c778acc2518052cc7aead7b87214729c7681b208a5421075a",
+          "path": "packages/api-contract/src/plan-store.ts"
+        },
+        {
+          "hash": "c444c45285d2411f42f44495bcf1e8afe85b1035b683f2f2e01ae103bf98df78",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "packages/api-contract/src/planner.ts"
+        },
+        {
+          "hash": "3dede339b8ac8e56cbfd3d7e60e6e0815676fcf0b480800212a4eaac577453fc",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "packages/api-contract/src/session.ts"
+        },
+        {
+          "hash": "a3950bd493f013f2968be5a5c37ff68a24b98d0f0ce504c6bff9ed5e1d446e32",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "packages/api-contract/src/settings.ts"
+        },
+        {
+          "hash": "98c26d69a8ab28f1fe0a43c895e69da48b3083863a4c3060f5bc6ded222d18cb",
+          "path": "packages/api-contract/src/terminal.ts"
+        },
+        {
+          "hash": "5789a0317aa45308ebe0b3f604975b96944a34fd9fbf3e23ec51747056b7a82f",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "packages/api-contract/src/workflow.ts"
+        },
+        {
+          "hash": "8f6e85eeaa8025fe7b2f01763e03f32540d3e2869ae857490d685098460f4e3a",
+          "path": "packages/api-contract/tsconfig.json"
+        }
+      ],
+      "globs": [
+        "packages/api-contract/**"
+      ],
+      "importConfidence": "full",
+      "name": "api-contract",
+      "origin": "authored",
+      "role": "code",
+      "testedBy": 2,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [
+        "apps/console/src/main.rs"
+      ],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "a56a0c24afd8d98592d9a9181d0934cc8fc124b5c410e02aeb03bab76528142f",
+          "path": "apps/console/Cargo.toml"
+        },
+        {
+          "hash": "2ef4635e0d32a5105c4668e43ae1511ee6397511add2d8e7a7bdd417de27edce",
+          "path": "apps/console/README.md"
+        },
+        {
+          "hash": "7a04b978370193c9c8618853f533fd04440d255824e5232eb1a28ebf1e5b7b2d",
+          "importsFiles": [
+            "apps/console/src/input.rs",
+            "apps/console/src/model.rs",
+            "apps/console/src/planner.rs",
+            "apps/console/src/ui.rs",
+            "crates/runtime-core/src/events.rs",
+            "crates/runtime-core/src/services/session_service.rs",
+            "crates/runtime-core/src/services/terminal_service.rs",
+            "crates/runtime-planner/src/lib.rs"
+          ],
+          "path": "apps/console/src/app.rs"
+        },
+        {
+          "exports": [
+            "shared_channel_sink"
+          ],
+          "hash": "224b8a26a6dab8756352c54f2786caf1d7695bd39f5555e80c70ab194d175e01",
+          "importsFiles": [
+            "crates/runtime-core/src/events.rs"
+          ],
+          "path": "apps/console/src/event_sink.rs"
+        },
+        {
+          "exports": [
+            "handle_key"
+          ],
+          "hash": "588e48964bdb8f6279b26a38c3a9ad97b18f88b2c33e842fb2adc8c353a91648",
+          "importsFiles": [
+            "apps/console/src/model.rs",
+            "crates/runtime-core/src/services/terminal_service.rs"
+          ],
+          "path": "apps/console/src/input.rs"
+        },
+        {
+          "entry": "main",
+          "entryRule": 1,
+          "hash": "aa579e51719e79cb007e418d8a1e22cdae76c97aecdd57c2bac0bc00707bf7b1",
+          "importsFiles": [
+            "apps/console/src/app.rs",
+            "apps/console/src/event_sink.rs",
+            "apps/console/src/input.rs",
+            "apps/console/src/model.rs",
+            "apps/console/src/planner.rs",
+            "apps/console/src/ui.rs",
+            "crates/runtime-core/src/services/session_service.rs",
+            "crates/runtime-core/src/services/terminal_service.rs",
+            "crates/runtime-core/src/session.rs"
+          ],
+          "path": "apps/console/src/main.rs",
+          "sequences": [
+            {
+              "calls": [
+                {
+                  "line": 19,
+                  "name": "shared_channel_sink",
+                  "target": {
+                    "file": "apps/console/src/event_sink.rs"
+                  }
+                },
+                {
+                  "line": 22,
+                  "name": "new",
+                  "receiver": "SessionRegistry",
+                  "target": {
+                    "file": "crates/runtime-core/src/session.rs"
+                  }
+                },
+                {
+                  "line": 25,
+                  "name": "new",
+                  "receiver": "SessionService",
+                  "target": {
+                    "file": "crates/runtime-core/src/services/session_service.rs"
+                  }
+                },
+                {
+                  "line": 26,
+                  "name": "new",
+                  "receiver": "TerminalService",
+                  "target": {
+                    "file": "crates/runtime-core/src/services/terminal_service.rs"
+                  }
+                },
+                {
+                  "line": 29,
+                  "name": "new",
+                  "target": {
+                    "file": "apps/console/src/app.rs"
+                  }
+                }
+              ],
+              "exported": false,
+              "invokedAtTopLevel": true,
+              "isDefaultExport": false,
+              "name": "main"
+            }
+          ]
+        },
+        {
+          "hash": "9cb2a872879d4e7b0dc24896858fdbfa58f9f27a2c2473782c1a2f6eb26673a6",
+          "importsFiles": [
+            "crates/runtime-core/src/events.rs",
+            "crates/runtime-planner/src/lib.rs"
+          ],
+          "path": "apps/console/src/model.rs",
+          "testsInside": true
+        },
+        {
+          "exports": [
+            "build_context",
+            "generate_proposal"
+          ],
+          "hash": "27b63b9209e853364c3f62a984b35b8ca1da344bc2f5cd37ab49dbefcf8052cd",
+          "importsFiles": [
+            "crates/runtime-planner/src/lib.rs",
+            "crates/runtime-planner/src/mock.rs"
+          ],
+          "path": "apps/console/src/planner.rs",
+          "testsInside": true
+        },
+        {
+          "exports": [
+            "render"
+          ],
+          "hash": "313cd5341b33ffebd68f4fef8bae1deae91345a25e61508956921988b9fab77e",
+          "importsFiles": [
+            "apps/console/src/model.rs"
+          ],
+          "path": "apps/console/src/ui.rs"
+        }
+      ],
+      "globs": [
+        "apps/console/**"
+      ],
+      "importConfidence": "full",
+      "name": "console",
+      "origin": "authored",
+      "role": "code",
+      "testedBy": 2,
+      "testedInside": true,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 1,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 1,
+      "entryPoints": [
+        "apps/desktop/src-tauri/src/lib.rs",
+        "apps/desktop/src-tauri/src/main.rs"
+      ],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "8aa81188a73f4d3fe439c487f77527055838327fc326be493ddd9ea86e423089",
+          "path": "apps/desktop/index.html"
+        },
+        {
+          "hash": "5b8a5a13a46c10762dd8b3902f8b27e15f39c8f4fe92d93f028c2d2e744b741e",
+          "path": "apps/desktop/package.json"
+        },
+        {
+          "hash": "3e8f864c0c5b17b9450ce1360eb41b0f03cff6634a857ac841c6eafac207f20e",
+          "path": "apps/desktop/src-tauri/Cargo.lock"
+        },
+        {
+          "hash": "97f8e819a98c36ba163e2f90a3a12f0b09c7a9702995c07a4fb172cf4e6737fa",
+          "path": "apps/desktop/src-tauri/Cargo.toml"
+        },
+        {
+          "hash": "487059eaf8a947b80f20a9aacac038a5047b2ad69d2401b827376c67d6fe847f",
+          "path": "apps/desktop/src-tauri/build.rs"
+        },
+        {
+          "hash": "070abaa7b138a953dfddebfa086b9d2ebee285ed60ca86d71fad425519eae958",
+          "path": "apps/desktop/src-tauri/gen/schemas/acl-manifests.json"
+        },
+        {
+          "hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "path": "apps/desktop/src-tauri/gen/schemas/capabilities.json"
+        },
+        {
+          "hash": "88cf23980f1479b57ee8dfd2206216770e0b943b50466b745f0e458c41946e60",
+          "path": "apps/desktop/src-tauri/gen/schemas/desktop-schema.json"
+        },
+        {
+          "hash": "88cf23980f1479b57ee8dfd2206216770e0b943b50466b745f0e458c41946e60",
+          "path": "apps/desktop/src-tauri/gen/schemas/windows-schema.json"
+        },
+        {
+          "hash": "0ff7139ac9c848fd940eb8b0dcb1e86a0e4ed5af056228928a14988fc43e5858",
+          "path": "apps/desktop/src-tauri/icons/128x128.png"
+        },
+        {
+          "hash": "bc9199a088774a0311d41577ffd9b5a45adb3be5f20d74613f723c1d32d91922",
+          "path": "apps/desktop/src-tauri/icons/128x128@2x.png"
+        },
+        {
+          "hash": "354ea864f0ab4687422862118c7a98b1d342db4c5225c238c1a87dbc6bc63334",
+          "path": "apps/desktop/src-tauri/icons/32x32.png"
+        },
+        {
+          "hash": "bc9199a088774a0311d41577ffd9b5a45adb3be5f20d74613f723c1d32d91922",
+          "path": "apps/desktop/src-tauri/icons/icon.icns"
+        },
+        {
+          "hash": "6698dbfdd49bee57818d3ba9752df4b6caef4944617620d6d2780a88ef292279",
+          "path": "apps/desktop/src-tauri/icons/icon.ico"
+        },
+        {
+          "exports": [
+            "history_append",
+            "history_list",
+            "history_update",
+            "plan_store"
+          ],
+          "hash": "2b6c6508b1029afd8b7fdf4f65fde7d64b3cdd936a98e48f0f0c90396c209d40",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/state.rs",
+            "apps/desktop/src-tauri/src/types/errors.rs",
+            "crates/runtime-persistence/src/db.rs",
+            "crates/runtime-persistence/src/history.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/commands/history.rs"
+        },
+        {
+          "exports": [
+            "memory_accept_suggestion",
+            "memory_add",
+            "memory_delete",
+            "memory_dismiss_suggestion",
+            "memory_list",
+            "memory_store_suggestion"
+          ],
+          "hash": "baf1afd1b7375d58f8485b29edcbb50b6b681aa963459a87ded7ff116a83fb8c",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/state.rs",
+            "apps/desktop/src-tauri/src/types/errors.rs",
+            "crates/runtime-persistence/src/db.rs",
+            "crates/runtime-persistence/src/memory.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/commands/memory.rs"
+        },
+        {
+          "hash": "69d64be79b38c55c71b118d6e124d4acaa53a8d7005266e89a35d72e137545fc",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/commands/history.rs",
+            "apps/desktop/src-tauri/src/commands/memory.rs",
+            "apps/desktop/src-tauri/src/commands/planner.rs",
+            "apps/desktop/src-tauri/src/commands/session.rs",
+            "apps/desktop/src-tauri/src/commands/settings.rs",
+            "apps/desktop/src-tauri/src/commands/terminal.rs",
+            "apps/desktop/src-tauri/src/commands/workflow.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/commands/mod.rs"
+        },
+        {
+          "exports": [
+            "planner_generate_plan"
+          ],
+          "hash": "43d7796999f1160924941849a9ea1b411f607e57a32d18f4fed81de40251baed",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/state.rs",
+            "apps/desktop/src-tauri/src/types/errors.rs",
+            "crates/runtime-planner/src/lib.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/commands/planner.rs",
+          "testsInside": true
+        },
+        {
+          "exports": [
+            "session_close",
+            "session_create",
+            "session_list",
+            "session_update_cwd"
+          ],
+          "hash": "866b90d4cb89d299043fc6b34f9a19e41a57f35a8d9979b53b041eb21b9f673f",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/state.rs",
+            "apps/desktop/src-tauri/src/types/errors.rs",
+            "crates/runtime-core/src/services/session_service.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/commands/session.rs"
+        },
+        {
+          "exports": [
+            "settings_get",
+            "settings_update"
+          ],
+          "hash": "08d8c6aaf2d4718cdad52d6de3b90464fc8f7253e881a07c204b4370dc5fce58",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/state.rs",
+            "apps/desktop/src-tauri/src/types/errors.rs",
+            "crates/runtime-persistence/src/db.rs",
+            "crates/runtime-persistence/src/settings.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/commands/settings.rs"
+        },
+        {
+          "exports": [
+            "terminal_execute",
+            "terminal_interrupt",
+            "terminal_resize",
+            "terminal_resync",
+            "terminal_write"
+          ],
+          "hash": "0eadb72ed4bd01339805396b490cd7848f8082770f0e1455c4da5132ee6cbdc7",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/state.rs",
+            "apps/desktop/src-tauri/src/types/errors.rs",
+            "crates/runtime-core/src/events.rs",
+            "crates/runtime-core/src/services/terminal_service.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/commands/terminal.rs"
+        },
+        {
+          "exports": [
+            "workflow_add",
+            "workflow_delete",
+            "workflow_list"
+          ],
+          "hash": "acaa55966a5224a43eeab4b82ecf33871ee53ef6ec7fa5d0564126752237e8cd",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/state.rs",
+            "apps/desktop/src-tauri/src/types/errors.rs",
+            "crates/runtime-persistence/src/db.rs",
+            "crates/runtime-persistence/src/workflow.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/commands/workflow.rs"
+        },
+        {
+          "hash": "ac743b9b0b5a91b853da3ada9535d6e309be367f0e63846a289a1017d1499f9d",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/db/schema.rs",
+            "apps/desktop/src-tauri/src/db/sqlite.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/db/mod.rs"
+        },
+        {
+          "hash": "d553624df0e832b04bb35ee902a4ef05215796f2f59502104a2a9e358cb3b252",
+          "importsFiles": [
+            "crates/runtime-persistence/src/schema.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/db/schema.rs"
+        },
+        {
+          "hash": "c82fa40e77fa46c6bedda6f8545e47d03ce24776303cdeaa0a5f6560d26e8398",
+          "importsFiles": [
+            "crates/runtime-persistence/src/db.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/db/sqlite.rs"
+        },
+        {
+          "hash": "6e3842e64a18ea60c6c1a3aec20137e620872ea068094c900f31c88ea6dff63f",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/events/tauri_sink.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/events/mod.rs"
+        },
+        {
+          "hash": "de3607c7de192cdbf458629910c3d8349096fcbb35dc349dd1c494bcdd4b329e",
+          "importsFiles": [
+            "crates/runtime-core/src/events.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/events/tauri_sink.rs"
+        },
+        {
+          "hash": "6d1896a0e2a7025ef4368fa45cf3deba4324950f803e0a9ebc65fe0c3cbb98a8",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/commands/mod.rs",
+            "apps/desktop/src-tauri/src/db/mod.rs",
+            "apps/desktop/src-tauri/src/events/mod.rs",
+            "apps/desktop/src-tauri/src/ollama.rs",
+            "apps/desktop/src-tauri/src/shell/mod.rs",
+            "apps/desktop/src-tauri/src/state.rs",
+            "apps/desktop/src-tauri/src/types/mod.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/lib.rs"
+        },
+        {
+          "entry": "main",
+          "entryRule": 1,
+          "hash": "0c67fffef3aa0776795b9ebecf5e9d9b27257370f8cfb2b35bea56f8aaf47f74",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/commands/history.rs",
+            "apps/desktop/src-tauri/src/commands/memory.rs",
+            "apps/desktop/src-tauri/src/commands/planner.rs",
+            "apps/desktop/src-tauri/src/commands/session.rs",
+            "apps/desktop/src-tauri/src/commands/settings.rs",
+            "apps/desktop/src-tauri/src/commands/terminal.rs",
+            "apps/desktop/src-tauri/src/commands/workflow.rs",
+            "apps/desktop/src-tauri/src/db/schema.rs",
+            "apps/desktop/src-tauri/src/db/sqlite.rs",
+            "apps/desktop/src-tauri/src/events/mod.rs",
+            "apps/desktop/src-tauri/src/state.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/main.rs",
+          "sequences": [
+            {
+              "calls": [
+                {
+                  "line": 12,
+                  "name": "new",
+                  "receiver": "TauriEventSink",
+                  "target": {
+                    "file": "apps/desktop/src-tauri/src/events/mod.rs"
+                  }
+                },
+                {
+                  "line": 15,
+                  "name": "new",
+                  "receiver": "AppState",
+                  "target": {
+                    "file": "apps/desktop/src-tauri/src/state.rs"
+                  }
+                },
+                {
+                  "line": 25,
+                  "name": "open_database",
+                  "target": {
+                    "file": "apps/desktop/src-tauri/src/db/sqlite.rs"
+                  }
+                },
+                {
+                  "line": 27,
+                  "name": "init_schema",
+                  "target": {
+                    "file": "apps/desktop/src-tauri/src/db/schema.rs"
+                  }
+                }
+              ],
+              "exported": false,
+              "invokedAtTopLevel": true,
+              "isDefaultExport": false,
+              "name": "main"
+            }
+          ]
+        },
+        {
+          "hash": "4d6ca04b5b8db9acbf754ec2451223dc47630217e2aef82032d312ed8bd74a0a",
+          "noStatements": true,
+          "path": "apps/desktop/src-tauri/src/ollama.rs"
+        },
+        {
+          "hash": "4ed44d8b122cb388cf5577a8c7ca51e040251ddc7056867ebc261314c4a4abd6",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/shell/pty_manager.rs",
+            "apps/desktop/src-tauri/src/shell/session_registry.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/shell/mod.rs"
+        },
+        {
+          "hash": "ec2cd0ef1901563eb4a8c109d33dadcf3e189ff429f239f47ae9e49e14e2683c",
+          "importsFiles": [
+            "crates/runtime-core/src/pty.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/shell/pty_manager.rs"
+        },
+        {
+          "hash": "d5474d816a750619e3072e52b04a96bb115414c491a04301c8470074a7800cb5",
+          "importsFiles": [
+            "crates/runtime-core/src/session.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/shell/session_registry.rs"
+        },
+        {
+          "hash": "f25ef20920642a71a341a79cfb777d24f17f850b71d74c7b0959c8ae3c93252b",
+          "importsFiles": [
+            "crates/runtime-core/src/events.rs",
+            "crates/runtime-core/src/services/session_service.rs",
+            "crates/runtime-core/src/services/terminal_service.rs",
+            "crates/runtime-core/src/session.rs",
+            "crates/runtime-planner/src/lib.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/state.rs"
+        },
+        {
+          "hash": "78c75dd4389eb39c70001b9d0d78cf4a09d75481bfd9d6263e05205752da8b6d",
+          "importsFiles": [
+            "crates/runtime-core/src/errors.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/types/errors.rs"
+        },
+        {
+          "hash": "75b00f074e3b9ee6f169bbde9373e4440db49a93add9f749fd49e42102ab2da5",
+          "importsFiles": [
+            "apps/desktop/src-tauri/src/types/errors.rs"
+          ],
+          "path": "apps/desktop/src-tauri/src/types/mod.rs"
+        },
+        {
+          "hash": "82b193f19bfd915aed23b317f6b2c784a45ba9660948be5450e8747c466a21d2",
+          "path": "apps/desktop/src-tauri/tauri.conf.json"
+        },
+        {
+          "exports": [
+            "AppShell"
+          ],
+          "hash": "07e9c0703f4dafdcefc07b4f24d90ebd4cf9ad38d28eebf5d4e6699cdd585d6a",
+          "importsFiles": [
+            "apps/desktop/src/components/CommandPalette.tsx",
+            "apps/desktop/src/components/HistoryDrawer.tsx",
+            "apps/desktop/src/components/InputComposer.tsx",
+            "apps/desktop/src/components/MemoryDrawer.tsx",
+            "apps/desktop/src/components/MemorySuggestions.tsx",
+            "apps/desktop/src/components/PlanPanel.tsx",
+            "apps/desktop/src/components/SessionTabs.tsx",
+            "apps/desktop/src/components/SettingsDrawer.tsx",
+            "apps/desktop/src/components/TerminalPane.tsx",
+            "apps/desktop/src/components/WorkflowDrawer.tsx",
+            "apps/desktop/src/components/WorkflowEditor.tsx",
+            "apps/desktop/src/components/WorkflowRunBanner.tsx",
+            "apps/desktop/src/features/memory/memoryClient.ts",
+            "apps/desktop/src/features/persistence/persistenceClient.ts",
+            "apps/desktop/src/features/planner/plannerClient.ts",
+            "apps/desktop/src/features/terminal/terminalClient.ts",
+            "apps/desktop/src/features/terminal/terminalEvents.ts",
+            "apps/desktop/src/hooks/useShortcuts.ts",
+            "apps/desktop/src/lib/buildPlannerContext.ts",
+            "apps/desktop/src/lib/mockBridge.ts",
+            "apps/desktop/src/lib/shortcuts.ts",
+            "apps/desktop/src/lib/tauriInvoke.ts",
+            "packages/api-contract/src/index.ts",
+            "packages/domain/src/index.ts",
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/app/AppShell.tsx"
+        },
+        {
+          "exports": [
+            "CommandPalette"
+          ],
+          "hash": "6d41f715c078d2fc7351b543bb82cf74f1739aabe813aa7da64a18b96d23b0be",
+          "path": "apps/desktop/src/components/CommandPalette.tsx"
+        },
+        {
+          "hash": "bd61e8fc763eed763b905c211505a55b4b593f87e7876c3ef07ef96c9c3f2a64",
+          "path": "apps/desktop/src/components/ErrorBoundary.tsx"
+        },
+        {
+          "exports": [
+            "HistoryDrawer"
+          ],
+          "hash": "baa6fc31049872a481ee3215db574b7dd30871c7d3c67b5fcef68bf90a5fac89",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/HistoryDrawer.tsx"
+        },
+        {
+          "hash": "d60f1f14f0014415d6de2c41d4a26b6700731580d52186d4b6aa8272f0d120a8",
+          "importsFiles": [
+            "apps/desktop/src/components/InputComposer.tsx"
+          ],
+          "path": "apps/desktop/src/components/InputComposer.test.tsx"
+        },
+        {
+          "hash": "b073142f44c0a6c2646460d9ef01a99a8a80ca8efac0dfac5f7d68bb2a24d9d5",
+          "importsFiles": [
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/InputComposer.tsx"
+        },
+        {
+          "exports": [
+            "MemoryDrawer"
+          ],
+          "hash": "9d95b9fd41590c6d3013e5f062d392fa8ceb302cbe6d5ddecacaab18ff25b77a",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/MemoryDrawer.tsx"
+        },
+        {
+          "exports": [
+            "MemorySuggestions"
+          ],
+          "hash": "e820a4dce978903ef2774e51bd3a858f4cba7834505f2abf49c6f42218858ad7",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/MemorySuggestions.tsx"
+        },
+        {
+          "hash": "d5ac3e3b25456d4ccdad3cc933fd5d2aa5112b73debe9cb889288520ed2db79b",
+          "importsFiles": [
+            "apps/desktop/src/components/PlanPanel.tsx"
+          ],
+          "path": "apps/desktop/src/components/PlanPanel.test.tsx"
+        },
+        {
+          "exports": [
+            "PlanPanel"
+          ],
+          "hash": "881201bdf71b6b009a897b07f57a6342976e4025af787a7d7c0da7590a501915",
+          "importsFiles": [
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/PlanPanel.tsx"
+        },
+        {
+          "exports": [
+            "SessionTabs"
+          ],
+          "hash": "f447749a5426a1b5341d24331dbb713d6636acb9ab178eebdcabb434a4b905fb",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/SessionTabs.tsx"
+        },
+        {
+          "exports": [
+            "SettingsDrawer"
+          ],
+          "hash": "4c8a4439e0304f9b1d70d9daa80ddac79116bc8d6ab74690bd441de435337443",
+          "path": "apps/desktop/src/components/SettingsDrawer.tsx"
+        },
+        {
+          "hash": "ebccfd8f411a829917e6fc1e3cf649670188672f97c021ff9422a80236449203",
+          "importsFiles": [
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/TerminalPane.tsx"
+        },
+        {
+          "exports": [
+            "WorkflowDrawer"
+          ],
+          "hash": "3882c57bdc89b5cb5ed2433175e8791b6e5999d6de54eb06b512875ed61b6b54",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/WorkflowDrawer.tsx"
+        },
+        {
+          "exports": [
+            "WorkflowEditor"
+          ],
+          "hash": "07c334ad0020fdeef4e17ae0e39979f9494caf2a3d676f7374e2edd8e0c40bd3",
+          "path": "apps/desktop/src/components/WorkflowEditor.tsx"
+        },
+        {
+          "exports": [
+            "WorkflowRunBanner"
+          ],
+          "hash": "891d28b6d0912e62ca8e072f0d52008381f3fab3a577d2c92f6399d071e198aa",
+          "importsFiles": [
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/WorkflowRunBanner.tsx"
+        },
+        {
+          "exports": [
+            "memoryAcceptSuggestion",
+            "memoryAdd",
+            "memoryDelete",
+            "memoryDismissSuggestion",
+            "memoryList",
+            "memoryStoreSuggestion"
+          ],
+          "hash": "4276bd10e33c344bdd0ff8a75419e11e813ce203f08a750ab67f80248d85d39f",
+          "importsFiles": [
+            "apps/desktop/src/lib/tauriInvoke.ts",
+            "packages/api-contract/src/index.ts"
+          ],
+          "path": "apps/desktop/src/features/memory/memoryClient.ts"
+        },
+        {
+          "exports": [
+            "historyAppend",
+            "historyList",
+            "historyUpdate",
+            "planStore",
+            "settingsGet",
+            "settingsUpdate",
+            "workflowAdd",
+            "workflowDelete",
+            "workflowList"
+          ],
+          "hash": "167dcc34721a33e4898600b22ac77e2f450c64e3311f064109ed2dcc510304a3",
+          "importsFiles": [
+            "apps/desktop/src/lib/tauriInvoke.ts",
+            "packages/api-contract/src/index.ts"
+          ],
+          "path": "apps/desktop/src/features/persistence/persistenceClient.ts"
+        },
+        {
+          "exports": [
+            "generatePlan"
+          ],
+          "hash": "2a5699f6c84b62e898ffa811d162d86985d1c3b3208e4e765ad9a44b2bacb175",
+          "importsFiles": [
+            "apps/desktop/src/lib/tauriInvoke.ts",
+            "packages/api-contract/src/index.ts"
+          ],
+          "path": "apps/desktop/src/features/planner/plannerClient.ts"
+        },
+        {
+          "exports": [
+            "closeSession",
+            "createSession",
+            "executeCommand",
+            "interruptTerminal",
+            "listSessions",
+            "resizeTerminal",
+            "resyncTerminal",
+            "writeTerminal"
+          ],
+          "hash": "f10056c7bbf9863914ebfffe6151d2ff49e6f21853db2263e4338a17b4010481",
+          "importsFiles": [
+            "apps/desktop/src/lib/tauriInvoke.ts",
+            "packages/api-contract/src/index.ts"
+          ],
+          "path": "apps/desktop/src/features/terminal/terminalClient.ts"
+        },
+        {
+          "exports": [
+            "subscribeToExecStateChanged",
+            "subscribeToExecutionFinished",
+            "subscribeToExecutionStarted",
+            "subscribeToSessionCwdChanged",
+            "subscribeToSessionReady",
+            "subscribeToTerminalLines"
+          ],
+          "hash": "5f9c690436c86e91cc4d131d50c171cd381599e571315c4d8bcfde916b11aeef",
+          "importsFiles": [
+            "packages/api-contract/src/index.ts"
+          ],
+          "path": "apps/desktop/src/features/terminal/terminalEvents.ts"
+        },
+        {
+          "exports": [
+            "useFocusZone"
+          ],
+          "hash": "c4a49b259ed135483194dbc7e7092674445a1040b14638ff10f86e3c67d7d77d",
+          "importsFiles": [
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/hooks/useFocusZone.ts"
+        },
+        {
+          "exports": [
+            "useShortcuts"
+          ],
+          "hash": "57012cee6d983ba37d3105f645955f479c259cdd3d022e8cdcfbc9b0814a0f2f",
+          "importsFiles": [
+            "apps/desktop/src/lib/shortcuts.ts",
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/hooks/useShortcuts.ts"
+        },
+        {
+          "exports": [
+            "buildPlannerContext"
+          ],
+          "hash": "12f26c0b042a924f2bf8b7f5ea069bc14ad4fdfab433948a2cf5c802dd8a9773",
+          "importsFiles": [
+            "packages/api-contract/src/index.ts",
+            "packages/domain/src/index.ts",
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/lib/buildPlannerContext.ts"
+        },
+        {
+          "exports": [
+            "mockInvoke",
+            "onMockEvent"
+          ],
+          "hash": "d5a9d9c1e57dd0b871f6d277d8dda66d697f7d96876c4047b6d0d1ede6fd4963",
+          "path": "apps/desktop/src/lib/mockBridge.ts"
+        },
+        {
+          "hash": "58c3541ec2efcaf8c57419605a7f89320038799f02c9d33b9a84be23cba37c07",
+          "importsFiles": [
+            "apps/desktop/src/lib/shortcuts.ts"
+          ],
+          "path": "apps/desktop/src/lib/shortcuts.test.ts"
+        },
+        {
+          "exports": [
+            "hasModifier",
+            "matchesEvent",
+            "parseCombo",
+            "resolveShortcut"
+          ],
+          "hash": "9626ec39ea42ba3ef3d752d70b5d1263116331e1f8ef72c3b8a4c5eb447b415e",
+          "importsFiles": [
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/lib/shortcuts.ts"
+        },
+        {
+          "exports": [
+            "isTauriRuntime",
+            "tauriInvoke"
+          ],
+          "hash": "46d0b1c8fe6712956be285292341be9c239c4470b37048bfc8d51b7cb9abe1b4",
+          "importsFiles": [
+            "apps/desktop/src/lib/mockBridge.ts"
+          ],
+          "path": "apps/desktop/src/lib/tauriInvoke.ts"
+        },
+        {
+          "hash": "488b1c0be122c942b29ca18f0c89f2d4ede66da966b245c2d58ea59910930d62",
+          "importsFiles": [
+            "apps/desktop/src/app/AppShell.tsx",
+            "apps/desktop/src/components/ErrorBoundary.tsx",
+            "apps/desktop/src/styles/globals.css"
+          ],
+          "path": "apps/desktop/src/main.tsx"
+        },
+        {
+          "hash": "744ecef95a9d4a90dacb6d8f034fa374f9f26e7e9d52aac8d78b5391098c9c3b",
+          "path": "apps/desktop/src/styles/globals.css"
+        },
+        {
+          "hash": "90ec9100c29e008c3d9194acd818e2cfa6dc6e177154bc8e10c5959aa35619ed",
+          "path": "apps/desktop/src/test/setup.ts"
+        },
+        {
+          "hash": "e87fc2617cddc943781b01f6c6858253a408e6852773b4cd986bba196b6d4e39",
+          "path": "apps/desktop/tsconfig.json"
+        },
+        {
+          "hash": "efc34bfccd6cb4f83bd488fc25b78b0c82b4bc2ef749e814444fd56260ef4e73",
+          "path": "apps/desktop/vite.config.ts"
+        }
+      ],
+      "globs": [
+        "apps/desktop/**"
+      ],
+      "importConfidence": "full",
+      "name": "desktop",
+      "origin": "authored",
+      "role": "code",
+      "testedBy": 4,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "f413b0c66575b251caefd28b763616cba436e71c98166f5f559489cf6d544226",
+          "path": "docs/dogfood-log.md"
+        },
+        {
+          "hash": "7c4d5441dc301089d6d665c1269e7168311e26ea28793ac851bfd79d8b89bab3",
+          "path": "docs/handbook/SUMMARY.md"
+        },
+        {
+          "hash": "4fb89928c56010489b316545ba91ca0048ee5b893e9c370b1ca1c4aa4c9b832e",
+          "path": "docs/handbook/src/architecture/layers.md"
+        },
+        {
+          "hash": "20dd169bbf85a91ceaa949a7089c726d92c979debdbce73cbc3c3f9e3fc39185",
+          "path": "docs/handbook/src/architecture/persistence.md"
+        },
+        {
+          "hash": "84f2f3fd921ff0ee377b854179128192a6adebecabdc5fd5929f560a4fee4fa7",
+          "path": "docs/handbook/src/architecture/planner-pipeline.md"
+        },
+        {
+          "hash": "3dc865b1eee41f96b47eedd0ef61cac6c2b71dbbc9b6f591e9c121586dc1f1ce",
+          "path": "docs/handbook/src/architecture/state-model.md"
+        },
+        {
+          "hash": "3d97ed00686badd00fd645a4ec3c048f066998fc16e22742a45af069885f55b1",
+          "path": "docs/handbook/src/architecture/terminal.md"
+        },
+        {
+          "hash": "9f81b34219ae00e1ed8c186918a333beefd6b899b63e55970220f53b306d69ba",
+          "path": "docs/handbook/src/developer-guide/adding-a-feature.md"
+        },
+        {
+          "hash": "a2bf8d6a319648096a63256d57b99be5d5e2a77369720ed2e5a3e033655ae074",
+          "path": "docs/handbook/src/developer-guide/dev-setup.md"
+        },
+        {
+          "hash": "3ca6d3ab09aa7cc03e25a3aaa171be45a66c0d5b7944e15f11e2263b5a67aa7e",
+          "path": "docs/handbook/src/developer-guide/mock-bridge.md"
+        },
+        {
+          "hash": "c1e2f0ac5477cd46762b6bd219c4fae1bb99cd91bedccd410c489c5dbfec8734",
+          "path": "docs/handbook/src/developer-guide/testing.md"
+        },
+        {
+          "hash": "d06e12bfae72a9ecd49d2f22de2b49fedd858e887cbf11f94837f54869db3780",
+          "path": "docs/handbook/src/intelligence/context-enrichment.md"
+        },
+        {
+          "hash": "e2bf2c1062fcd5c2fb94eebce2b2466d6fdb3a15d311172c4005e911ca03d797",
+          "path": "docs/handbook/src/intelligence/memory-detectors.md"
+        },
+        {
+          "hash": "5821f408bade799313a9250ce1a6bdaa6e534b32bf9a3da250b0f681411e112c",
+          "path": "docs/handbook/src/intelligence/workflow-promotion.md"
+        },
+        {
+          "hash": "d64cf06610fedb68de8ebfe7026c4552075c2a8444712036f42803172f0b453c",
+          "path": "docs/handbook/src/operations/known-limitations.md"
+        },
+        {
+          "hash": "3e7a2559076ace009d57e8a7e805e9f2aa769837bf3175545495acdfdeb6a3e4",
+          "path": "docs/handbook/src/operations/release-checklist.md"
+        },
+        {
+          "hash": "8ed8edbd91a16e405a704b194fecd505e6ffc1b3cf9f2303991cc76d3b0b2977",
+          "path": "docs/handbook/src/orientation/core-concepts.md"
+        },
+        {
+          "hash": "24888f8ee8b35e8b7f5860e6cf9513363a78fafefc845adfa59cdd895c904ce9",
+          "path": "docs/handbook/src/orientation/first-ten-minutes.md"
+        },
+        {
+          "hash": "b2bb371aa1bcfc3dae890bd6f871f8ccb915110dde92ebf5d9821f1c7f22f172",
+          "path": "docs/handbook/src/orientation/what-is-commandui.md"
+        },
+        {
+          "hash": "bf1cd1063e3d99f297403f7024c8caa632f3cfb2a573f9beded94967670d4122",
+          "path": "docs/handbook/src/product-behavior/keyboard-shortcuts.md"
+        },
+        {
+          "hash": "e8a729dcd2612920ba62fcdb777321d6682273aeb1c09776cdaaa6f82c182fc7",
+          "path": "docs/handbook/src/product-behavior/modes.md"
+        },
+        {
+          "hash": "84ac8639e4b73ed16d2332f8a7f1accdadf0f5ab978149b1ad5861e8a39bf890",
+          "path": "docs/handbook/src/product-behavior/risk-tiers.md"
+        },
+        {
+          "hash": "1e4bf6749146cd74cc74630407e2afb47a10ce700586f412bc14c79319c27f7b",
+          "path": "docs/handbook/src/product-behavior/settings.md"
+        },
+        {
+          "hash": "8dcad9c961eacf3de5f4d03f5a85a145d922f49e089b2f857de4a7ce3c12153b",
+          "path": "docs/handbook/src/user-guide/history.md"
+        },
+        {
+          "hash": "dd1f986a95baae6437821dc2b824715b528cf4b17742dd246ba93ecc238673b6",
+          "path": "docs/handbook/src/user-guide/input-modes.md"
+        },
+        {
+          "hash": "42e15d5699ff31ae3a4ed118ffe479a67a076003faa833f9565853325f83b41b",
+          "path": "docs/handbook/src/user-guide/memory.md"
+        },
+        {
+          "hash": "70efff8275af0f07a0a43ba0fd1021e6a2caf75bbd7763508999f3982ec115a9",
+          "path": "docs/handbook/src/user-guide/plan-review.md"
+        },
+        {
+          "hash": "dce49dd596026ea00dcb5c4c3a1ed3ba4c68c1316676a27110e47bc46e77a81c",
+          "path": "docs/handbook/src/user-guide/workflows.md"
+        },
+        {
+          "hash": "00cfaaab57c510ca15502d5bea7cf8bd5593eb44109a3412da79d9c54eb5e69b",
+          "path": "docs/product/desktop-packaging-checklist.md"
+        },
+        {
+          "hash": "f371e3e2192b0061e198ab11678cb18bbaab5641cbcec574f959d526c24da0c4",
+          "path": "docs/product/developer-setup.md"
+        },
+        {
+          "hash": "18af3a2fd722b204d4d4522c4be4791ead3794e2262950f7e5671472c294a2c5",
+          "path": "docs/product/icon-spec.md"
+        },
+        {
+          "hash": "5da5706fba10e26832b911d3830c752e885d36da657913b4caf8aaa25c07c201",
+          "path": "docs/product/known-limitations.md"
+        },
+        {
+          "hash": "8d29ddbf3e6b59f986dc420f09b2c09bb1b1f4dd572dd07fa0431b914034c6bf",
+          "path": "docs/product/release-checklist.md"
+        },
+        {
+          "hash": "2b8f411fa18feca9af348987051355ab9f2a57adb4a95e15a24205ed9d2e225e",
+          "path": "docs/product/windows-notes.md"
+        },
+        {
+          "hash": "82f82d3436c7ea7bfbc72ebd570f18d6265eb493b0319c6eb3e6287e067c7e61",
+          "path": "docs/specs/parity-law.md"
+        },
+        {
+          "hash": "c09d5ecd05edeece212c9ab25cef0f53387b8662f807924cb4d1d829acdbd682",
+          "path": "docs/specs/play-law.md"
+        },
+        {
+          "hash": "65c6375fa49495000a8b378c4de64dd46a66a5798fa6ef98acf0de88205dc9f5",
+          "path": "docs/specs/raw-play-mode.md"
+        },
+        {
+          "hash": "ede158da7f1b96aaed61ba4cfae9cec36c924c9befc1d4e7037922f7dfeef03d",
+          "path": "docs/specs/smoke-test-checklist.md"
+        },
+        {
+          "hash": "16c5364e6ab757d2db1bbe4a77ce5eb01f9d95840f95689a58a350d8e31bb066",
+          "path": "docs/specs/tui-extraction-worksheet.md"
+        },
+        {
+          "hash": "de9a40b939f3dbad506234cf2cf79e968a2ee0908c72d6bc2488e8cd628291bf",
+          "path": "docs/specs/tui-spine.md"
+        }
+      ],
+      "globs": [
+        "docs/**"
+      ],
+      "importConfidence": "full",
+      "name": "docs",
+      "origin": "authored",
+      "role": "docs",
+      "testedBy": 0,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [
+        "packages/domain/src/index.ts"
+      ],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "949381eeb06781ab6ec6f985ad3ec2e9ff895f71be33d34274e205660df36fc4",
+          "path": "packages/domain/package.json"
+        },
+        {
+          "hash": "b42b61ea95c7dc734f921fb9f538bff2ece2ea2270805b78ff641cbe4ae26f72",
+          "path": "packages/domain/src/history.ts"
+        },
+        {
+          "hash": "553720ca474d62105dbc9cfb85e28447cb91e74778fbcd43164751634d29a825",
+          "importsFiles": [
+            "packages/domain/src/history.ts",
+            "packages/domain/src/memory.ts",
+            "packages/domain/src/memoryDetectors.ts",
+            "packages/domain/src/plan.ts",
+            "packages/domain/src/session.ts",
+            "packages/domain/src/settings.ts",
+            "packages/domain/src/workflow.ts"
+          ],
+          "path": "packages/domain/src/index.ts",
+          "reexportsAll": [
+            "packages/domain/src/history.ts",
+            "packages/domain/src/memory.ts",
+            "packages/domain/src/memoryDetectors.ts",
+            "packages/domain/src/plan.ts",
+            "packages/domain/src/session.ts",
+            "packages/domain/src/settings.ts",
+            "packages/domain/src/workflow.ts"
+          ],
+          "reexportsOnly": true
+        },
+        {
+          "hash": "ced4e0d0ef173c6d6a4b3713251d2d0bb7d39b6482fff4b0b6c87f4806bc015b",
+          "path": "packages/domain/src/memory.ts"
+        },
+        {
+          "hash": "7f42ffd27443d8df5827a1b33710a3fc4a045ebf78b6dbd381b04d9d5acd35c3",
+          "importsFiles": [
+            "packages/domain/src/history.ts",
+            "packages/domain/src/memory.ts",
+            "packages/domain/src/memoryDetectors.ts"
+          ],
+          "path": "packages/domain/src/memoryDetectors.test.ts"
+        },
+        {
+          "exports": [
+            "detectPreferredCwd",
+            "detectRecurringCommands",
+            "detectWorkflowPatterns",
+            "normalizeCommand",
+            "runDetectors"
+          ],
+          "hash": "e7ad3e8e670f18a0a5e5524f10052596a7a5c6de42f6a61778309f4a1b5eabbf",
+          "importsFiles": [
+            "packages/domain/src/history.ts",
+            "packages/domain/src/memory.ts"
+          ],
+          "path": "packages/domain/src/memoryDetectors.ts"
+        },
+        {
+          "hash": "80f609d77d32213a1180ed345bf3d5506659280245d433a1b26374005f70b55d",
+          "path": "packages/domain/src/plan.ts"
+        },
+        {
+          "hash": "4dd9b2f9bade706c61b70c6b45a1a1e546b7a41bca06f663441a69064e07372e",
+          "path": "packages/domain/src/session.ts"
+        },
+        {
+          "hash": "cf57d9b28ef001baad3ed3fbf0898f732a509313259628e1aba41fa568fd176b",
+          "path": "packages/domain/src/settings.ts"
+        },
+        {
+          "hash": "8efe75e18c020ae7922f2d5b67aecc73dec1c4787670bbb89790c5d07785775f",
+          "path": "packages/domain/src/workflow.ts"
+        },
+        {
+          "hash": "8f6e85eeaa8025fe7b2f01763e03f32540d3e2869ae857490d685098460f4e3a",
+          "path": "packages/domain/tsconfig.json"
+        }
+      ],
+      "globs": [
+        "packages/domain/**"
+      ],
+      "importConfidence": "full",
+      "name": "domain",
+      "origin": "authored",
+      "role": "code",
+      "testedBy": 2,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "b235c5bff3559d4dfffe88e9c734ed226f1915c420e1deb7d0c9def3c1c3985e",
+          "path": ".gitignore"
+        },
+        {
+          "hash": "2cdcc7517393cf659d3db9ed05899251c1a1f1bd51eebd07ed4e84dd9347403e",
+          "path": ".prettierignore"
+        },
+        {
+          "hash": "f616bdbe4813bbf89df611a84f1461770702fbfd506c155aba5f47258ef37403",
+          "path": "CHANGELOG.md"
+        },
+        {
+          "hash": "60abcb8e0afa3b0812c9732421644434783a3321e5009c7ddca19c35aded1a79",
+          "path": "Cargo.lock"
+        },
+        {
+          "hash": "b7352ffc5f7f1e9f651756d3c466822e8f982538361b7f2e70cf7ddc6c55a787",
+          "path": "Cargo.toml"
+        },
+        {
+          "hash": "18224cc10f15fc253dd8baeaa83716f14b4ba15cfb6bc55e2cab7f5cad663b7d",
+          "path": "LICENSE"
+        },
+        {
+          "hash": "17e5f975a3c93d3dc31f694432d6b736c6b8656bc535369ebee9350427baab2d",
+          "path": "README.es.md"
+        },
+        {
+          "hash": "69bd8a64facc7a79a6e45885131c9d87165b3321fa4f41bc77f40816777d616a",
+          "path": "README.fr.md"
+        },
+        {
+          "hash": "59a86c14347408f678ecd14f7536c5fa5a3a4d7c85935ba39788382c804d4820",
+          "path": "README.hi.md"
+        },
+        {
+          "hash": "2b8b22b74fd108c3b809c1f81c030b9cd8626da2e5fc7a38372295ebbb868664",
+          "path": "README.it.md"
+        },
+        {
+          "hash": "5c7ff117577473aa9a74164b646fbd8cfb2678aaa36faf489efc82c56b4af8d9",
+          "path": "README.ja.md"
+        },
+        {
+          "hash": "afbded39260ef74e1386a42c4a2f8d019ea8618486cebeb2424cdef1131bc9d4",
+          "path": "README.md"
+        },
+        {
+          "hash": "3dcd9499c77b5ece758f400b6aeccb2df123ad438627e5769875d0df60ae38e0",
+          "path": "README.pt-BR.md"
+        },
+        {
+          "hash": "ee137304a70c1621d2f8d92e96463015f7ba2aa6bff5db6c58a9979d30598b34",
+          "path": "README.zh.md"
+        },
+        {
+          "hash": "d5b29054d15ec790686866bf0693dd0c6aa39891ab9f0ed7cb4f22e63d1f97f4",
+          "path": "SECURITY.md"
+        },
+        {
+          "hash": "4f1a22e26d3f551c9c85ac11e7905a0d95d946f59b0d905851edd85e2f40542a",
+          "path": "package.json"
+        },
+        {
+          "hash": "f548f8c6df73b2ce9066b27a42b9e030fa3455ac9966aeadcc9714196189be0a",
+          "path": "pnpm-lock.yaml"
+        },
+        {
+          "hash": "253208fa7c1b64372c219b9e19cef15ed70ca93b66a4d5c4c4d2297a5aff8880",
+          "path": "pnpm-workspace.yaml"
+        },
+        {
+          "hash": "31f69bdf37f08c3d1d5ea88d22316bd192435287b82e71b8eb64c7461392301c",
+          "path": "tsconfig.base.json"
+        }
+      ],
+      "globs": [
+        "*"
+      ],
+      "importConfidence": "full",
+      "name": "root",
+      "origin": "authored",
+      "role": "config",
+      "testedBy": 0,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [
+        "crates/runtime-core/src/lib.rs"
+      ],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "73eaf7bfcc2cf25015870777e00fe9bd386f125b2566ce0a97407af52264f631",
+          "path": "crates/runtime-core/Cargo.toml"
+        },
+        {
+          "hash": "230841bf5a9221d9c3c44d8df8b8edc951eca499a121dd93937e69ed71e455b5",
+          "path": "crates/runtime-core/src/errors.rs"
+        },
+        {
+          "hash": "c4e3e535dc715427d0de9684c9aa4e1c515e0942b57ec4979cd6d9829093d525",
+          "path": "crates/runtime-core/src/events.rs",
+          "testsInside": true
+        },
+        {
+          "hash": "d712ca49dd17fc9c5864dd03e2364040f7e5ed9eab3749fea441db0daac1a5d3",
+          "importsFiles": [
+            "crates/runtime-core/src/errors.rs",
+            "crates/runtime-core/src/events.rs",
+            "crates/runtime-core/src/parity.rs",
+            "crates/runtime-core/src/pty.rs",
+            "crates/runtime-core/src/services/mod.rs",
+            "crates/runtime-core/src/session.rs"
+          ],
+          "path": "crates/runtime-core/src/lib.rs",
+          "testsInside": true
+        },
+        {
+          "hash": "4fd932ce26cb32f2f13f22ea9aa905838f79c4610be6e674facbcf51dc081d62",
+          "importsFiles": [
+            "crates/runtime-core/src/events.rs",
+            "crates/runtime-core/src/pty.rs",
+            "crates/runtime-core/src/services/session_service.rs",
+            "crates/runtime-core/src/session.rs"
+          ],
+          "path": "crates/runtime-core/src/parity.rs",
+          "testsInside": true
+        },
+        {
+          "exports": [
+            "bootstrap_prompt",
+            "default_shell",
+            "spawn_reader_loop",
+            "spawn_shell",
+            "write_command",
+            "write_raw"
+          ],
+          "hash": "ed7da3738a1b2089d0d0825ea68b40af11fd6de56fd84d810cd1452d703c6180",
+          "path": "crates/runtime-core/src/pty.rs"
+        },
+        {
+          "hash": "119808009ecb829794f16f0798e717174993ab50452f7ae8fb55b179886124b3",
+          "importsFiles": [
+            "crates/runtime-core/src/services/session_service.rs",
+            "crates/runtime-core/src/services/terminal_service.rs"
+          ],
+          "path": "crates/runtime-core/src/services/mod.rs"
+        },
+        {
+          "hash": "f37a286cdc5853997da147a4dcbf23c4e5334a4540a129b024c040ec0e7c5fe5",
+          "importsFiles": [
+            "crates/runtime-core/src/events.rs",
+            "crates/runtime-core/src/pty.rs",
+            "crates/runtime-core/src/session.rs"
+          ],
+          "path": "crates/runtime-core/src/services/session_service.rs",
+          "testsInside": true
+        },
+        {
+          "hash": "780ab96899a211733a4ad7ab3fec3a9c6e519b9ac4f28d3d5a70614f4b6c4f52",
+          "importsFiles": [
+            "crates/runtime-core/src/events.rs",
+            "crates/runtime-core/src/pty.rs",
+            "crates/runtime-core/src/session.rs"
+          ],
+          "path": "crates/runtime-core/src/services/terminal_service.rs",
+          "testsInside": true
+        },
+        {
+          "hash": "beb6206dfae96eda63edc570e64d54cc26f61977c1a7d7ca20df2c020cf2589e",
+          "importsFiles": [
+            "crates/runtime-core/src/pty.rs"
+          ],
+          "path": "crates/runtime-core/src/session.rs",
+          "testsInside": true
+        }
+      ],
+      "globs": [
+        "crates/runtime-core/**"
+      ],
+      "importConfidence": "full",
+      "name": "runtime-core",
+      "origin": "authored",
+      "role": "code",
+      "testedBy": 6,
+      "testedInside": true,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [
+        "crates/runtime-persistence/src/lib.rs"
+      ],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "4740ad1a41dd8142bf00412b36d7d316c578d791dbb1d4cd308e988345f45334",
+          "path": "crates/runtime-persistence/Cargo.toml"
+        },
+        {
+          "exports": [
+            "open_database"
+          ],
+          "hash": "1dc38eeacec16f7fd98dbf435489cae55cc851d45a20378b0665badb2179aeb0",
+          "path": "crates/runtime-persistence/src/db.rs"
+        },
+        {
+          "exports": [
+            "append",
+            "list",
+            "store_plan",
+            "update"
+          ],
+          "hash": "ac2c00e8b08c7df522cc78917ed0e47623a80e0f3db29efde4948fa42e04991b",
+          "path": "crates/runtime-persistence/src/history.rs"
+        },
+        {
+          "hash": "68a05bdc9605dbf7c49993c2c72e03a2960adf94ac742ec9425925b67cefd481",
+          "importsFiles": [
+            "crates/runtime-persistence/src/db.rs",
+            "crates/runtime-persistence/src/history.rs",
+            "crates/runtime-persistence/src/memory.rs",
+            "crates/runtime-persistence/src/schema.rs",
+            "crates/runtime-persistence/src/settings.rs",
+            "crates/runtime-persistence/src/workflow.rs"
+          ],
+          "path": "crates/runtime-persistence/src/lib.rs"
+        },
+        {
+          "exports": [
+            "accept_suggestion",
+            "add_item",
+            "delete_item",
+            "dismiss_suggestion",
+            "list_items",
+            "list_pending_suggestions",
+            "store_suggestion"
+          ],
+          "hash": "fbb75f67caed1e4c2cee3432a2d44a4c182cb7aabd3f366f4d33268136cf5894",
+          "path": "crates/runtime-persistence/src/memory.rs"
+        },
+        {
+          "exports": [
+            "init_schema"
+          ],
+          "hash": "dc1c203a0c3dd0fccc12303cef1ffbc8b813d3181071441c1e162c726f1dde1e",
+          "path": "crates/runtime-persistence/src/schema.rs",
+          "testsInside": true
+        },
+        {
+          "exports": [
+            "default_settings",
+            "get",
+            "update"
+          ],
+          "hash": "ee83e6e3bc65149fb18372db9d99a7b9c9c99ed3c3a5eb584041c60d7d74be18",
+          "path": "crates/runtime-persistence/src/settings.rs"
+        },
+        {
+          "exports": [
+            "add",
+            "delete",
+            "list"
+          ],
+          "hash": "4af6dd4a9a8ff161f699e6d7021e5054bfc7f25d58423554713698375f322bb0",
+          "path": "crates/runtime-persistence/src/workflow.rs"
+        }
+      ],
+      "globs": [
+        "crates/runtime-persistence/**"
+      ],
+      "importConfidence": "full",
+      "name": "runtime-persistence",
+      "origin": "authored",
+      "role": "code",
+      "testedBy": 1,
+      "testedInside": true,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [
+        "crates/runtime-planner/src/lib.rs"
+      ],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "c2f095dee8a4e2ef09aa0edf9be589dc74c1ec89d0bcc2532c958c2cb74da7b2",
+          "path": "crates/runtime-planner/Cargo.toml"
+        },
+        {
+          "exports": [
+            "build_review",
+            "llm_to_proposal",
+            "try_ollama"
+          ],
+          "hash": "9f1313da46ef0fc2365008c28995aefe207c5ec5e9c9f13aef630d8730b08457",
+          "importsFiles": [
+            "crates/runtime-planner/src/prompt.rs",
+            "crates/runtime-planner/src/types.rs",
+            "crates/runtime-planner/src/validate.rs"
+          ],
+          "path": "crates/runtime-planner/src/client.rs",
+          "testsInside": true
+        },
+        {
+          "exports": [
+            "generate_proposal"
+          ],
+          "hash": "d18acf04378b401e4a1de041a52b9068e3c1520c158cf2e4af398495ed631fe5",
+          "importsFiles": [
+            "crates/runtime-planner/src/client.rs",
+            "crates/runtime-planner/src/mock.rs",
+            "crates/runtime-planner/src/parity.rs",
+            "crates/runtime-planner/src/prompt.rs",
+            "crates/runtime-planner/src/types.rs",
+            "crates/runtime-planner/src/validate.rs"
+          ],
+          "path": "crates/runtime-planner/src/lib.rs"
+        },
+        {
+          "exports": [
+            "generate"
+          ],
+          "hash": "b0fad539c6771624bba20004107e262d7abde28b1a9056e33c6845688d132e68",
+          "importsFiles": [
+            "crates/runtime-planner/src/types.rs"
+          ],
+          "path": "crates/runtime-planner/src/mock.rs",
+          "testsInside": true
+        },
+        {
+          "hash": "71cae139600205c89b367daf18d96aae55a69fbc98f379dea23bcf44c1b1a422",
+          "importsFiles": [
+            "crates/runtime-planner/src/client.rs",
+            "crates/runtime-planner/src/mock.rs",
+            "crates/runtime-planner/src/types.rs",
+            "crates/runtime-planner/src/validate.rs"
+          ],
+          "path": "crates/runtime-planner/src/parity.rs",
+          "testsInside": true
+        },
+        {
+          "exports": [
+            "build_planner_prompt"
+          ],
+          "hash": "c9c435ef838bfe1cfd5d06fe5c7687d8030949066b841c6bd29ce19441ca6d8c",
+          "importsFiles": [
+            "crates/runtime-planner/src/types.rs"
+          ],
+          "path": "crates/runtime-planner/src/prompt.rs",
+          "testsInside": true
+        },
+        {
+          "hash": "97d9d1700f57591f5ed3c9c8cca55b468bd7901d3d23b7ea53eced051c76d0bc",
+          "path": "crates/runtime-planner/src/types.rs"
+        },
+        {
+          "exports": [
+            "validate_llm_response"
+          ],
+          "hash": "91b57db1eae9741dff40b7963f64adf81698ee438e9bbee1349baeb9ea5b217f",
+          "importsFiles": [
+            "crates/runtime-planner/src/types.rs"
+          ],
+          "path": "crates/runtime-planner/src/validate.rs",
+          "testsInside": true
+        }
+      ],
+      "globs": [
+        "crates/runtime-planner/**"
+      ],
+      "importConfidence": "full",
+      "name": "runtime-planner",
+      "origin": "authored",
+      "role": "code",
+      "testedBy": 5,
+      "testedInside": true,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "d8162b824ee4885a6b93ce4a314846192744c165e49c87abf416c6f2792eef37",
+          "path": "site/astro.config.mjs"
+        },
+        {
+          "hash": "3044af950115eeb3cd3cf51e00c703e57ea12d7f194558d8e86932058bf6bf93",
+          "path": "site/package-lock.json"
+        },
+        {
+          "hash": "037225d8df8be227b6c88489220d900df1645bf0cf2948f284586a73d8c15744",
+          "path": "site/package.json"
+        },
+        {
+          "hash": "ee756dfba4122d2acc94a39b2555d9f200fff56a87a8c0b10f9cd01df26a8b62",
+          "path": "site/src/content.config.ts"
+        },
+        {
+          "hash": "2e6a8cccd7010d1eaeb286e90add6056607562aab363642f4fd315c4042d44d7",
+          "path": "site/src/content/docs/handbook/beginners.md"
+        },
+        {
+          "hash": "d2ddbe2f6be515b9c352b9f684c1f50dcdb07c3789263ebec7d9df84b42c66f6",
+          "path": "site/src/content/docs/handbook/core-concepts.md"
+        },
+        {
+          "hash": "5e52d243c34aed9977e4c05f00ec965937aeeecc3a17e9de1a8ce03011fbd8aa",
+          "path": "site/src/content/docs/handbook/developer-guide/adding-a-feature.md"
+        },
+        {
+          "hash": "2801f658d9304d401e1afdc2140d7cc14d28a089a27e038f6927679aa617655e",
+          "path": "site/src/content/docs/handbook/developer-guide/dev-setup.md"
+        },
+        {
+          "hash": "def5fd9e1d65c26825ba19406f2cb6bc19a74f5046396a323959ca447945d34c",
+          "path": "site/src/content/docs/handbook/developer-guide/mock-bridge.md"
+        },
+        {
+          "hash": "658fc9aae809214306211d4d68c9247908c0db8ef1bb19a1a7cbd1dc345d6639",
+          "path": "site/src/content/docs/handbook/developer-guide/testing.md"
+        },
+        {
+          "hash": "7ce22bb16e0a34fcf8cb79c67a4307d490e407be1bf60bfbd10cf8e9a286495d",
+          "path": "site/src/content/docs/handbook/first-ten-minutes.md"
+        },
+        {
+          "hash": "97ecf7fa46a47e551a6e8a4da58b41b66efcda6d55707ffaa4951fdab821d2b2",
+          "path": "site/src/content/docs/handbook/history.md"
+        },
+        {
+          "hash": "bbd3b288fae20bb6ced72609c2fce1f8e7bfd33f7da74ac7ec2ec0412668644d",
+          "path": "site/src/content/docs/handbook/index.md"
+        },
+        {
+          "hash": "5e35ea460ece2a24239618ded401133d79b9841c0647f3e66c9409814ae0611a",
+          "path": "site/src/content/docs/handbook/input-modes.md"
+        },
+        {
+          "hash": "34c2c39caf110696b9492e72a2c85514a6209ac1918eac1979a3f2eab5375e4e",
+          "path": "site/src/content/docs/handbook/intelligence/context-enrichment.md"
+        },
+        {
+          "hash": "83fdefac481e1c07232c6c5d9ee4771c46962a1c253f328d9d41981e886417c4",
+          "path": "site/src/content/docs/handbook/intelligence/memory-detectors.md"
+        },
+        {
+          "hash": "4846745c9e110581f41af4120d631057213ddf68a6dd8577827a66077b686716",
+          "path": "site/src/content/docs/handbook/intelligence/workflow-promotion.md"
+        },
+        {
+          "hash": "bf04165dfeea391184a3fa16d72670b4a47aec04d1eb03ce1ad64850ffb033dd",
+          "path": "site/src/content/docs/handbook/keyboard-shortcuts.md"
+        },
+        {
+          "hash": "5780c7bc256ea6484034f9e1b949b695f66bdfc840e87882bcad7b0266661052",
+          "path": "site/src/content/docs/handbook/layers.md"
+        },
+        {
+          "hash": "8426039d403cbb2733039b4a4b984d9b1b79a3b590c89de51ee2ed8098eebf5d",
+          "path": "site/src/content/docs/handbook/memory.md"
+        },
+        {
+          "hash": "7cd66e6ca5a490eab4cc1d4f18c8d4ed791a84b6a6c9c01ce4c8bb4d45b8b1e3",
+          "path": "site/src/content/docs/handbook/modes.md"
+        },
+        {
+          "hash": "c6031fba728770f5b0799bf792dac2d2ab18dd9145b306ad40ff320d5cb8884b",
+          "path": "site/src/content/docs/handbook/operations/known-limitations.md"
+        },
+        {
+          "hash": "84a9dbc31cbbb473e4464602ca9306a301a7074a548314f8543e64c9a7deb7bf",
+          "path": "site/src/content/docs/handbook/operations/release-checklist.md"
+        },
+        {
+          "hash": "9357f096fb2cedf5890abe1a03a1445704750eb806fd0ebf115af8849a42ba80",
+          "path": "site/src/content/docs/handbook/persistence.md"
+        },
+        {
+          "hash": "aac3f390367271612842914b4a197b7e4ca088152f6a7c780f1563a21dd3bd9e",
+          "path": "site/src/content/docs/handbook/plan-review.md"
+        },
+        {
+          "hash": "d8680fa67861f052b4835280f7794ca184a093c4d0aea523ae2c57a560f9850a",
+          "path": "site/src/content/docs/handbook/planner-pipeline.md"
+        },
+        {
+          "hash": "bc1adc2f0a49440b38cf625737fe7d014f383555fe8154c10b92e301651d15a9",
+          "path": "site/src/content/docs/handbook/risk-tiers.md"
+        },
+        {
+          "hash": "3b548bea0557fbf53c4d78e4767891bdad632cec7effb206952ef251efcf920a",
+          "path": "site/src/content/docs/handbook/settings.md"
+        },
+        {
+          "hash": "64097a7df3af4e903184751831702bf0c60b7b73565f25e25088d477a22be14c",
+          "path": "site/src/content/docs/handbook/state-model.md"
+        },
+        {
+          "hash": "c8fd3cfa72cdf14e1808de851ebfea22f472ffeba4f05c579b3e9586dc97bb20",
+          "path": "site/src/content/docs/handbook/terminal.md"
+        },
+        {
+          "hash": "4b85ec14a88994446324c7071da542dfee270c2addb58c2a8166495d86f3e620",
+          "path": "site/src/content/docs/handbook/what-is-commandui.md"
+        },
+        {
+          "hash": "7caaaec85fc03d6fd0b5c0f4cd1c648adaad7d862e353b435fdeb879b995f813",
+          "path": "site/src/content/docs/handbook/workflows.md"
+        },
+        {
+          "hash": "391533713539035d3c92282579d43de0f137067867fdb502d7eaea3c74601d2a",
+          "path": "site/src/pages/index.astro"
+        },
+        {
+          "hash": "a4f27bfa78b63f1a02c374661931f98c56fa94973531f775bb9287ddac4bf82c",
+          "path": "site/src/pages/privacy.astro"
+        },
+        {
+          "hash": "88020691091bfaffb182e3b96357869aa6b8ada0945f254fc1fb4b3129eb16f8",
+          "path": "site/src/site-config.ts"
+        },
+        {
+          "hash": "29ee8df91833e694bdba973126b34a6177de4cf01dab6d9ef7d3126e8e2b67fb",
+          "path": "site/src/styles/global.css"
+        },
+        {
+          "hash": "29409cc209df513da6437a079cdbda5a940d64e341e765c016a5511cdb5ebbc9",
+          "path": "site/src/styles/starlight-custom.css"
+        },
+        {
+          "hash": "b5b0a5b04a14cddd7713c5e1c82e86c79c17c2f86b170e26e9b170b3d5e01cd9",
+          "path": "site/tsconfig.json"
+        }
+      ],
+      "globs": [
+        "site/**"
+      ],
+      "importConfidence": "full",
+      "name": "site",
+      "origin": "authored",
+      "role": "site",
+      "testedBy": 0,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [
+        "packages/state/src/index.ts"
+      ],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "2ca4284e3eac04916a03d2cdfd115765f26297c81b8009870c0b907757e3d082",
+          "path": "packages/state/package.json"
+        },
+        {
+          "hash": "dcf00f4c81f0f0c16c771457a3faa68b9f7004642671b468af32949e5945c420",
+          "importsFiles": [
+            "packages/state/src/index.ts"
+          ],
+          "path": "packages/state/src/index.test.ts"
+        },
+        {
+          "hash": "e40a80efed462aac657e6b9cbf6f9c6e7332aca266a244769f924bbf41737dac",
+          "importsFiles": [
+            "packages/api-contract/src/index.ts",
+            "packages/domain/src/index.ts",
+            "packages/state/src/memorySelectors.ts"
+          ],
+          "path": "packages/state/src/index.ts",
+          "reexportsAll": [
+            "packages/state/src/memorySelectors.ts"
+          ]
+        },
+        {
+          "exports": [
+            "resolveEffectiveMemory"
+          ],
+          "hash": "bf744a15017d0ec26c2bdf256241e5a9064d352b3442e0e7cda4688b567bdf8f",
+          "importsFiles": [
+            "packages/domain/src/index.ts"
+          ],
+          "path": "packages/state/src/memorySelectors.ts"
+        },
+        {
+          "hash": "8f6e85eeaa8025fe7b2f01763e03f32540d3e2869ae857490d685098460f4e3a",
+          "path": "packages/state/tsconfig.json"
+        }
+      ],
+      "globs": [
+        "packages/state/**"
+      ],
+      "importConfidence": "full",
+      "name": "state",
+      "origin": "authored",
+      "role": "code",
+      "testedBy": 4,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [
+        "packages/ui/src/index.ts"
+      ],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "faead0aa6fa1a36b93867e6eea21e469650a1d25c79b4c5d7a9bace4a1395b16",
+          "path": "packages/ui/package.json"
+        },
+        {
+          "hash": "1d8d34b7b1b171770dc58ee5776b92cf38a34d939238800feb5449a9abaa29bd",
+          "noStatements": true,
+          "path": "packages/ui/src/index.ts"
+        },
+        {
+          "hash": "8f6e85eeaa8025fe7b2f01763e03f32540d3e2869ae857490d685098460f4e3a",
+          "path": "packages/ui/tsconfig.json"
+        }
+      ],
+      "globs": [
+        "packages/ui/**"
+      ],
+      "importConfidence": "full",
+      "name": "ui",
+      "origin": "authored",
+      "role": "code",
+      "testedBy": 0,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "44f98eb20a7f46c44d861c64feb7c0ea72298f27196c196ff9a31d4ea3156723",
+          "path": "winget/manifests/m/mcp-tool-shop/CommandUI/1.0.0/mcp-tool-shop.CommandUI.installer.yaml"
+        },
+        {
+          "hash": "3637ed2306254bedd7658a13264d6207f118933f95ca4cfd3bb60e163fbc739b",
+          "path": "winget/manifests/m/mcp-tool-shop/CommandUI/1.0.0/mcp-tool-shop.CommandUI.locale.en-US.yaml"
+        },
+        {
+          "hash": "d835305cc20363f9eb9c976c54114cb9e3fa5e4fba44e9a3c681d046a48078b3",
+          "path": "winget/manifests/m/mcp-tool-shop/CommandUI/1.0.0/mcp-tool-shop.CommandUI.yaml"
+        }
+      ],
+      "globs": [
+        "winget/**"
+      ],
+      "importConfidence": "full",
+      "name": "winget",
+      "origin": "authored",
+      "role": "data",
+      "testedBy": 0,
+      "unresolvedSites": 0
+    }
+  ],
+  "doors": [
+    {
+      "checksCount": 2,
+      "commands": [
+        {
+          "job": "check-and-test",
+          "step": "Atlas check",
+          "text": "npx --yes @dogfood-lab/atlas@1.19.0 check"
+        },
+        {
+          "job": "check-and-test",
+          "step": "Install system dependencies",
+          "text": "sudo apt-get update\nsudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libglib2.0-dev\n"
+        },
+        {
+          "job": "check-and-test",
+          "step": "Cargo check (crates)",
+          "text": "cargo check -p commandui-runtime-core -p commandui-runtime-persistence -p commandui-runtime-planner"
+        },
+        {
+          "job": "check-and-test",
+          "step": "Cargo test (crates)",
+          "text": "cargo test -p commandui-runtime-core -p commandui-runtime-persistence -p commandui-runtime-planner"
+        }
+      ],
+      "elsewhere": [],
+      "file": ".github/workflows/ci.yml",
+      "landings": [],
+      "mentions": [],
+      "name": "CI",
+      "permissions": [],
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "runtime-core",
+          "depth": 0,
+          "files": 9
+        },
+        {
+          "boundary": "runtime-persistence",
+          "depth": 0,
+          "files": 7
+        },
+        {
+          "boundary": "runtime-planner",
+          "depth": 0,
+          "files": 7
+        }
+      ],
+      "readers": [],
+      "runs": [
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-core/src/events.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-core/src/lib.rs",
+          "runKind": "executes",
+          "via": "cargo check"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-core/src/parity.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-core/src/services/session_service.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-core/src/services/terminal_service.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-core/src/session.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-persistence/src/lib.rs",
+          "runKind": "checks",
+          "via": "cargo check"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-persistence/src/schema.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-planner/src/client.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-planner/src/lib.rs",
+          "runKind": "checks",
+          "via": "cargo check"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-planner/src/mock.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-planner/src/parity.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-planner/src/prompt.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "crates/runtime-planner/src/validate.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        }
+      ],
+      "runsCount": 14,
+      "secrets": [],
+      "sends": {
+        "deploysPages": false,
+        "dispatchesTo": [],
+        "opensIssues": false,
+        "opensIssuesOnFailure": false,
+        "opensPullRequests": false,
+        "publishes": false,
+        "publishesTo": [],
+        "releases": false
+      },
+      "stages": [],
+      "triggers": [
+        {
+          "event": "pull_request",
+          "paths": [
+            ".github/workflows/**",
+            "Cargo.lock",
+            "Cargo.toml",
+            "apps/**",
+            "atlas/**",
+            "crates/**",
+            "site/astro.config.mjs",
+            "site/package-lock.json",
+            "site/package.json"
+          ]
+        },
+        {
+          "event": "push",
+          "paths": [
+            ".github/workflows/**",
+            "Cargo.lock",
+            "Cargo.toml",
+            "apps/**",
+            "atlas/**",
+            "crates/**",
+            "site/astro.config.mjs",
+            "site/package-lock.json",
+            "site/package.json"
+          ]
+        },
+        {
+          "event": "workflow_dispatch"
+        }
+      ],
+      "uses": [
+        "actions/checkout",
+        "actions/setup-node",
+        "dtolnay/rust-toolchain"
+      ],
+      "usesWorkflowToken": false
+    },
+    {
+      "checksCount": 0,
+      "commands": [
+        {
+          "job": "build",
+          "step": "Install site dependencies",
+          "text": "npm ci"
+        },
+        {
+          "job": "build",
+          "step": "Build site",
+          "text": "npm run build"
+        }
+      ],
+      "elsewhere": [],
+      "file": ".github/workflows/pages.yml",
+      "landings": [],
+      "mentions": [],
+      "name": "Deploy site to GitHub Pages",
+      "permissions": [
+        "contents:read",
+        "id-token:write",
+        "pages:write"
+      ],
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "site",
+          "depth": 0,
+          "files": 3
+        }
+      ],
+      "readers": [],
+      "runs": [
+        {
+          "job": "build",
+          "matched": true,
+          "path": "site/astro.config.mjs",
+          "runKind": "executes",
+          "via": "astro build"
+        },
+        {
+          "directory": true,
+          "job": "build",
+          "matched": true,
+          "path": "site/src/",
+          "runKind": "executes",
+          "via": "astro build"
+        }
+      ],
+      "runsCount": 2,
+      "secrets": [],
+      "sends": {
+        "deploysPages": true,
+        "dispatchesTo": [],
+        "opensIssues": false,
+        "opensIssuesOnFailure": false,
+        "opensPullRequests": false,
+        "publishes": false,
+        "publishesTo": [],
+        "releases": false
+      },
+      "stages": [],
+      "triggers": [
+        {
+          "branches": [
+            "main"
+          ],
+          "event": "push",
+          "paths": [
+            ".github/workflows/pages.yml",
+            "site/**"
+          ]
+        },
+        {
+          "event": "workflow_dispatch"
+        }
+      ],
+      "uses": [
+        "actions/checkout",
+        "actions/deploy-pages",
+        "actions/setup-node",
+        "actions/upload-pages-artifact"
+      ],
+      "usesWorkflowToken": false
+    },
+    {
+      "checksCount": 2,
+      "commands": [
+        {
+          "job": "build-windows",
+          "step": "4",
+          "text": "pnpm install --frozen-lockfile"
+        },
+        {
+          "job": "build-windows",
+          "step": "Build Tauri app",
+          "text": "pnpm --filter @commandui/desktop tauri:build"
+        }
+      ],
+      "elsewhere": [],
+      "file": ".github/workflows/release-desktop.yml",
+      "gated": [
+        {
+          "jobs": [
+            "build-windows"
+          ],
+          "pushes": false,
+          "sends": [
+            "releases"
+          ],
+          "stages": [],
+          "when": {
+            "event": "release"
+          }
+        }
+      ],
+      "landings": [],
+      "mentions": [],
+      "name": "Release Desktop",
+      "permissions": [
+        "contents:write"
+      ],
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "desktop",
+          "depth": 0,
+          "files": 54
+        },
+        {
+          "boundary": "api-contract",
+          "depth": 1,
+          "enters": {
+            "file": "packages/api-contract/src/index.ts",
+            "from": "apps/desktop/src/app/AppShell.tsx"
+          },
+          "files": 12
+        },
+        {
+          "boundary": "domain",
+          "depth": 1,
+          "enters": {
+            "file": "packages/domain/src/index.ts",
+            "from": "apps/desktop/src/app/AppShell.tsx"
+          },
+          "files": 8
+        },
+        {
+          "boundary": "state",
+          "depth": 1,
+          "enters": {
+            "file": "packages/state/src/index.ts",
+            "from": "apps/desktop/src/app/AppShell.tsx"
+          },
+          "files": 2
+        },
+        {
+          "boundary": "runtime-core",
+          "depth": 2,
+          "enters": {
+            "file": "crates/runtime-core/src/services/session_service.rs",
+            "from": "apps/desktop/src-tauri/src/commands/session.rs"
+          },
+          "files": 6
+        },
+        {
+          "boundary": "runtime-persistence",
+          "depth": 2,
+          "enters": {
+            "file": "crates/runtime-persistence/src/db.rs",
+            "from": "apps/desktop/src-tauri/src/commands/history.rs"
+          },
+          "files": 6
+        },
+        {
+          "boundary": "runtime-planner",
+          "depth": 2,
+          "enters": {
+            "file": "crates/runtime-planner/src/lib.rs",
+            "from": "apps/desktop/src-tauri/src/commands/planner.rs"
+          },
+          "files": 7
+        }
+      ],
+      "readers": [],
+      "runs": [
+        {
+          "job": "build-windows",
+          "matched": true,
+          "path": "apps/desktop/src-tauri/src/lib.rs",
+          "runKind": "checks",
+          "via": "tauri build"
+        },
+        {
+          "job": "build-windows",
+          "matched": true,
+          "path": "apps/desktop/src-tauri/src/main.rs",
+          "runKind": "checks",
+          "via": "tauri build"
+        },
+        {
+          "directory": true,
+          "job": "build-windows",
+          "matched": true,
+          "path": "apps/desktop/src/",
+          "runKind": "executes",
+          "via": "tauri build → tsc apps/desktop/tsconfig.json"
+        },
+        {
+          "job": "build-windows",
+          "matched": true,
+          "path": "apps/desktop/vite.config.ts",
+          "runKind": "executes",
+          "via": "tauri build → vite build"
+        }
+      ],
+      "runsCount": 4,
+      "secrets": [],
+      "sends": {
+        "deploysPages": false,
+        "dispatchesTo": [],
+        "opensIssues": false,
+        "opensIssuesOnFailure": false,
+        "opensPullRequests": false,
+        "publishes": false,
+        "publishesTo": [],
+        "releases": false
+      },
+      "stages": [],
+      "triggers": [
+        {
+          "event": "release",
+          "types": [
+            "published"
+          ]
+        },
+        {
+          "event": "workflow_dispatch"
+        }
+      ],
+      "uses": [
+        "actions/checkout",
+        "actions/setup-node",
+        "actions/upload-artifact",
+        "dtolnay/rust-toolchain",
+        "pnpm/action-setup",
+        "softprops/action-gh-release"
+      ],
+      "usesWorkflowToken": false
+    },
+    {
+      "checksCount": 0,
+      "commands": [],
+      "elsewhere": [],
+      "file": "apps/console/Cargo.toml",
+      "kind": "command",
+      "landings": [],
+      "mentions": [],
+      "name": "commandui-console",
+      "permissions": [],
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "console",
+          "depth": 0,
+          "files": 7
+        },
+        {
+          "boundary": "runtime-core",
+          "depth": 1,
+          "enters": {
+            "file": "crates/runtime-core/src/services/session_service.rs",
+            "from": "apps/console/src/main.rs"
+          },
+          "files": 5
+        },
+        {
+          "boundary": "runtime-planner",
+          "depth": 2,
+          "enters": {
+            "file": "crates/runtime-planner/src/lib.rs",
+            "from": "apps/console/src/app.rs"
+          },
+          "files": 7
+        }
+      ],
+      "readers": [],
+      "runs": [
+        {
+          "path": "apps/console/src/main.rs",
+          "runKind": "executes"
+        }
+      ],
+      "runsCount": 1,
+      "secrets": [],
+      "sends": {
+        "deploysPages": false,
+        "dispatchesTo": [],
+        "opensIssues": false,
+        "opensIssuesOnFailure": false,
+        "opensPullRequests": false,
+        "publishes": false,
+        "publishesTo": [],
+        "releases": false
+      },
+      "stages": [],
+      "triggers": [],
+      "uses": [],
+      "usesWorkflowToken": false
+    },
+    {
+      "app": "desktop",
+      "checksCount": 0,
+      "commands": [],
+      "elsewhere": [],
+      "file": "apps/desktop/src-tauri/Cargo.toml",
+      "kind": "command",
+      "landings": [],
+      "mentions": [],
+      "name": "commandui-desktop",
+      "permissions": [],
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "desktop",
+          "depth": 0,
+          "files": 14
+        },
+        {
+          "boundary": "runtime-core",
+          "depth": 2,
+          "enters": {
+            "file": "crates/runtime-core/src/services/session_service.rs",
+            "from": "apps/desktop/src-tauri/src/commands/session.rs"
+          },
+          "files": 6
+        },
+        {
+          "boundary": "runtime-persistence",
+          "depth": 2,
+          "enters": {
+            "file": "crates/runtime-persistence/src/db.rs",
+            "from": "apps/desktop/src-tauri/src/commands/history.rs"
+          },
+          "files": 6
+        },
+        {
+          "boundary": "runtime-planner",
+          "depth": 2,
+          "enters": {
+            "file": "crates/runtime-planner/src/lib.rs",
+            "from": "apps/desktop/src-tauri/src/commands/planner.rs"
+          },
+          "files": 7
+        }
+      ],
+      "readers": [],
+      "runs": [
+        {
+          "path": "apps/desktop/src-tauri/src/main.rs",
+          "runKind": "executes"
+        }
+      ],
+      "runsCount": 1,
+      "secrets": [],
+      "sends": {
+        "deploysPages": false,
+        "dispatchesTo": [],
+        "opensIssues": false,
+        "opensIssuesOnFailure": false,
+        "opensPullRequests": false,
+        "publishes": false,
+        "publishesTo": [],
+        "releases": false
+      },
+      "stages": [],
+      "triggers": [],
+      "uses": [],
+      "usesWorkflowToken": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "api-contract",
+      "kind": "file",
+      "to": "domain"
+    },
+    {
+      "from": "console",
+      "kind": "file",
+      "to": "runtime-core"
+    },
+    {
+      "from": "console",
+      "kind": "file",
+      "to": "runtime-planner"
+    },
+    {
+      "from": "desktop",
+      "kind": "file",
+      "to": "api-contract"
+    },
+    {
+      "from": "desktop",
+      "kind": "file",
+      "to": "domain"
+    },
+    {
+      "from": "desktop",
+      "kind": "file",
+      "to": "runtime-core"
+    },
+    {
+      "from": "desktop",
+      "kind": "file",
+      "to": "runtime-persistence"
+    },
+    {
+      "from": "desktop",
+      "kind": "file",
+      "to": "runtime-planner"
+    },
+    {
+      "from": "desktop",
+      "kind": "file",
+      "to": "state"
+    },
+    {
+      "from": "state",
+      "kind": "file",
+      "to": "api-contract"
+    },
+    {
+      "from": "state",
+      "kind": "file",
+      "to": "domain"
+    }
+  ],
+  "generatedFrom": {
+    "commit": "cd989a31b8c744663b43a40676f7f809dfea75e2",
+    "tracked": 300
+  },
+  "landings": [
+    {
+      "readers": [
+        {
+          "by": "Cargo.toml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "apps/console",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "apps/console/Cargo.toml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "apps/console/src/main.rs",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "Cargo.toml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "apps/desktop/src-tauri",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "apps/desktop/src-tauri/tauri.conf.json",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "apps/desktop/src-tauri/icons/128x128.png",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "apps/desktop/src-tauri/tauri.conf.json",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "apps/desktop/src-tauri/icons/128x128@2x.png",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "apps/desktop/src-tauri/tauri.conf.json",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "apps/desktop/src-tauri/icons/32x32.png",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "apps/desktop/src-tauri/tauri.conf.json",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "apps/desktop/src-tauri/icons/icon.icns",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "apps/desktop/src-tauri/tauri.conf.json",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "apps/desktop/src-tauri/icons/icon.ico",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "Cargo.toml",
+          "call": "configuration",
+          "confidence": "config"
+        },
+        {
+          "by": "apps/console/Cargo.toml",
+          "call": "configuration",
+          "confidence": "config"
+        },
+        {
+          "by": "apps/desktop/src-tauri/Cargo.toml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "crates/runtime-core",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "Cargo.toml",
+          "call": "configuration",
+          "confidence": "config"
+        },
+        {
+          "by": "apps/desktop/src-tauri/Cargo.toml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "crates/runtime-persistence",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "Cargo.toml",
+          "call": "configuration",
+          "confidence": "config"
+        },
+        {
+          "by": "apps/console/Cargo.toml",
+          "call": "configuration",
+          "confidence": "config"
+        },
+        {
+          "by": "apps/desktop/src-tauri/Cargo.toml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "crates/runtime-planner",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "tsconfig.base.json",
+          "call": "literal",
+          "confidence": "text"
+        }
+      ],
+      "target": "packages/api-contract/src/index.ts",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "tsconfig.base.json",
+          "call": "literal",
+          "confidence": "text"
+        }
+      ],
+      "target": "packages/domain/src/index.ts",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "tsconfig.base.json",
+          "call": "literal",
+          "confidence": "text"
+        }
+      ],
+      "target": "packages/state/src/index.ts",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "tsconfig.base.json",
+          "call": "literal",
+          "confidence": "text"
+        }
+      ],
+      "target": "packages/ui/src/index.ts",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "site/astro.config.mjs",
+          "call": "content-collection",
+          "confidence": "ast"
+        }
+      ],
+      "target": "site/src/content/docs",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "site/astro.config.mjs",
+          "call": "autogenerate",
+          "confidence": "ast"
+        }
+      ],
+      "target": "site/src/content/docs/handbook",
+      "writers": []
+    }
+  ],
+  "overlaps": [],
+  "submodules": [],
+  "symlinks": [],
+  "testFiles": 22,
+  "unassigned": []
+}
