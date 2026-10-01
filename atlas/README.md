@@ -1,22 +1,20 @@
 # commandui: how it works
 
-Mapped at 2026-09-30 from commit 842976b by Atlas 1.24.0.
+Mapped at 2026-10-01 from commit 9b77cf9 by Atlas 1.24.0.
 
 ## What this is
 
 15 parts, in TypeScript (59 files), Rust (53 files), CSS (3 files), Astro (2 files), HTML (1 file) and JavaScript (1 file). Work enters through 5 doors; the busiest is Release Desktop, which reaches 7 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).
 
-## What changed since 2026-09-24 (cd989a3)
+## What changed since 2026-09-30 (842976b)
 
-- Release Desktop now also runs apps/desktop/src-tauri/build.rs.
-- apps/desktop/src-tauri/gen/schemas/ is now written by apps/desktop/src-tauri/build.rs.
-- desktop was authored and is now mixed.
+- CI's pull request trigger no longer names `.github/workflows/**`, `Cargo.lock`, `Cargo.toml`, `apps/**`, `atlas/**`, `crates/**`, `site/astro.config.mjs`, `site/package-lock.json` and `site/package.json`.
 - 1 file changed content, across 1 part.
 
 ## What comes in
 
 1. **Release Desktop.** When a release is published; or by hand. Runs apps/desktop/src-tauri/build.rs, apps/desktop/src/ and apps/desktop/vite.config.ts; builds apps/desktop/src-tauri/src/main.rs; checks apps/desktop/src-tauri/src/lib.rs.
-2. **CI.** On a pull request touching 9 paths; on a push touching 9 paths; or by hand. Runs crates/runtime-core/src/events.rs, crates/runtime-core/src/lib.rs, crates/runtime-core/src/parity.rs and 9 more; checks crates/runtime-persistence/src/lib.rs and crates/runtime-planner/src/lib.rs.
+2. **CI.** On a pull request; on a push touching 9 paths; or by hand. Runs crates/runtime-core/src/events.rs, crates/runtime-core/src/lib.rs, crates/runtime-core/src/parity.rs and 9 more; checks crates/runtime-persistence/src/lib.rs and crates/runtime-planner/src/lib.rs.
 3. **Deploy site to GitHub Pages.** On a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
 4. **commandui-desktop** (the desktop app people install). Runs apps/desktop/src-tauri/src/main.rs.
 5. **commandui-console** (a command built from apps/console, which nothing ships). Runs apps/console/src/main.rs.

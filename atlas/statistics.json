@@ -266,8 +266,8 @@
     "definition": "commits is how many commits in the window touch the file, including merges and commits dropped from coupling. lines is added plus deleted in those commits.",
     "files": [
       {
-        "commits": 3,
-        "lines": 35,
+        "commits": 5,
+        "lines": 39,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -286,8 +286,8 @@
         "path": ".prettierignore"
       },
       {
-        "commits": 1,
-        "lines": 97,
+        "commits": 3,
+        "lines": 179,
         "path": "atlas/README.md"
       },
       {
@@ -296,18 +296,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 1,
-        "lines": 445,
+        "commits": 3,
+        "lines": 689,
         "path": "atlas/page.json"
       },
       {
-        "commits": 1,
-        "lines": 954,
+        "commits": 3,
+        "lines": 2192,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 1,
-        "lines": 3114,
+        "commits": 3,
+        "lines": 4290,
         "path": "atlas/structure.json"
       },
       {
@@ -331,9 +331,9 @@
     "level": "low",
     "reason": "fewer than 30 qualifying commits in the window, and fewer than 25 source files reach 10 revisions"
   },
-  "generatedAt": "2026-09-30T20:09:19.961Z",
+  "generatedAt": "2026-10-01T02:14:52.457Z",
   "generatedFrom": {
-    "commit": "842976b0eff0d8b0bae702c0306c2bc25bbf6522"
+    "commit": "9b77cf9ec98ef47063da46ac5300d1f240cd21e6"
   },
   "pairs": [],
   "parameters": {
@@ -346,16 +346,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "both",
-    "headDate": "2026-09-24T15:00:10-07:00",
+    "headDate": "2026-09-30T13:27:56-07:00",
     "inScopeFiles": 305,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 4,
+    "qualifyingCommits": 5,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-03-28T22:00:10.000Z",
+    "since": "2026-04-03T20:27:56.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

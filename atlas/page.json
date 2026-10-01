@@ -93,25 +93,9 @@
     "items": [
       {
         "kind": "door",
-        "sentence": "Release Desktop now also runs apps/desktop/src-tauri/build.rs.",
+        "sentence": "CI's pull request trigger no longer names `.github/workflows/**`, `Cargo.lock`, `Cargo.toml`, `apps/**`, `atlas/**`, `crates/**`, `site/astro.config.mjs`, `site/package-lock.json` and `site/package.json`.",
         "subjects": [
-          ".github/workflows/release-desktop.yml",
-          "apps/desktop/src-tauri/build.rs"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "apps/desktop/src-tauri/gen/schemas/ is now written by apps/desktop/src-tauri/build.rs.",
-        "subjects": [
-          "apps/desktop/src-tauri/gen/schemas/",
-          "apps/desktop/src-tauri/build.rs"
-        ]
-      },
-      {
-        "kind": "origin",
-        "sentence": "desktop was authored and is now mixed.",
-        "subjects": [
-          "desktop"
+          ".github/workflows/ci.yml"
         ]
       },
       {
@@ -121,8 +105,8 @@
       }
     ],
     "since": {
-      "commit": "cd989a31b8c744663b43a40676f7f809dfea75e2",
-      "generatedAt": "2026-09-24T21:48:15.924Z"
+      "commit": "842976b0eff0d8b0bae702c0306c2bc25bbf6522",
+      "generatedAt": "2026-09-30T20:09:19.961Z"
     },
     "unchanged": false
   },
@@ -131,7 +115,7 @@
     "Window: 180 days; a pair counts from 3 shared commits, since the window holds fewer than 30 qualifying commits."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "842976b0eff0d8b0bae702c0306c2bc25bbf6522",
+  "commit": "9b77cf9ec98ef47063da46ac5300d1f240cd21e6",
   "defaultBranch": "main",
   "derived": "15 parts, in TypeScript (59 files), Rust (53 files), CSS (3 files), Astro (2 files), HTML (1 file) and JavaScript (1 file). Work enters through 5 doors; the busiest is Release Desktop, which reaches 7 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
@@ -252,7 +236,7 @@
       "sends": [],
       "stages": [],
       "triggers": [
-        "on a pull request touching 9 paths",
+        "on a pull request",
         "on a push touching 9 paths",
         "or by hand"
       ]
@@ -428,7 +412,7 @@
       ]
     }
   ],
-  "generatedAt": "2026-09-30T20:09:19.961Z",
+  "generatedAt": "2026-10-01T02:14:52.457Z",
   "limits": [
     "1 read uses a path built at run time and is not named here.",
     "1 write goes to the home directory, not to this repository.",

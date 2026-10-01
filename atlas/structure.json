@@ -260,7 +260,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "30d1eed99f2bce84555756d8b54c8aef9b33239502da709254879ade7cc8161c",
+          "hash": "7e10d6f10e140177e8925000d8a60bccc236bdee6106efd88900226dff40874f",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -2804,18 +2804,7 @@
       ],
       "triggers": [
         {
-          "event": "pull_request",
-          "paths": [
-            ".github/workflows/**",
-            "Cargo.lock",
-            "Cargo.toml",
-            "apps/**",
-            "atlas/**",
-            "crates/**",
-            "site/astro.config.mjs",
-            "site/package-lock.json",
-            "site/package.json"
-          ]
+          "event": "pull_request"
         },
         {
           "event": "push",
@@ -3387,7 +3376,7 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "842976b0eff0d8b0bae702c0306c2bc25bbf6522",
+    "commit": "9b77cf9ec98ef47063da46ac5300d1f240cd21e6",
     "tracked": 300
   },
   "landings": [
