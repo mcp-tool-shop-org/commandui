@@ -64,7 +64,8 @@ import {
 } from "../features/memory/memoryClient";
 import { InputComposer } from "../components/InputComposer";
 import type { InputComposerHandle } from "../components/InputComposer";
-import { PlanPanel } from "../components/PlanPanel";
+import { PlanPanel, planCanRun } from "../components/PlanPanel";
+import type { PlanRunGate } from "../components/PlanPanel";
 import { TerminalPane } from "../components/TerminalPane";
 import type { TerminalPaneHandle } from "../components/TerminalPane";
 import { CommandPalette } from "../components/CommandPalette";
@@ -144,6 +145,7 @@ export function AppShell() {
 
   // --- Local state ---
   const [plan, setPlan] = useState<PlannerGeneratePlanResponse | null>(null);
+  const [planNonce, setPlanNonce] = useState(0);
   const [currentPlanHistoryId, setCurrentPlanHistoryId] = useState<
     string | null
   >(null);
@@ -177,9 +179,22 @@ export function AppShell() {
   const terminalPaneRef = useRef<TerminalPaneHandle>(null);
   const composerRef = useRef<InputComposerHandle>(null);
   const activeSessionIdRef = useRef<string | null>(null);
+  const planGateRef = useRef<PlanRunGate>({ command: "", confirmed: false });
+  const approvePlanRef = useRef<(command: string) => void>(() => {});
+  const planNonceSeenRef = useRef(0);
+
+  const acceptPlanRunGate = useCallback((gate: PlanRunGate) => {
+    planGateRef.current = gate;
+  }, []);
 
   // Keep ref in sync with state (for use in event callbacks)
   activeSessionIdRef.current = activeSessionId;
+
+  // A new plan (including a reopen of the same command) starts unconfirmed.
+  if (planNonceSeenRef.current !== planNonce || plan === null) {
+    planNonceSeenRef.current = planNonce;
+    planGateRef.current = { command: "", confirmed: false };
+  }
 
   const session =
     sessions.find((s) => s.id === activeSessionId) ?? null;
@@ -486,9 +501,10 @@ export function AppShell() {
       { id: "memory",        combo: "ctrl+m",        context: ["global"], action: () => setMemoryOpen((v) => !v) },
       { id: "settings",      combo: "ctrl+,",        context: ["global"], action: () => setSettingsOpen((v) => !v) },
       { id: "escape",        combo: "escape",        context: ["global"], action: closeAllOverlays },
-      // Plan shortcuts (zone-specific, bare keys only fire when plan is focused)
-      { id: "plan-approve",  combo: "a",             context: ["plan"],   when: () => plan !== null, action: () => plan && handleApprovePlan(plan.plan.command) },
-      { id: "plan-approve-global", combo: "ctrl+enter", context: ["global"], when: () => plan !== null, action: () => plan && handleApprovePlan(plan.plan.command) },
+      // Plan shortcuts. Bare keys do not fire in text fields (see resolveShortcut).
+      // Approve uses the edited textarea command, and handleApprovePlan applies canRun.
+      { id: "plan-approve",  combo: "a",             context: ["plan"],   when: () => plan !== null, action: () => approvePlanRef.current(planGateRef.current.command) },
+      { id: "plan-approve-global", combo: "ctrl+enter", context: ["global"], when: () => plan !== null, action: () => approvePlanRef.current(planGateRef.current.command) },
       { id: "plan-reject",   combo: "r",             context: ["plan"],   when: () => plan !== null, action: handleRejectPlan },
       { id: "plan-edit",     combo: "e",             context: ["plan"],   when: () => plan !== null, action: () => {
         // Focus the command textarea in PlanPanel
@@ -601,7 +617,9 @@ export function AppShell() {
           context,
         });
 
+        planGateRef.current = { command: "", confirmed: false };
         setPlan(res);
+        setPlanNonce((n) => n + 1);
         setCurrentPlanHistoryId(historyId);
 
         const historyItem: HistoryItem = {
@@ -635,6 +653,21 @@ export function AppShell() {
   // --- Plan actions ---
   async function handleApprovePlan(approvedCommand: string) {
     if (!session || !plan) return;
+    const trimmed = approvedCommand.trim();
+    const gate = planGateRef.current;
+    // Same rule as PlanPanel's Run button. Shortcuts pass the edited command
+    // the panel reported; a different string (the original plan command) does not run.
+    if (trimmed.length === 0 || trimmed !== gate.command) return;
+    if (
+      !planCanRun({
+        command: trimmed,
+        risk: plan.plan.risk,
+        requireMediumRiskConfirmation: confirmMediumRisk,
+        confirmed: gate.confirmed,
+      })
+    ) {
+      return;
+    }
     setBusy(true);
 
     try {
@@ -642,25 +675,25 @@ export function AppShell() {
 
       if (currentPlanHistoryId) {
         updateHistoryItem(currentPlanHistoryId, {
-          executedCommand: approvedCommand,
+          executedCommand: trimmed,
         });
         executionToHistoryRef.current[executionId] = currentPlanHistoryId;
 
         void historyUpdate({
           historyId: currentPlanHistoryId,
-          executedCommand: approvedCommand,
+          executedCommand: trimmed,
         });
       }
 
       // Check for edit-based memory suggestion
       if (
-        approvedCommand !== plan.plan.command &&
+        trimmed !== plan.plan.command &&
         session.cwd
       ) {
         const existing = memorySuggestions.find(
           (s) =>
             s.kind === "accepted_substitution" &&
-            s.proposedValue === approvedCommand &&
+            s.proposedValue === trimmed &&
             s.projectRoot === session.cwd,
         );
 
@@ -670,9 +703,9 @@ export function AppShell() {
             scope: "project",
             projectRoot: session.cwd,
             kind: "accepted_substitution",
-            label: `Use "${approvedCommand}" instead of "${plan.plan.command}"`,
+            label: `Use "${trimmed}" instead of "${plan.plan.command}"`,
             proposedKey: plan.plan.command,
-            proposedValue: approvedCommand,
+            proposedValue: trimmed,
             confidence: 0.72,
             derivedFromHistoryIds: currentPlanHistoryId
               ? [currentPlanHistoryId]
@@ -684,12 +717,12 @@ export function AppShell() {
         }
       }
 
-      appendTerminalLine(session.id, `[approved] ${approvedCommand}\r\n`);
+      appendTerminalLine(session.id, `[approved] ${trimmed}\r\n`);
 
       await executeCommand({
         executionId,
         sessionId: session.id,
-        command: approvedCommand,
+        command: trimmed,
         source: "semantic",
         linkedPlanId: plan.plan.id,
       });
@@ -703,6 +736,10 @@ export function AppShell() {
       setBusy(false);
     }
   }
+
+  approvePlanRef.current = (command: string) => {
+    void handleApprovePlan(command);
+  };
 
   function handleRejectPlan() {
     if (!session) return;
@@ -847,18 +884,19 @@ export function AppShell() {
       source: "semantic",
       userIntent: item.userInput,
       command: item.generatedCommand,
-      explanation: "Reopened from history",
+      explanation: "Reopened from history without a stored risk, so confirmation is required.",
       assumptions: [],
       confidence: 0.9,
-      risk: "low",
+      risk: "high",
       destructive: false,
-      requiresConfirmation: false,
+      requiresConfirmation: true,
       touchesFiles: false,
       touchesNetwork: false,
       escalatesPrivileges: false,
       generatedAt: item.createdAt,
     };
 
+    planGateRef.current = { command: "", confirmed: false };
     setPlan({
       plan: syntheticPlan,
       review: {
@@ -869,6 +907,7 @@ export function AppShell() {
         retrievedContext: [],
       },
     });
+    setPlanNonce((n) => n + 1);
     setCurrentPlanHistoryId(item.id);
     setHistoryOpen(false);
   }
@@ -1352,6 +1391,7 @@ export function AppShell() {
           <aside className="plan-column">
             {plan ? (
               <PlanPanel
+                key={planNonce}
                 sessionId={plan.plan.sessionId}
                 intent={plan.plan.userIntent}
                 command={plan.plan.command}
@@ -1360,6 +1400,7 @@ export function AppShell() {
                 contextSources={plan.review.retrievedContext}
                 plannerSource={plan.plan.source}
                 requireMediumRiskConfirmation={confirmMediumRisk}
+                onRunGate={acceptPlanRunGate}
                 onApprove={handleApprovePlan}
                 onReject={handleRejectPlan}
                 onSaveWorkflow={handleSaveWorkflow}

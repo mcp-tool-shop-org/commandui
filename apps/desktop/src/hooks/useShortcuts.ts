@@ -6,14 +6,13 @@ import { resolveShortcut } from "../lib/shortcuts";
 /**
  * Attach a single window keydown listener that dispatches to the shortcut registry.
  * Reads current focus zone from Zustand to determine context.
+ * resolveShortcut ignores bare keys while focus is in a text field.
  */
 export function useShortcuts(shortcuts: ShortcutDef[]): void {
   const currentZone = useFocusStore((s) => s.currentZone);
 
   useEffect(() => {
     function handler(event: KeyboardEvent) {
-      // Don't intercept when an input/textarea in a drawer or palette is focused
-      // (the shortcut system handles this via zone guards)
       const match = resolveShortcut(shortcuts, event, currentZone);
       if (match) {
         event.preventDefault();

@@ -1,15 +1,45 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useFocusStore } from "@commandui/state";
+
+export type PlanRisk = "low" | "medium" | "high";
+
+/** Latest edited command and checkbox, reported so shortcuts share canRun. */
+export type PlanRunGate = {
+  command: string;
+  confirmed: boolean;
+};
+
+export function planNeedsConfirmation(
+  risk: PlanRisk,
+  requireMediumRiskConfirmation: boolean,
+): boolean {
+  return risk === "high" || (risk === "medium" && requireMediumRiskConfirmation);
+}
+
+/** Same rule as the Run Plan button: non-empty command, and the checkbox when required. */
+export function planCanRun(input: {
+  command: string;
+  risk: PlanRisk;
+  requireMediumRiskConfirmation: boolean;
+  confirmed: boolean;
+}): boolean {
+  const needsConfirmation = planNeedsConfirmation(
+    input.risk,
+    input.requireMediumRiskConfirmation,
+  );
+  return input.command.trim().length > 0 && (!needsConfirmation || input.confirmed);
+}
 
 type Props = {
   sessionId: string;
   intent: string;
   command: string;
-  risk: "low" | "medium" | "high";
+  risk: PlanRisk;
   explanation: string;
   contextSources?: string[];
   plannerSource?: string;
   requireMediumRiskConfirmation?: boolean;
+  onRunGate?: (gate: PlanRunGate) => void;
   onApprove: (command: string) => void;
   onReject: () => void;
   onSaveWorkflow: (command: string) => void;
@@ -24,20 +54,25 @@ export function PlanPanel({
   contextSources,
   plannerSource,
   requireMediumRiskConfirmation = true,
+  onRunGate,
   onApprove,
   onReject,
   onSaveWorkflow,
 }: Props) {
   const [editedCommand, setEditedCommand] = useState(command);
   const [confirmRisk, setConfirmRisk] = useState(false);
+  const [commandSync, setCommandSync] = useState(command);
   const panelRef = useRef<HTMLDivElement>(null);
   const commandTextareaRef = useRef<HTMLTextAreaElement>(null);
   const setFocusZone = useFocusStore((s) => s.setFocusZone);
 
-  useEffect(() => {
+  // Reset the draft and the checkbox when a different command is shown,
+  // before paint, so a previous confirmation cannot approve the new plan.
+  if (command !== commandSync) {
+    setCommandSync(command);
     setEditedCommand(command);
     setConfirmRisk(false);
-  }, [command]);
+  }
 
   /** Focus the command edit textarea (for keyboard shortcut "E") */
   function focusCommandEdit() {
@@ -50,6 +85,13 @@ export function PlanPanel({
     if (el) (el as unknown as Record<string, unknown>).__focusEdit = focusCommandEdit;
   });
 
+  useLayoutEffect(() => {
+    onRunGate?.({
+      command: command ? editedCommand.trim() : "",
+      confirmed: command ? confirmRisk : false,
+    });
+  }, [command, editedCommand, confirmRisk, onRunGate]);
+
   if (!command) {
     return (
       <div className="plan-panel">
@@ -58,10 +100,13 @@ export function PlanPanel({
     );
   }
 
-  const needsConfirmation =
-    risk === "high" || (risk === "medium" && requireMediumRiskConfirmation);
-  const canRun =
-    editedCommand.trim().length > 0 && (!needsConfirmation || confirmRisk);
+  const needsConfirmation = planNeedsConfirmation(risk, requireMediumRiskConfirmation);
+  const canRun = planCanRun({
+    command: editedCommand,
+    risk,
+    requireMediumRiskConfirmation,
+    confirmed: confirmRisk,
+  });
 
   return (
     <div

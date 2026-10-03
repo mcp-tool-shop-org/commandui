@@ -88,6 +88,41 @@ function isBareKey(parsed: ParsedCombo): boolean {
 /** Special keys that should work even in text input zones. */
 const SPECIAL_KEYS = new Set(["escape", "enter", "tab"]);
 
+const NON_TEXT_INPUT_TYPES = new Set([
+  "button",
+  "checkbox",
+  "radio",
+  "submit",
+  "reset",
+  "file",
+  "color",
+  "range",
+  "image",
+  "hidden",
+]);
+
+/** True for editors where a bare letter should type, not trigger a shortcut. */
+function isTextFieldElement(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag !== "INPUT") return false;
+  const type = (target as HTMLInputElement).type.toLowerCase();
+  return !NON_TEXT_INPUT_TYPES.has(type);
+}
+
+/**
+ * Focus can sit in the plan editor, palette, history search, or workflow
+ * editor while the focus zone is still "plan". Bare keys must not fire there.
+ */
+function eventInTextField(event: KeyboardEvent): boolean {
+  if (isTextFieldElement(event.target)) return true;
+  if (typeof document === "undefined") return false;
+  const active = document.activeElement;
+  return active !== event.target && isTextFieldElement(active);
+}
+
 /**
  * Resolve the best-matching shortcut for a keyboard event given the current focus zone.
  *
@@ -95,6 +130,7 @@ const SPECIAL_KEYS = new Set(["escape", "enter", "tab"]);
  * - Zone-specific context beats "global"
  * - When zone is "terminal" or "composer", bare-key shortcuts are suppressed
  *   (except special keys like Escape/Enter)
+ * - Bare keys are also suppressed while focus is in any text field
  * - `when` guard must return true (or be absent)
  */
 export function resolveShortcut(
@@ -109,9 +145,13 @@ export function resolveShortcut(
     if (!matchesEvent(parsed, event)) continue;
     if (def.when && !def.when()) continue;
 
-    // Guard: suppress bare-key shortcuts in text-input zones
+    // Guard: suppress bare-key shortcuts in text-input zones and text fields
     const isTextZone = currentZone === "terminal" || currentZone === "composer";
-    if (isTextZone && isBareKey(parsed) && !SPECIAL_KEYS.has(parsed.key)) {
+    if (
+      (isTextZone || eventInTextField(event)) &&
+      isBareKey(parsed) &&
+      !SPECIAL_KEYS.has(parsed.key)
+    ) {
       continue;
     }
 
