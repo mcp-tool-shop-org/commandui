@@ -249,4 +249,23 @@ mod tests {
         let err = require_column(&conn, "workflows", "steps_json").unwrap_err();
         assert!(err.contains("workflows.steps_json"), "{err}");
     }
+
+    #[test]
+    fn init_fails_when_a_table_name_is_already_a_view() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE VIEW history_items AS SELECT 1 AS id;")
+            .unwrap();
+        let err = init_schema(&conn).unwrap_err();
+        assert!(
+            err.contains("Schema init failed") || err.contains("Schema migration failed"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn missing_table_fails_the_column_check() {
+        let conn = Connection::open_in_memory().unwrap();
+        let err = require_column(&conn, "missing_table", "steps_json").unwrap_err();
+        assert!(err.contains("missing_table.steps_json"), "{err}");
+    }
 }

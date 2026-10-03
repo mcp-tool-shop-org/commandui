@@ -227,4 +227,38 @@ mod tests {
         assert!(stored.contains("\"fontSize\":\"lg\""), "{stored}");
         assert_eq!(get(&conn).unwrap().confirm_medium_risk, Some(true));
     }
+
+    #[test]
+    fn update_keeps_an_explicit_false_and_fails_without_the_table() {
+        let conn = open();
+        let patch = SettingsSnapshot {
+            confirm_medium_risk: Some(false),
+            theme: Some("light".into()),
+            ..default_settings()
+        };
+        // Fill every other field so the patch is a complete object, then
+        // clear the ones the merge must leave to the stored defaults.
+        let patch = SettingsSnapshot {
+            product_mode: None,
+            theme: patch.theme,
+            font_size: None,
+            density: None,
+            default_input_mode: None,
+            auto_open_plan_panel: None,
+            confirm_medium_risk: Some(false),
+            explanation_verbosity: None,
+            reduced_clutter: None,
+            simplified_summaries: None,
+        };
+        update(&conn, &patch).unwrap();
+        let stored = get(&conn).unwrap();
+        assert_eq!(stored.confirm_medium_risk, Some(false));
+        assert_eq!(stored.theme.as_deref(), Some("light"));
+        assert_eq!(stored.font_size.as_deref(), Some("md"));
+
+        let bare = Connection::open_in_memory().unwrap();
+        assert_eq!(get(&bare).unwrap().theme.as_deref(), Some("dark"));
+        let err = update(&bare, &default_settings()).unwrap_err();
+        assert!(err.contains("settings update"), "{err}");
+    }
 }

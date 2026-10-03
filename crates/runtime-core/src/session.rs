@@ -151,4 +151,84 @@ mod tests {
         let json = serde_json::to_string(&SessionExecState::Running).unwrap();
         assert_eq!(json, "\"running\"");
     }
+
+    fn record(id: &str) -> SessionRecord {
+        let pair = portable_pty::native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("open pty");
+        SessionRecord {
+            id: id.to_string(),
+            label: format!("label-{id}"),
+            cwd: "/work".into(),
+            shell: "bash".into(),
+            status: "active".into(),
+            pty_pair: pair,
+            writer: std::sync::Arc::new(std::sync::Mutex::new(
+                Box::new(std::io::sink()) as Box<dyn std::io::Write + Send>
+            )),
+            pending_execution_id: None,
+            marker_nonce: "nonce".into(),
+            exec_state: SessionExecState::Booting,
+            boot_prompt_received: false,
+            command_sent_at: None,
+            read_buffer: String::new(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            last_active_at: "2026-01-01T00:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn registry_inserts_reads_updates_and_removes() {
+        let mut registry = SessionRegistry::new();
+        assert!(registry.get("s1").is_none());
+        assert!(registry.pending_execution_id("s1").is_none());
+        assert!(registry.exec_state("s1").is_none());
+        assert!(registry.list().is_empty());
+
+        registry.insert(record("s1"));
+        registry.insert(record("s2"));
+        assert_eq!(registry.list().len(), 2);
+        assert_eq!(registry.get("s1").unwrap().label, "label-s1");
+        registry.get_mut("s1").unwrap().label = "renamed".into();
+        assert_eq!(registry.get("s1").unwrap().label, "renamed");
+
+        registry
+            .set_pending_execution("s1", Some("exec-1".into()))
+            .unwrap();
+        assert_eq!(registry.pending_execution_id("s1").as_deref(), Some("exec-1"));
+        registry.set_pending_execution("s1", None).unwrap();
+        assert!(registry.pending_execution_id("s1").is_none());
+
+        registry
+            .set_exec_state("s1", SessionExecState::Ready)
+            .unwrap();
+        assert_eq!(registry.exec_state("s1"), Some(SessionExecState::Ready));
+        registry.resize("s1", 100, 40).unwrap();
+
+        let removed = registry.remove("s1").unwrap();
+        assert_eq!(removed.id, "s1");
+        assert!(registry.get("s1").is_none());
+        assert!(registry.remove("s1").is_none());
+    }
+
+    #[test]
+    fn registry_missing_session_is_an_error() {
+        let mut registry = SessionRegistry::new();
+        for err in [
+            registry.resize("missing", 80, 24).unwrap_err(),
+            registry
+                .set_pending_execution("missing", None)
+                .unwrap_err(),
+            registry
+                .set_exec_state("missing", SessionExecState::Ready)
+                .unwrap_err(),
+        ] {
+            assert!(err.contains("Session not found: missing"), "{err}");
+        }
+    }
 }

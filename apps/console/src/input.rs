@@ -973,4 +973,338 @@ mod tests {
         assert_eq!(action, InputAction::Ignored);
         assert!(model.status_line.as_deref().unwrap().contains("Session not found"));
     }
+
+    #[test]
+    fn shell_chords_scroll_help_and_mode_changes() {
+        let terminal = service();
+
+        let mut model = Model::new();
+        assert_eq!(
+            handle_key(press(KeyCode::Char('q'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::Quit
+        );
+        assert_eq!(
+            handle_key(press(KeyCode::Char('a'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+
+        let mut model = two_sessions();
+        model.sessions.pop();
+        assert_eq!(
+            handle_key(press(KeyCode::Char('w'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert_eq!(
+            handle_key(press(KeyCode::Char(']'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert_eq!(
+            handle_key(press(KeyCode::Esc, KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+
+        let mut model = two_sessions();
+        model.sessions[0].terminal_lines = vec!["a".into(), "b".into(), "c".into()];
+        model.pane_rows = 1;
+        assert_eq!(
+            handle_key(press(KeyCode::PageUp, KeyModifiers::SHIFT), &mut model, &terminal),
+            InputAction::Scrolled
+        );
+        assert!(model.sessions[0].scroll_offset > 0);
+        assert_eq!(
+            handle_key(press(KeyCode::PageDown, KeyModifiers::SHIFT), &mut model, &terminal),
+            InputAction::Scrolled
+        );
+
+        model.show_help = true;
+        assert_eq!(
+            handle_key(press(KeyCode::Char('a'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert!(model.show_help);
+        assert_eq!(
+            handle_key(press(KeyCode::Char('h'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert!(!model.show_help);
+        handle_key(press(KeyCode::Char('h'), KeyModifiers::CONTROL), &mut model, &terminal);
+        assert!(model.show_help);
+
+        let mut model = two_sessions();
+        model.sessions[0].session_state = SessionState::Booting;
+        assert_eq!(
+            handle_key(press(KeyCode::Char('g'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert_eq!(
+            handle_key(press(KeyCode::Char('t'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert_eq!(
+            handle_key(press(KeyCode::Char('a'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+
+        let mut model = two_sessions();
+        assert_eq!(
+            handle_key(press(KeyCode::Char('g'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::EnterRawPlay
+        );
+        let mut model = two_sessions();
+        assert_eq!(
+            handle_key(press(KeyCode::Char('s'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::ModeSwitched
+        );
+        assert_eq!(model.input_mode, InputMode::Switcher);
+        let mut model = two_sessions();
+        assert_eq!(
+            handle_key(press(KeyCode::Char('t'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::ModeSwitched
+        );
+        assert_eq!(model.input_mode, InputMode::Ask);
+        let mut model = two_sessions();
+        assert_eq!(
+            handle_key(press(KeyCode::Char('n'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::CreateSession
+        );
+        assert_eq!(
+            handle_key(press(KeyCode::Char('w'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::CloseSession
+        );
+
+        let mut model = two_sessions();
+        model.sessions[0].exec_state = "interrupting".into();
+        let action = handle_key(press(KeyCode::Char('c'), KeyModifiers::CONTROL), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+
+        let mut model = two_sessions();
+        model.sessions[0].scroll_offset = 2;
+        model.sessions[0].terminal_lines = vec!["a".into(), "b".into(), "c".into()];
+        handle_key(press(KeyCode::Char('z'), KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(model.sessions[0].scroll_offset, 0);
+
+        let mut model = two_sessions();
+        assert_eq!(
+            handle_key(press(KeyCode::F(20), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert_eq!(
+            handle_key(press(KeyCode::PageUp, KeyModifiers::SHIFT), &mut Model::new(), &terminal),
+            InputAction::Scrolled
+        );
+    }
+
+    #[test]
+    fn ask_review_switcher_and_raw_keys_cover_each_arm() {
+        let terminal = service();
+
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Ask;
+        model.planner_busy = true;
+        assert_eq!(
+            handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        model.planner_busy = false;
+        assert_eq!(
+            handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        model.composer_text = "  list files  ".into();
+        model.composer_cursor = model.composer_text.len();
+        assert_eq!(
+            handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::SubmitIntent("list files".into())
+        );
+        assert!(model.planner_busy);
+
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Ask;
+        model.composer_text = "ab".into();
+        model.composer_cursor = 2;
+        handle_key(press(KeyCode::Backspace, KeyModifiers::NONE), &mut model, &terminal);
+        handle_key(press(KeyCode::Left, KeyModifiers::NONE), &mut model, &terminal);
+        handle_key(press(KeyCode::Right, KeyModifiers::NONE), &mut model, &terminal);
+        handle_key(press(KeyCode::Char('日'), KeyModifiers::NONE), &mut model, &terminal);
+        handle_key(press(KeyCode::Char('u'), KeyModifiers::CONTROL), &mut model, &terminal);
+        assert!(model.composer_text.is_empty());
+        assert_eq!(
+            handle_key(press(KeyCode::Esc, KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::ModeSwitched
+        );
+        model.input_mode = InputMode::Ask;
+        assert_eq!(
+            handle_key(press(KeyCode::Char('t'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::ModeSwitched
+        );
+        model.input_mode = InputMode::Ask;
+        assert_eq!(
+            handle_key(press(KeyCode::F(1), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Review;
+        assert_eq!(
+            handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        model.set_proposal(proposal("echo hi", false), "s1".into());
+        model.review_rows = 6;
+        model.review_cols = 80;
+        for code in [KeyCode::Up, KeyCode::Down, KeyCode::PageUp, KeyCode::PageDown, KeyCode::Left, KeyCode::Right, KeyCode::Char('k'), KeyCode::Char('j')] {
+            handle_key(press(code, KeyModifiers::NONE), &mut model, &terminal);
+        }
+        handle_key(press(KeyCode::Char('c'), KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(
+            handle_key(press(KeyCode::Char('y'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::ApproveProposal("echo hi".into(), "s1".into(), "plan-9".into())
+        );
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Review;
+        model.review_rows = 6;
+        model.review_cols = 80;
+        model.set_proposal(proposal("echo hi", true), "s1".into());
+        handle_key(press(KeyCode::Char('c'), KeyModifiers::NONE), &mut model, &terminal);
+        assert!(model.proposal_confirmed);
+        handle_key(press(KeyCode::Char('c'), KeyModifiers::NONE), &mut model, &terminal);
+        assert!(!model.proposal_confirmed);
+        assert_eq!(
+            handle_key(press(KeyCode::Char('n'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::CancelProposal
+        );
+        assert_eq!(model.input_mode, InputMode::Ask);
+
+        let mut model = Model::new();
+        model.input_mode = InputMode::Switcher;
+        assert_eq!(
+            handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::ModeSwitched
+        );
+
+        let mut model = two_sessions();
+        model.open_switcher();
+        assert_eq!(
+            handle_key(press(KeyCode::Up, KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert_eq!(model.switcher_cursor, 1);
+        assert_eq!(
+            handle_key(press(KeyCode::Down, KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert_eq!(
+            handle_key(press(KeyCode::Char('2'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::NextSession
+        );
+        let mut model = two_sessions();
+        model.open_switcher();
+        assert_eq!(
+            handle_key(press(KeyCode::Char('9'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert_eq!(
+            handle_key(press(KeyCode::Esc, KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::ModeSwitched
+        );
+        model.open_switcher();
+        assert_eq!(
+            handle_key(press(KeyCode::Char('s'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::ModeSwitched
+        );
+        model.open_switcher();
+        assert_eq!(
+            handle_key(press(KeyCode::Char('n'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::CreateSession
+        );
+        let mut model = two_sessions();
+        model.sessions.pop();
+        model.open_switcher();
+        assert_eq!(
+            handle_key(press(KeyCode::Char('w'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        let mut model = two_sessions();
+        model.open_switcher();
+        model.switcher_cursor = 1;
+        assert_eq!(
+            handle_key(press(KeyCode::Char('w'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::CloseSession
+        );
+        let mut model = two_sessions();
+        model.open_switcher();
+        assert_eq!(
+            handle_key(press(KeyCode::F(2), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+
+        let mut model = two_sessions();
+        model.input_mode = InputMode::RawPlay;
+        model.sessions[0].session_state = SessionState::Closed;
+        assert_eq!(
+            handle_raw_play_key(press(KeyCode::Char('a'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::ExitRawPlay
+        );
+        let mut model = two_sessions();
+        model.input_mode = InputMode::RawPlay;
+        assert_eq!(
+            handle_raw_play_key(press(KeyCode::Char('q'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::ExitRawPlay
+        );
+        assert!(model.should_quit);
+        let mut model = two_sessions();
+        model.input_mode = InputMode::RawPlay;
+        assert_eq!(
+            handle_raw_play_key(press(KeyCode::F(20), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        let mut model = Model::new();
+        model.input_mode = InputMode::RawPlay;
+        assert_eq!(
+            handle_raw_play_key(press(KeyCode::Char('a'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::ExitRawPlay
+        );
+    }
+
+    #[test]
+    fn key_bytes_cover_specials_and_modifiers() {
+        let mods = [
+            KeyModifiers::NONE,
+            KeyModifiers::SHIFT,
+            KeyModifiers::ALT,
+            KeyModifiers::CONTROL,
+            KeyModifiers::SHIFT | KeyModifiers::ALT | KeyModifiers::CONTROL,
+        ];
+        let codes = [
+            KeyCode::Up,
+            KeyCode::Down,
+            KeyCode::Left,
+            KeyCode::Right,
+            KeyCode::Home,
+            KeyCode::End,
+            KeyCode::Insert,
+            KeyCode::Delete,
+            KeyCode::PageUp,
+            KeyCode::PageDown,
+            KeyCode::Enter,
+            KeyCode::Backspace,
+            KeyCode::Tab,
+            KeyCode::Esc,
+            KeyCode::F(1),
+            KeyCode::F(12),
+            KeyCode::F(13),
+            KeyCode::Null,
+        ];
+        for mods in mods {
+            for code in codes {
+                let _ = key_to_bytes(press(code, mods));
+            }
+        }
+        assert_eq!(key_to_bytes(press(KeyCode::Char(' '), KeyModifiers::CONTROL)), "\u{0}");
+        assert_eq!(key_to_bytes(press(KeyCode::Char('@'), KeyModifiers::CONTROL)), "\u{0}");
+        assert!(key_to_bytes(press(KeyCode::Char('日'), KeyModifiers::CONTROL)).is_empty());
+        assert_eq!(key_to_bytes(press(KeyCode::Char('x'), KeyModifiers::ALT | KeyModifiers::CONTROL)).chars().next(), Some('\u{1b}'));
+        assert_eq!(key_to_bytes(press(KeyCode::Enter, KeyModifiers::ALT)), "\u{1b}\r");
+        assert_eq!(key_to_bytes(press(KeyCode::Char('a'), KeyModifiers::NONE)), "a");
+    }
 }

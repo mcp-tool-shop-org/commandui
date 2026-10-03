@@ -616,4 +616,63 @@ mod tests {
         let status = app.model.status_line.as_deref().unwrap();
         assert!(status.contains("Session not found"), "{status}");
     }
+
+    #[test]
+    fn closing_the_proposal_owner_clears_review_and_the_last_session_stays() {
+        let mut app = test_app();
+        app.model.add_session("only".into(), "Only".into());
+        app.close_active_session();
+        assert_eq!(app.model.session_count(), 1);
+
+        app.model.add_session("s2".into(), "B".into());
+        app.model.switch_to(1);
+        app.model.set_proposal(proposal("echo hi"), "s2".into());
+        app.model.input_mode = InputMode::Review;
+        app.close_active_session();
+        assert!(app.model.current_proposal.is_none());
+        assert_eq!(app.model.input_mode, InputMode::Shell);
+        assert_eq!(app.model.session_count(), 1);
+        assert_eq!(app.model.active_index, 0);
+    }
+
+    #[test]
+    fn create_session_records_a_row_and_spawn_planner_returns_a_mock() {
+        let mut app = test_app();
+        app.create_session();
+        assert_eq!(app.model.session_count(), 1);
+        let id = app.model.sessions[0].id.clone();
+        if !id.starts_with("error-") {
+            app.session_service.close(&id).expect("close spawned session");
+        }
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let mut app = test_app();
+            app.ollama_config = Arc::new(OllamaConfig {
+                endpoint: "http://127.0.0.1:1".into(),
+                model: "none".into(),
+                timeout_secs: 1,
+            });
+            app.model.add_session("s1".into(), "A".into());
+            app.model.sessions[0].cwd = Some("/work".into());
+            app.spawn_planner("list the files".into());
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                app.planner_rx.recv(),
+            )
+            .await
+            .expect("planner timed out")
+            .expect("planner channel closed");
+            match result {
+                PlannerResult::Success((proposal, session_id)) => {
+                    assert_eq!(session_id, "s1");
+                    assert!(!proposal.command.is_empty());
+                }
+                PlannerResult::Error(err) => panic!("planner error: {err}"),
+            }
+        });
+    }
 }

@@ -998,4 +998,173 @@ mod tests {
         let shown = draw_text(&mut model);
         assert!(shown.contains("Session not found: s1"), "{shown}");
     }
+
+    fn draw_sized(model: &mut Model, cols: u16, rows: u16) -> String {
+        let backend = ratatui::backend::TestBackend::new(cols, rows);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal.draw(|frame| render(frame, model)).unwrap();
+        let buf = terminal.backend().buffer();
+        let mut out = String::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    fn mark(model: &mut Model, state: SessionState, exec: &str) {
+        let idx = model.add_session("s1".into(), "Run A".into());
+        model.sessions[idx].session_state = state;
+        model.sessions[idx].exec_state = exec.into();
+        model.sessions[idx].cwd = Some("/work/project".into());
+    }
+
+    #[test]
+    fn every_chrome_mode_paints_without_a_real_terminal() {
+        let mut welcome = Model::new();
+        let shown = draw_text(&mut welcome);
+        assert!(shown.contains("Press ^N"), "{shown}");
+        assert!(shown.contains("NO SESSION") || shown.contains("No Session"), "{shown}");
+
+        for (state, exec, needle) in [
+            (SessionState::Booting, "booting", "BOOT"),
+            (SessionState::Active, "ready", "idle"),
+            (SessionState::Active, "running", "running"),
+            (SessionState::Active, "interrupting", "stopping"),
+            (SessionState::Active, "desynced", "desynced"),
+            (SessionState::Closed, "ready", "DONE"),
+            (SessionState::Error("boom".into()), "ready", "ERROR"),
+        ] {
+            let mut model = Model::new();
+            mark(&mut model, state, exec);
+            model.sessions[0].terminal_lines = (0..40).map(|i| format!("line-{i}")).collect();
+            model.sessions[0].line_remainder = "partial".into();
+            model.sessions[0].scroll_offset = 3;
+            model.status_line = Some("status".into());
+            let shown = draw_text(&mut model);
+            assert!(shown.contains(needle), "{exec} missing {needle}:\n{shown}");
+        }
+
+        let mut help = Model::new();
+        mark(&mut help, SessionState::Active, "ready");
+        help.show_help = true;
+        let shown = draw_text(&mut help);
+        assert!(shown.contains("Help"), "{shown}");
+
+        let mut ask = Model::new();
+        mark(&mut ask, SessionState::Active, "ready");
+        ask.input_mode = InputMode::Ask;
+        let empty = draw_text(&mut ask);
+        assert!(empty.contains("Type your intent"), "{empty}");
+        ask.planner_error = Some("planner down".into());
+        let erred = draw_text(&mut ask);
+        assert!(erred.contains("planner down"), "{erred}");
+        ask.planner_error = None;
+        ask.planner_busy = true;
+        ask.composer_text = "list files".into();
+        ask.composer_cursor = 1;
+        let busy = draw_text(&mut ask);
+        assert!(busy.contains("Generating"), "{busy}");
+        ask.planner_busy = false;
+        ask.composer_text = "日a".into();
+        ask.composer_cursor = "日".len();
+        let typed = draw_text(&mut ask);
+        assert!(typed.contains('a'), "{typed}");
+
+        let mut runs = Model::new();
+        for (id, label, state, exec) in [
+            ("s1", "A", SessionState::Booting, "booting"),
+            ("s2", "B", SessionState::Active, "running"),
+            ("s3", "C", SessionState::Active, "interrupting"),
+            ("s4", "D", SessionState::Closed, "ready"),
+            ("s5", "E", SessionState::Error("x".into()), "ready"),
+            ("s6", "F", SessionState::Active, "ready"),
+            ("s7", "G", SessionState::Active, "ready"),
+            ("s8", "H", SessionState::Active, "ready"),
+            ("s9", "I", SessionState::Active, "ready"),
+            ("s10", "J", SessionState::Active, "mystery"),
+        ] {
+            let idx = runs.add_session(id.into(), label.into());
+            runs.sessions[idx].session_state = state;
+            runs.sessions[idx].exec_state = exec.into();
+            runs.sessions[idx].cwd = Some(if id == "s10" {
+                "あ".repeat(30)
+            } else {
+                "/work".into()
+            });
+            runs.sessions[idx].has_unread = id == "s2";
+        }
+        runs.input_mode = InputMode::Switcher;
+        runs.switcher_cursor = 1;
+        runs.active_index = 0;
+        let shown = draw_text(&mut runs);
+        assert!(shown.contains("Runs") || shown.contains("RUNS"), "{shown}");
+
+        let mut review = Model::new();
+        mark(&mut review, SessionState::Active, "ready");
+        let mut proposal = sample_proposal("echo hi", false);
+        proposal.risk = "medium".into();
+        proposal.destructive = true;
+        proposal.escalates_privileges = true;
+        proposal.touches_network = true;
+        proposal.confidence = 0.42;
+        review.set_proposal(proposal, "missing-owner".into());
+        review.input_mode = InputMode::Review;
+        review.review_error = Some("clipped".into());
+        review.status_line = Some("review status".into());
+        review.proposal_confirmed = true;
+        let shown = draw_text(&mut review);
+        assert!(shown.contains("MEDIUM") || shown.contains("medium") || shown.contains("Risk"), "{shown}");
+        assert!(shown.contains("DESTRUCTIVE"), "{shown}");
+
+        let mut bare = Model::new();
+        bare.input_mode = InputMode::Review;
+        let shown = draw_text(&mut bare);
+        assert!(shown.contains("No proposal"), "{shown}");
+
+        let mut high = Model::new();
+        mark(&mut high, SessionState::Active, "ready");
+        let mut proposal = sample_proposal("echo hi", true);
+        proposal.risk = "severe".into();
+        high.set_proposal(proposal, "s1".into());
+        high.input_mode = InputMode::Review;
+        high.proposal_confirmed = false;
+        let shown = draw_text(&mut high);
+        assert!(shown.contains("Confirmation required"), "{shown}");
+
+        let mut raw = Model::new();
+        mark(&mut raw, SessionState::Active, "ready");
+        raw.input_mode = InputMode::RawPlay;
+        let shown = draw_text(&mut raw);
+        assert!(!shown.contains("Ask the AI") || shown.contains("CommandUI"), "{shown}");
+
+        let mut tiny = Model::new();
+        mark(&mut tiny, SessionState::Active, "ready");
+        tiny.show_help = true;
+        tiny.input_mode = InputMode::Switcher;
+        let shown = draw_sized(&mut tiny, 4, 3);
+        assert!(!shown.is_empty());
+    }
+
+    #[test]
+    fn review_helpers_cover_empty_and_saturated_edges() {
+        assert_eq!(split_review_rows(0, 4), (0, 0));
+        assert_eq!(scroll_u16(usize::MAX), u16::MAX);
+        assert_eq!(shorten_cwd("/work"), "/work");
+        let lines = visible_command_lines("");
+        assert_eq!(lines.len(), 1);
+        let quoted = visible_command_lines("a'b\t\\\u{2028}");
+        assert!(quoted[0].contains("\\'"), "{quoted:?}");
+        assert!(quoted[0].contains("\\t"), "{quoted:?}");
+        assert!(quoted[0].contains("\\\\"), "{quoted:?}");
+        assert!(command_is_clipped(&[], 0, 0, 1, 1) == false);
+
+        let frame = Rect::new(2, 2, 4, 3);
+        let host = Rect::new(0, 0, 1, 1);
+        let overlay = clamped_overlay(frame, host, 10, 10);
+        assert!(overlay.width <= frame.width);
+        assert!(overlay.height <= frame.height);
+    }
 }

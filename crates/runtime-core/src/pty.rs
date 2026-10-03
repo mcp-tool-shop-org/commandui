@@ -191,6 +191,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
 
     const NONCE: &str = "abc123nonce";
 
@@ -251,5 +252,182 @@ mod tests {
         assert_eq!(command_line_for_shell("bash", NONCE, "ls"), "ls\n");
         assert_eq!(resync_input("bash", NONCE), "\n");
         assert!(resync_input("cmd.exe", NONCE).contains("%ERRORLEVEL%"));
+    }
+
+    #[test]
+    fn marker_nonce_is_32_hex_and_default_shell_is_nonempty() {
+        let nonce = new_marker_nonce();
+        assert_eq!(nonce.len(), 32);
+        assert!(nonce.chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(!default_shell().is_empty());
+    }
+
+    #[test]
+    fn write_command_and_write_raw_succeed_against_sink() {
+        let handle: PtyHandle = Arc::new(Mutex::new(
+            Box::new(std::io::sink()) as Box<dyn Write + Send>,
+        ));
+        write_command(&handle, "echo hi").unwrap();
+        write_raw(&handle, "xyz").unwrap();
+    }
+
+    #[test]
+    fn write_paths_report_write_flush_and_lock_errors() {
+        let fail_write: PtyHandle = Arc::new(Mutex::new(Box::new(FailWrite) as Box<dyn Write + Send>));
+        let write_err = write_command(&fail_write, "echo hi").unwrap_err();
+        assert!(write_err.contains("Write error"), "{write_err}");
+        let write_err = write_raw(&fail_write, "xyz").unwrap_err();
+        assert!(write_err.contains("Write error"), "{write_err}");
+
+        let fail_flush: PtyHandle =
+            Arc::new(Mutex::new(Box::new(FailFlush) as Box<dyn Write + Send>));
+        let flush_err = write_command(&fail_flush, "echo hi").unwrap_err();
+        assert!(flush_err.contains("Flush error"), "{flush_err}");
+        let flush_err = write_raw(&fail_flush, "xyz").unwrap_err();
+        assert!(flush_err.contains("Flush error"), "{flush_err}");
+
+        let handle: PtyHandle = Arc::new(Mutex::new(
+            Box::new(std::io::sink()) as Box<dyn Write + Send>,
+        ));
+        let cloned = Arc::clone(&handle);
+        let joined = std::thread::spawn(move || {
+            let _guard = cloned.lock().unwrap();
+            panic!("poison pty lock");
+        })
+        .join();
+        assert!(joined.is_err());
+        let lock_err = write_command(&handle, "echo hi").unwrap_err();
+        assert!(lock_err.contains("Lock error"), "{lock_err}");
+        let lock_err = write_raw(&handle, "xyz").unwrap_err();
+        assert!(lock_err.contains("Lock error"), "{lock_err}");
+    }
+
+    #[test]
+    fn spawn_shell_rejects_a_bash_name_that_is_not_a_program() {
+        let err = match spawn_shell("bash-not-installed", None) {
+            Err(err) => err,
+            Ok(_spawned) => panic!("expected missing bash spawn to fail"),
+        };
+        assert!(
+            err.contains("Failed to spawn shell") || err.contains("Failed to open PTY"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn spawn_shell_echo_reaches_reader_and_clone_reader_is_ok() {
+        let cwd = std::env::temp_dir();
+        let cwd = cwd.to_string_lossy().to_string();
+        let (pair, handle) = match spawn_shell(&default_shell(), Some(&cwd)) {
+            Ok(spawned) => spawned,
+            Err(err) => panic!("spawn returned {err}"),
+        };
+
+        let cloned = clone_reader(&pair);
+        assert!(cloned.is_ok());
+        drop(cloned);
+
+        write_raw(&handle, "echo commandui-pty-ok\r\n").expect("echo write");
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        spawn_reader_loop(&pair, move |chunk| {
+            let _ = tx.send(chunk);
+        });
+
+        let got = rx.recv_timeout(std::time::Duration::from_secs(3));
+        assert!(got.is_ok(), "expected a reader chunk within 3 seconds");
+
+        // Ask the shell to leave before the pair drops, so the child does not stay up.
+        let _ = write_raw(&handle, "exit\r\n");
+        drop(handle);
+        drop(pair);
+    }
+
+    #[test]
+    fn spawn_reader_forwards_chunks_and_stops_on_eof_or_error() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        spawn_reader(
+            ScriptedRead {
+                steps: vec![Ok(b"abc".to_vec()), Ok(Vec::new())],
+                at: 0,
+                done: Some(done_tx),
+            },
+            move |chunk| {
+                let _ = tx.send(chunk);
+            },
+        );
+        assert_eq!(rx.recv_timeout(std::time::Duration::from_secs(2)).unwrap(), "abc");
+        done_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("eof reader did not finish");
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        spawn_reader(
+            ScriptedRead {
+                steps: vec![Err(std::io::Error::other("boom"))],
+                at: 0,
+                done: Some(done_tx),
+            },
+            |_| {},
+        );
+        done_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("error reader did not finish");
+    }
+
+    struct FailWrite;
+
+    impl Write for FailWrite {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("write failed"))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct FailFlush;
+
+    impl Write for FailFlush {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Err(std::io::Error::other("flush failed"))
+        }
+    }
+
+    struct ScriptedRead {
+        steps: Vec<std::io::Result<Vec<u8>>>,
+        at: usize,
+        done: Option<std::sync::mpsc::Sender<()>>,
+    }
+
+    impl Drop for ScriptedRead {
+        fn drop(&mut self) {
+            if let Some(done) = self.done.take() {
+                let _ = done.send(());
+            }
+        }
+    }
+
+    impl Read for ScriptedRead {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.at >= self.steps.len() {
+                return Ok(0);
+            }
+            let step = std::mem::replace(&mut self.steps[self.at], Ok(Vec::new()));
+            self.at += 1;
+            match step {
+                Ok(bytes) if bytes.is_empty() => Ok(0),
+                Ok(bytes) => {
+                    let n = bytes.len().min(buf.len());
+                    buf[..n].copy_from_slice(&bytes[..n]);
+                    Ok(n)
+                }
+                Err(err) => Err(err),
+            }
+        }
     }
 }

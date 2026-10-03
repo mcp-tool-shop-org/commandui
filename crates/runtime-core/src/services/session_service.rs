@@ -875,6 +875,110 @@ mod tests {
         assert!(sessions.lock().unwrap().get("s1").is_some());
     }
 
+    #[test]
+    fn list_on_empty_registry_is_empty() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(CollectingSink::new());
+        let svc = SessionService::new(sessions, sink);
+        let listed = svc.list().unwrap();
+        assert!(listed.is_empty());
+    }
+
+    #[test]
+    fn update_cwd_rejects_empty_and_missing_session() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(CollectingSink::new());
+        let svc = SessionService::new(sessions, sink);
+        let empty = svc.update_cwd("missing", "").unwrap_err();
+        assert!(empty.contains("cwd cannot be empty"), "{empty}");
+        let missing = svc
+            .update_cwd("missing", &std::env::temp_dir().to_string_lossy())
+            .unwrap_err();
+        assert!(missing.contains("Session not found"), "{missing}");
+    }
+
+    #[test]
+    fn create_missing_bash_binary_does_not_insert() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(CollectingSink::new());
+        let svc = SessionService::new(sessions.clone(), sink);
+        let cwd = std::env::temp_dir().to_string_lossy().to_string();
+        let err = svc
+            .create(CreateSessionRequest {
+                label: Some("missing-bash".to_string()),
+                cwd: Some(cwd),
+                shell: Some("bash-not-installed".to_string()),
+            })
+            .unwrap_err();
+        assert!(
+            err.contains("Failed to spawn shell") || err.contains("Failed to open PTY"),
+            "{err}"
+        );
+        assert!(sessions.lock().unwrap().list().is_empty());
+    }
+
+    #[test]
+    fn create_list_update_cwd_and_close_round_trip() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(CollectingSink::new());
+        let svc = SessionService::new(sessions.clone(), sink);
+        let cwd = std::env::temp_dir().to_string_lossy().to_string();
+        let summary = svc
+            .create(CreateSessionRequest {
+                label: Some("covered".to_string()),
+                cwd: Some(cwd.clone()),
+                shell: None,
+            })
+            .unwrap();
+        let _close = CloseSession {
+            svc: &svc,
+            id: summary.id.clone(),
+        };
+
+        assert!(!summary.id.is_empty());
+        assert_eq!(summary.label, "covered");
+        assert_eq!(summary.cwd, cwd);
+        assert_eq!(summary.shell, default_shell());
+        assert_eq!(summary.status, "active");
+        assert!(!summary.created_at.is_empty());
+        assert!(!summary.last_active_at.is_empty());
+
+        let listed = svc.list().unwrap();
+        assert!(listed.iter().any(|item| item.id == summary.id));
+
+        let updated = std::env::temp_dir()
+            .join("commandui-cwd-marker")
+            .to_string_lossy()
+            .to_string();
+        svc.update_cwd(&summary.id, &updated).unwrap();
+        {
+            let reg = sessions.lock().unwrap();
+            assert_eq!(reg.get(&summary.id).unwrap().cwd, updated);
+        }
+        assert!(svc
+            .list()
+            .unwrap()
+            .iter()
+            .any(|item| item.id == summary.id && item.cwd == updated));
+
+        svc.close(&summary.id).unwrap();
+        assert!(sessions.lock().unwrap().get(&summary.id).is_none());
+        assert!(svc.list().unwrap().iter().all(|item| item.id != summary.id));
+        let err = svc.close(&summary.id).unwrap_err();
+        assert!(err.contains("Session not found"), "{err}");
+    }
+
+    struct CloseSession<'a> {
+        svc: &'a SessionService,
+        id: String,
+    }
+
+    impl Drop for CloseSession<'_> {
+        fn drop(&mut self) {
+            let _ = self.svc.close(&self.id);
+        }
+    }
+
     struct ReenterOnFinish {
         inner: Arc<CollectingSink>,
         sessions: Arc<Mutex<SessionRegistry>>,

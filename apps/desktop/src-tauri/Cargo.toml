@@ -18,3 +18,6 @@ reqwest = { version = "0.12", features = ["json"] }
 commandui-runtime-core = { path = "../../../crates/runtime-core" }
 commandui-runtime-persistence = { path = "../../../crates/runtime-persistence" }
 commandui-runtime-planner = { path = "../../../crates/runtime-planner" }
+
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }

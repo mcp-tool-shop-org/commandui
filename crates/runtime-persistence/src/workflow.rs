@@ -54,3 +54,81 @@ pub fn delete(conn: &Connection, id: &str) -> Result<(), String> {
     .map_err(|e| format!("workflow delete: {e}"))?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schema::init_schema;
+    use rusqlite::Connection;
+
+    fn sample(id: &str, created: &str) -> Workflow {
+        Workflow {
+            id: id.into(),
+            label: format!("label-{id}"),
+            source: "ask".into(),
+            original_intent: Some("ship the patch".into()),
+            command: "git status".into(),
+            steps_json: Some("[\"git status\"]".into()),
+            project_root: Some("/work".into()),
+            created_at: created.into(),
+        }
+    }
+
+    #[test]
+    fn add_lists_newest_first_and_delete_removes_one() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_schema(&conn).unwrap();
+        let mut older = sample("w1", "2026-01-01T00:00:00Z");
+        older.original_intent = None;
+        older.steps_json = None;
+        older.project_root = None;
+        add(&conn, &older).unwrap();
+        add(&conn, &sample("w2", "2026-01-02T00:00:00Z")).unwrap();
+
+        let listed = list(&conn).unwrap();
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].id, "w2");
+        assert_eq!(listed[0].steps_json.as_deref(), Some("[\"git status\"]"));
+        assert!(listed[1].original_intent.is_none());
+        assert!(listed[1].steps_json.is_none());
+        assert!(listed[1].project_root.is_none());
+
+        delete(&conn, "w2").unwrap();
+        delete(&conn, "missing").unwrap();
+        let listed = list(&conn).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, "w1");
+    }
+
+    #[test]
+    fn a_row_that_cannot_map_is_skipped() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_schema(&conn).unwrap();
+        add(&conn, &sample("good", "2026-01-01T00:00:00Z")).unwrap();
+        add(&conn, &sample("bad", "2026-01-02T00:00:00Z")).unwrap();
+        conn.execute(
+            "UPDATE workflows SET label = ?1 WHERE id = 'bad'",
+            [rusqlite::types::Value::Blob(vec![0xff])],
+        )
+        .unwrap();
+        let listed = list(&conn).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, "good");
+    }
+
+    fn expect_err<T>(result: Result<T, String>, needle: &str) {
+        match result {
+            Err(err) => assert!(err.contains(needle), "{err}"),
+            Ok(_) => panic!("expected an error containing {needle}"),
+        }
+    }
+
+    #[test]
+    fn missing_table_is_an_error() {
+        let conn = Connection::open_in_memory().unwrap();
+        let wf = sample("w", "t");
+        expect_err(add(&conn, &wf), "workflow add");
+        expect_err(list(&conn), "workflow list");
+        expect_err(delete(&conn, "w"), "workflow delete");
+    }
+}

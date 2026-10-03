@@ -16,3 +16,6 @@ pub use session::{session_close, session_create, session_list, session_update_cw
 pub use settings::{settings_get, settings_update};
 pub use terminal::{terminal_execute, terminal_interrupt, terminal_resize, terminal_resync, terminal_write};
 pub use workflow::{workflow_add, workflow_delete, workflow_list};
+
+#[cfg(test)]
+mod ipc_tests;

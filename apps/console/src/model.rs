@@ -1028,4 +1028,122 @@ mod tests {
         model.apply_event(make_line_event("s1", "hello\r\n"));
         assert_eq!(model.sessions[0].terminal_lines, vec!["XY", "hello"]);
     }
+
+    #[test]
+    fn runtime_events_update_cwd_and_exec_state() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+
+        model.apply_event(RuntimeEvent::SessionCwdChanged(SessionCwdChangedEvent {
+            session_id: "s1".into(),
+            cwd: "/work".into(),
+        }));
+        assert_eq!(model.sessions[0].cwd.as_deref(), Some("/work"));
+
+        model.apply_event(RuntimeEvent::SessionExecStateChanged(
+            SessionExecStateChangedEvent {
+                session_id: "s1".into(),
+                exec_state: "desynced".into(),
+                changed_at: "t".into(),
+            },
+        ));
+        assert_eq!(model.sessions[0].exec_state, "desynced");
+
+        model.apply_event(RuntimeEvent::ExecutionStarted(ExecutionStartedEvent {
+            execution: ExecutionSummary {
+                id: "e1".into(),
+                session_id: "s1".into(),
+                command: "echo hi".into(),
+                source: "ask".into(),
+                linked_plan_id: None,
+                status: "running".into(),
+                started_at: "t".into(),
+                finished_at: None,
+                exit_code: None,
+            },
+        }));
+        assert_eq!(model.sessions[0].exec_state, "running");
+
+        model.apply_event(RuntimeEvent::ExecutionFinished(ExecutionFinishedEvent {
+            execution_id: "e1".into(),
+            session_id: "s1".into(),
+            exit_code: 0,
+            finished_at: "t".into(),
+            status: "success".into(),
+        }));
+        assert_eq!(model.sessions[0].exec_state, "ready");
+
+        model.apply_event(RuntimeEvent::ExecutionFinished(ExecutionFinishedEvent {
+            execution_id: "e2".into(),
+            session_id: "missing".into(),
+            exit_code: 1,
+            finished_at: "t".into(),
+            status: "failure".into(),
+        }));
+        assert_eq!(model.sessions[0].exec_state, "ready");
+    }
+
+    #[test]
+    fn scroll_composer_and_empty_model_edges() {
+        let mut session = SessionModel::new("s".into(), "A".into());
+        assert!(!session.is_ready());
+        session.terminal_lines = vec!["a".into(), "b".into(), "c".into()];
+        session.scroll_up(100);
+        assert_eq!(session.scroll_offset, 2);
+        session.scroll_down(1);
+        assert_eq!(session.scroll_offset, 1);
+        session.scroll_to_bottom();
+        assert_eq!(session.scroll_offset, 0);
+        session.session_state = SessionState::Active;
+        assert!(session.is_ready());
+
+        let mut model = Model::new();
+        assert!(!model.is_ready());
+        assert!(!model.can_accept_input());
+        assert!(!model.has_valid_proposal());
+        model.next_session();
+        model.prev_session();
+        assert!(model.sessions.is_empty());
+        model.surface_session_result(Err("nope".into()));
+        assert_eq!(model.status_line.as_deref(), Some("nope"));
+        model.surface_session_result(Ok(()));
+        assert!(model.status_line.is_none());
+
+        model.add_session("s1".into(), "A".into());
+        model.active_index = 9;
+        assert!(model.active_session().is_none());
+        assert!(model.active_session_mut().is_none());
+        assert!(!model.is_ready());
+        assert!(!model.can_accept_input());
+        assert!(!model.active_session_alive());
+        model.active_index = 0;
+        model.sessions[0].session_state = SessionState::Active;
+        assert!(model.is_ready());
+
+        model.composer_insert('你');
+        model.composer_insert('a');
+        assert_eq!(model.composer_text, "你a");
+        model.composer_left();
+        assert_eq!(model.composer_cursor, "你".len());
+        model.composer_left();
+        assert_eq!(model.composer_cursor, 0);
+        model.composer_left();
+        assert_eq!(model.composer_cursor, 0);
+        model.composer_right();
+        assert_eq!(model.composer_cursor, "你".len());
+        model.composer_insert('b');
+        assert_eq!(model.composer_text, "你ba");
+        model.composer_right();
+        model.composer_right();
+        assert_eq!(model.composer_cursor, model.composer_text.len());
+        model.composer_backspace();
+        model.composer_backspace();
+        model.composer_backspace();
+        assert_eq!(model.composer_text, "");
+        model.composer_backspace();
+        assert_eq!(model.composer_cursor, 0);
+
+        model.prev_session();
+        assert_eq!(model.active_index, 0);
+    }
 }

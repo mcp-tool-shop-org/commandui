@@ -32,3 +32,17 @@ impl AppState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use commandui_runtime_core::events::NoopSink;
+
+    #[test]
+    fn new_starts_without_database_or_sessions() {
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(NoopSink);
+        let state = AppState::new(sink);
+        assert!(state.db_path.lock().expect("db path").is_none());
+        assert!(state.sessions.lock().expect("sessions").list().is_empty());
+    }
+}

@@ -686,6 +686,141 @@ mod tests {
         assert!(svc.write("s1", "x").is_err());
     }
 
+    #[test]
+    fn interrupt_and_resync_missing_session() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(CollectingSink::new());
+        let svc = TerminalService::new(sessions, sink);
+        let interrupted = svc.interrupt("missing").unwrap_err();
+        assert!(interrupted.contains("Session not found"), "{interrupted}");
+        let resynced = svc.resync("missing").unwrap_err();
+        assert!(resynced.contains("Session not found"), "{resynced}");
+    }
+
+    #[test]
+    fn resize_missing_session_and_open_pty() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(CollectingSink::new());
+        let svc = TerminalService::new(sessions.clone(), sink);
+        let missing = svc.resize("missing", 80, 24).unwrap_err();
+        assert!(missing.contains("Session not found"), "{missing}");
+        insert_ready(&sessions, "s1", make_dummy_writer());
+        svc.resize("s1", 100, 40).unwrap();
+    }
+
+    #[test]
+    fn execute_rejects_booting_desynced_and_interrupting() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(CollectingSink::new());
+        insert_ready(&sessions, "s1", make_dummy_writer());
+        let svc = TerminalService::new(sessions.clone(), sink as Arc<dyn RuntimeEventSink>);
+
+        sessions.lock().unwrap().get_mut("s1").unwrap().exec_state = SessionExecState::Booting;
+        let booting = svc
+            .execute(exec_request("e-boot"))
+            .unwrap_err();
+        assert!(booting.contains("still booting"), "{booting}");
+
+        sessions.lock().unwrap().get_mut("s1").unwrap().exec_state = SessionExecState::Desynced;
+        let desynced = svc.execute(exec_request("e-desync")).unwrap_err();
+        assert!(desynced.contains("desynced"), "{desynced}");
+
+        sessions.lock().unwrap().get_mut("s1").unwrap().exec_state = SessionExecState::Interrupting;
+        let interrupting = svc.execute(exec_request("e-int")).unwrap_err();
+        assert!(interrupting.contains("already running"), "{interrupting}");
+    }
+
+    #[test]
+    fn registry_lock_poison_is_an_error() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(CollectingSink::new());
+        let to_poison = sessions.clone();
+        let joined = std::thread::spawn(move || {
+            let _guard = to_poison.lock().unwrap();
+            panic!("poison session registry");
+        })
+        .join();
+        assert!(joined.is_err());
+        let svc = TerminalService::new(sessions, sink);
+        assert!(svc.interrupt("s1").is_err());
+        assert!(svc.resync("s1").is_err());
+        assert!(svc.write("s1", "x").is_err());
+        assert!(svc.resize("s1", 80, 24).is_err());
+        assert!(svc.execute(exec_request("e1")).is_err());
+    }
+
+    #[test]
+    fn execute_lock_errors_after_the_write() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        insert_ready(
+            &sessions,
+            "s1",
+            Arc::new(Mutex::new(Box::new(PoisonRegistry {
+                sessions: sessions.clone(),
+                fail_write: false,
+            }) as Box<dyn std::io::Write + Send>)),
+        );
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+        assert!(svc.execute(exec_request("e-ok-write")).is_err());
+
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        insert_ready(
+            &sessions,
+            "s1",
+            Arc::new(Mutex::new(Box::new(PoisonRegistry {
+                sessions: sessions.clone(),
+                fail_write: true,
+            }) as Box<dyn std::io::Write + Send>)),
+        );
+        let svc = TerminalService::new(sessions, sink as Arc<dyn RuntimeEventSink>);
+        assert!(svc.execute(exec_request("e-bad-write")).is_err());
+    }
+
+    #[test]
+    fn interrupt_write_failure_when_session_is_already_gone() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(CollectingSink::new());
+        let writer = Arc::new(Mutex::new(Box::new(RemoveThenFail {
+            sessions: sessions.clone(),
+        }) as Box<dyn std::io::Write + Send>));
+        {
+            let mut reg = sessions.lock().unwrap();
+            reg.insert(SessionRecord {
+                id: "s1".to_string(),
+                label: "Test".to_string(),
+                cwd: "/tmp".to_string(),
+                shell: "bash".to_string(),
+                status: "active".to_string(),
+                pty_pair: make_dummy_pty_pair(),
+                writer,
+                pending_execution_id: Some("e0".to_string()),
+                exec_state: SessionExecState::Running,
+                boot_prompt_received: true,
+                command_sent_at: None,
+                marker_nonce: "test-nonce".to_string(),
+                read_buffer: String::new(),
+                created_at: "2026-01-01T00:00:00Z".to_string(),
+                last_active_at: "2026-01-01T00:00:00Z".to_string(),
+            });
+        }
+        let svc = TerminalService::new(sessions.clone(), sink);
+        let err = svc.interrupt("s1").unwrap_err();
+        assert!(err.contains("Write error"), "{err}");
+        assert!(sessions.lock().unwrap().get("s1").is_none());
+    }
+
+    fn exec_request(execution_id: &str) -> ExecuteRequest {
+        ExecuteRequest {
+            execution_id: execution_id.to_string(),
+            session_id: "s1".to_string(),
+            command: "ls".to_string(),
+            source: "user".to_string(),
+            linked_plan_id: None,
+        }
+    }
+
     // --- Test helpers ---
 
     fn insert_ready(sessions: &Arc<Mutex<SessionRegistry>>, id: &str, writer: crate::pty::PtyHandle) {
@@ -711,6 +846,51 @@ mod tests {
 
     fn failing_writer() -> crate::pty::PtyHandle {
         Arc::new(Mutex::new(Box::new(FailWrite) as Box<dyn std::io::Write + Send>))
+    }
+
+    struct RemoveThenFail {
+        sessions: Arc<Mutex<SessionRegistry>>,
+    }
+
+    impl std::io::Write for RemoveThenFail {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            let _ = self.sessions.lock().unwrap().remove("s1");
+            Err(std::io::Error::other("write failed"))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct PoisonRegistry {
+        sessions: Arc<Mutex<SessionRegistry>>,
+        fail_write: bool,
+    }
+
+    impl std::io::Write for PoisonRegistry {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if self.fail_write {
+                poison_registry(&self.sessions);
+                return Err(std::io::Error::other("write failed"));
+            }
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            if !self.fail_write {
+                poison_registry(&self.sessions);
+            }
+            Ok(())
+        }
+    }
+
+    fn poison_registry(sessions: &Arc<Mutex<SessionRegistry>>) {
+        let sessions = sessions.clone();
+        let joined = std::thread::spawn(move || {
+            let _guard = sessions.lock().unwrap();
+            panic!("poison session registry");
+        })
+        .join();
+        assert!(joined.is_err());
     }
 
     struct FailWrite;

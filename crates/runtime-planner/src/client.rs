@@ -328,4 +328,274 @@ mod tests {
         assert!(plan.expected_output.is_none());
         assert_eq!(plan.confidence, 0.8);
     }
+
+    fn config(endpoint: String, timeout_secs: u64) -> OllamaConfig {
+        OllamaConfig {
+            endpoint,
+            model: "test-model".to_string(),
+            timeout_secs,
+        }
+    }
+
+    fn context() -> PlanContext {
+        PlanContext {
+            session_id: "sess-from-context".to_string(),
+            cwd: "work".to_string(),
+            ..PlanContext::default()
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn try_ollama_connection_error_on_closed_port() {
+        let closed = try_ollama(
+            &config(test_support::closed_endpoint(), 2),
+            &context(),
+            "list files",
+        )
+        .await
+        .expect_err("closed port must fail");
+        // This host drops SYNs to a closed port, so the client timer wins.
+        // Port 0 is refused at once and still hits the connection arm.
+        let err = if closed.contains("connection") {
+            closed
+        } else {
+            try_ollama(
+                &config("http://127.0.0.1:0".to_string(), 2),
+                &context(),
+                "list files",
+            )
+            .await
+            .expect_err("port 0 must fail")
+        };
+        assert!(err.contains("connection"), "{err}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn try_ollama_timeout_when_peer_never_responds() {
+        let err = try_ollama(&config(test_support::spawn_hang(), 1), &context(), "list files")
+            .await
+            .expect_err("hanging peer must fail");
+        assert!(err == "timeout" || err.contains("timeout"), "{err}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn try_ollama_http_500() {
+        let endpoint = test_support::spawn_body("500 Internal Server Error", "nope");
+        let err = try_ollama(&config(endpoint, 2), &context(), "list files")
+            .await
+            .expect_err("HTTP 500 must fail");
+        assert!(err.contains("HTTP 500"), "{err}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn try_ollama_envelope_parse_error() {
+        let endpoint = test_support::spawn_body("200 OK", "not-an-envelope");
+        let err = try_ollama(&config(endpoint, 2), &context(), "list files")
+            .await
+            .expect_err("non-envelope body must fail");
+        assert!(err.contains("envelope parse"), "{err}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn try_ollama_plan_parse_truncates_long_raw() {
+        let raw = "a".repeat(250);
+        let endpoint = test_support::spawn_body("200 OK", &test_support::envelope(&raw));
+        let err = try_ollama(&config(endpoint, 2), &context(), "list files")
+            .await
+            .expect_err("non-plan response must fail");
+        assert!(err.contains("plan parse"), "{err}");
+        assert!(err.contains("..."), "{err}");
+        assert!(err.contains(&"a".repeat(200)), "{err}");
+        assert!(!err.contains(&"a".repeat(201)), "{err}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn try_ollama_plan_parse_keeps_short_raw() {
+        let endpoint = test_support::spawn_body("200 OK", &test_support::envelope("not-json"));
+        let err = try_ollama(&config(endpoint, 2), &context(), "list files")
+            .await
+            .expect_err("non-plan response must fail");
+        assert!(err.contains("plan parse"), "{err}");
+        assert!(err.contains("raw: not-json"), "{err}");
+        assert!(!err.contains("..."), "{err}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn try_ollama_rejects_empty_command() {
+        let plan = test_support::plan_json("", "low", false);
+        let endpoint = test_support::spawn_body("200 OK", &test_support::envelope(&plan));
+        let err = try_ollama(&config(endpoint, 2), &context(), "list files")
+            .await
+            .expect_err("empty command must not become a proposal");
+        assert!(err.contains("command is empty"), "{err}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn try_ollama_rejects_high_risk_without_approval() {
+        let plan = test_support::plan_json("echo hello", "high", false);
+        let endpoint = test_support::spawn_body("200 OK", &test_support::envelope(&plan));
+        let err = try_ollama(&config(endpoint, 2), &context(), "list files")
+            .await
+            .expect_err("high risk without approval must not become a proposal");
+        assert!(err.contains("must require approval"), "{err}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn try_ollama_accepts_low_risk_plan() {
+        let plan = test_support::plan_json("echo hello", "low", false);
+        let endpoint = test_support::spawn_body("200 OK", &test_support::envelope(&plan));
+        let ctx = context();
+        let proposal = try_ollama(&config(endpoint, 2), &ctx, "say hello")
+            .await
+            .expect("accepted plan");
+        assert_eq!(proposal.source, "ollama");
+        assert_eq!(proposal.command, "echo hello");
+        assert_eq!(proposal.session_id, ctx.session_id);
+        assert_eq!(proposal.confidence, 0.5);
+    }
+
+    #[test]
+    fn test_build_review_project_context_and_network() {
+        let proposal = CommandProposal {
+            id: "p-net".to_string(),
+            session_id: "s1".to_string(),
+            source: "ollama".to_string(),
+            user_intent: "fetch".to_string(),
+            command: "curl https://example.test".to_string(),
+            cwd: None,
+            explanation: "Fetches a page".to_string(),
+            assumptions: vec![],
+            confidence: 0.5,
+            risk: "low".to_string(),
+            destructive: false,
+            requires_confirmation: false,
+            touches_files: false,
+            touches_network: true,
+            escalates_privileges: false,
+            expected_output: None,
+            generated_at: "2026-01-01T00:00:00Z".to_string(),
+        };
+        let ctx = PlanContext {
+            cwd: String::new(),
+            project_root: Some("repo".to_string()),
+            project_facts: vec![crate::types::ProjectFact {
+                kind: "workflow".to_string(),
+                label: "build".to_string(),
+                value: "cargo test".to_string(),
+            }],
+            ..PlanContext::default()
+        };
+        let review = build_review(&proposal, &ctx);
+        assert!(review
+            .safety_flags
+            .contains(&"NETWORK_ACCESS".to_string()));
+        assert!(!review
+            .retrieved_context
+            .iter()
+            .any(|line| line.starts_with("cwd:")));
+        assert!(review
+            .retrieved_context
+            .contains(&"projectRoot: repo".to_string()));
+        assert!(review
+            .retrieved_context
+            .contains(&"workflow:build".to_string()));
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test_support {
+    use std::io::{Read, Write};
+    use std::net::{Shutdown, TcpListener, TcpStream};
+    use std::thread;
+    use std::time::Duration;
+
+    pub(crate) fn closed_endpoint() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        drop(listener);
+        format!("http://127.0.0.1:{port}")
+    }
+
+    pub(crate) fn spawn_hang() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        thread::spawn(move || {
+            if let Ok((stream, _)) = listener.accept() {
+                thread::sleep(Duration::from_secs(4));
+                drop(stream);
+            }
+        });
+        format!("http://127.0.0.1:{port}")
+    }
+
+    pub(crate) fn spawn_body(status: &str, body: &str) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let status = status.to_string();
+        let body = body.to_string();
+        thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+                drain_request(&mut stream);
+                let header = format!(
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(body.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Write);
+            }
+        });
+        format!("http://127.0.0.1:{port}")
+    }
+
+    pub(crate) fn envelope(response: &str) -> String {
+        serde_json::json!({ "response": response }).to_string()
+    }
+
+    pub(crate) fn plan_json(command: &str, risk: &str, requires_approval: bool) -> String {
+        serde_json::json!({
+            "intent_summary": "List files",
+            "command": command,
+            "risk": risk,
+            "explanation": "Prints a short line",
+            "requires_approval": requires_approval,
+            "destructive": false,
+            "escalates_privileges": false,
+            "confidence": 0.5
+        })
+        .to_string()
+    }
+
+    fn drain_request(stream: &mut TcpStream) {
+        let mut buf = Vec::new();
+        let mut tmp = [0u8; 4096];
+        loop {
+            match stream.read(&mut tmp) {
+                Ok(0) => break,
+                Ok(n) => {
+                    buf.extend_from_slice(&tmp[..n]);
+                    if request_complete(&buf) || buf.len() > 2 * 1024 * 1024 {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    }
+
+    fn request_complete(buf: &[u8]) -> bool {
+        let Some(header_end) = buf.windows(4).position(|window| window == b"\r\n\r\n") else {
+            return false;
+        };
+        let headers = String::from_utf8_lossy(&buf[..header_end]);
+        let mut content_length = 0usize;
+        for line in headers.split("\r\n") {
+            if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                content_length = value.trim().parse().unwrap_or(0);
+            }
+        }
+        buf.len() >= header_end + 4 + content_length
+    }
 }

@@ -26,3 +26,31 @@ impl RuntimeEventSink for ChannelSink {
 pub fn shared_channel_sink(tx: UnboundedSender<RuntimeEvent>) -> Arc<dyn RuntimeEventSink> {
     Arc::new(ChannelSink::new(tx))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use commandui_runtime_core::events::{RuntimeEvent, SessionReadyEvent};
+
+    #[test]
+    fn emit_delivers_and_a_dropped_receiver_is_ignored() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let sink = shared_channel_sink(tx);
+        sink.emit(RuntimeEvent::SessionReady(SessionReadyEvent {
+            session_id: "s1".into(),
+            cwd: "/work".into(),
+        }));
+        match rx.try_recv().unwrap() {
+            RuntimeEvent::SessionReady(event) => {
+                assert_eq!(event.session_id, "s1");
+                assert_eq!(event.cwd, "/work");
+            }
+            _ => panic!("expected a session-ready event"),
+        }
+        drop(rx);
+        sink.emit(RuntimeEvent::SessionReady(SessionReadyEvent {
+            session_id: "s1".into(),
+            cwd: "/work".into(),
+        }));
+    }
+}

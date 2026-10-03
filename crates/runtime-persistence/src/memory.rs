@@ -179,3 +179,131 @@ pub fn store_suggestion(conn: &Connection, suggestion: &MemorySuggestion) -> Res
     ).map_err(|e| format!("store suggestion: {e}"))?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schema::init_schema;
+    use rusqlite::Connection;
+
+    fn open() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        init_schema(&conn).unwrap();
+        conn
+    }
+
+    fn item(id: &str, updated: &str) -> MemoryItem {
+        MemoryItem {
+            id: id.into(),
+            scope: "project".into(),
+            project_root: Some("/work".into()),
+            kind: "alias".into(),
+            key: format!("key-{id}"),
+            value: "value".into(),
+            confidence: 0.8,
+            source: "user".into(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: updated.into(),
+        }
+    }
+
+    fn suggestion(id: &str, status: &str) -> MemorySuggestion {
+        MemorySuggestion {
+            id: id.into(),
+            scope: "project".into(),
+            project_root: None,
+            kind: "alias".into(),
+            label: "List files".into(),
+            proposed_key: "ls".into(),
+            proposed_value: "Get-ChildItem".into(),
+            confidence: 0.6,
+            derived_from_history_ids: vec!["h1".into(), "h2".into()],
+            status: status.into(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn items_and_suggestions_round_trip() {
+        let conn = open();
+        let mut older = item("m1", "2026-01-01T00:00:00Z");
+        older.project_root = None;
+        add_item(&conn, &older).unwrap();
+        add_item(&conn, &item("m2", "2026-01-02T00:00:00Z")).unwrap();
+
+        let listed = list_items(&conn).unwrap();
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].id, "m2");
+        assert_eq!(listed[0].project_root.as_deref(), Some("/work"));
+        assert!(listed[1].project_root.is_none());
+
+        delete_item(&conn, "m1").unwrap();
+        delete_item(&conn, "missing").unwrap();
+        let listed = list_items(&conn).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, "m2");
+
+        store_suggestion(&conn, &suggestion("sg1", "pending")).unwrap();
+        store_suggestion(&conn, &suggestion("sg1", "pending")).unwrap();
+        let mut accepted = suggestion("sg2", "accepted");
+        accepted.derived_from_history_ids.clear();
+        store_suggestion(&conn, &accepted).unwrap();
+
+        conn.execute(
+            "INSERT INTO memory_suggestions (id, scope, project_root, kind, label, proposed_key, proposed_value, confidence, derived_from_history_ids_json, status, created_at) VALUES ('sg3', 'project', NULL, 'alias', 'bad', 'k', 'v', 0.1, 'not-json', 'pending', '2026-01-03T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+
+        let pending = list_pending_suggestions(&conn).unwrap();
+        assert_eq!(pending.len(), 2);
+        let bad = pending.iter().find(|row| row.id == "sg3").unwrap();
+        assert!(bad.derived_from_history_ids.is_empty());
+        let good = pending.iter().find(|row| row.id == "sg1").unwrap();
+        assert_eq!(good.derived_from_history_ids, vec!["h1", "h2"]);
+        assert!(good.project_root.is_none());
+
+        dismiss_suggestion(&conn, "sg3").unwrap();
+        dismiss_suggestion(&conn, "missing").unwrap();
+        let pending = list_pending_suggestions(&conn).unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].id, "sg1");
+
+        let created = accept_suggestion(&conn, "sg1").unwrap();
+        assert_eq!(created.source, "accepted");
+        assert_eq!(created.key, "ls");
+        assert_eq!(created.value, "Get-ChildItem");
+        assert!(created.project_root.is_none());
+        let again = accept_suggestion(&conn, "sg1").unwrap();
+        assert_ne!(created.id, again.id);
+        let items = list_items(&conn).unwrap();
+        assert!(items.iter().any(|row| row.id == created.id));
+        assert!(items.iter().any(|row| row.id == again.id));
+        assert!(list_pending_suggestions(&conn).unwrap().is_empty());
+    }
+
+    fn expect_err<T>(result: Result<T, String>, needle: &str) {
+        match result {
+            Err(err) => assert!(err.contains(needle), "{err}"),
+            Ok(_) => panic!("expected an error containing {needle}"),
+        }
+    }
+
+    #[test]
+    fn missing_suggestion_and_missing_tables_are_errors() {
+        let conn = open();
+        expect_err(accept_suggestion(&conn, "nope"), "suggestion not found");
+
+        let bare = Connection::open_in_memory().unwrap();
+        expect_err(list_items(&bare), "memory list");
+        expect_err(list_pending_suggestions(&bare), "memory suggestions");
+        expect_err(add_item(&bare, &item("m", "t")), "memory add");
+        expect_err(accept_suggestion(&bare, "sg"), "suggestion not found");
+        expect_err(dismiss_suggestion(&bare, "sg"), "dismiss suggestion");
+        expect_err(delete_item(&bare, "m"), "memory delete");
+        expect_err(
+            store_suggestion(&bare, &suggestion("sg", "pending")),
+            "store suggestion",
+        );
+    }
+}

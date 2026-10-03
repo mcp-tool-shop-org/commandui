@@ -68,4 +68,19 @@ mod tests {
         assert_eq!(p.risk, "high");
         assert!(p.destructive);
     }
+
+    #[tokio::test]
+    async fn generate_proposal_falls_back_when_the_endpoint_is_closed() {
+        let config = OllamaConfig {
+            endpoint: "http://127.0.0.1:9".into(),
+            model: "unused".into(),
+            timeout_secs: 1,
+        };
+        let ctx = build_context("s1", "/work");
+        let proposal = generate_proposal(&config, &ctx, "show changed files").await;
+        assert_eq!(proposal.source, "mock");
+        assert_eq!(proposal.command, "git status --short");
+        assert_eq!(proposal.session_id, "s1");
+        assert_eq!(proposal.cwd.as_deref(), Some("/work"));
+    }
 }
