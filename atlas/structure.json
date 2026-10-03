@@ -260,7 +260,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "7e10d6f10e140177e8925000d8a60bccc236bdee6106efd88900226dff40874f",
+          "hash": "44744bf0f73e7777570a89c3d2604518166ad0b1fa976580f49defa06e3beaed",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -268,7 +268,7 @@
           "path": ".github/workflows/pages.yml"
         },
         {
-          "hash": "76e57bc0c8ef1f4860ba089971a691239abdb49a9983c5a4c2630055ae9451f4",
+          "hash": "73ad16ea9eda4cce76f5fc4e6d1ef5362a8096b82a9026b6dd36c1f355b2a0d4",
           "path": ".github/workflows/release-desktop.yml"
         }
       ],
@@ -425,6 +425,9 @@
       "name": "api-contract",
       "origin": "authored",
       "role": "code",
+      "testRunners": [
+        "vitest"
+      ],
       "testedBy": 2,
       "unresolvedSites": 0
     },
@@ -451,10 +454,10 @@
             {
               "in": "create_session",
               "kind": "match-err",
-              "line": 116
+              "line": 118
             }
           ],
-          "hash": "7a04b978370193c9c8618853f533fd04440d255824e5232eb1a28ebf1e5b7b2d",
+          "hash": "47f426e618026162393dc7437853195287ac5db5ce92ababe1550dcb40172f20",
           "importsFiles": [
             "apps/console/src/input.rs",
             "apps/console/src/model.rs",
@@ -481,12 +484,13 @@
           "exports": [
             "handle_key"
           ],
-          "hash": "588e48964bdb8f6279b26a38c3a9ad97b18f88b2c33e842fb2adc8c353a91648",
+          "hash": "ccefd94f2935b30606299ea06e35744dec9732f6d01717c052a226d795585ac8",
           "importsFiles": [
             "apps/console/src/model.rs",
             "crates/runtime-core/src/services/terminal_service.rs"
           ],
-          "path": "apps/console/src/input.rs"
+          "path": "apps/console/src/input.rs",
+          "testsInside": true
         },
         {
           "entry": "main",
@@ -554,7 +558,7 @@
           ]
         },
         {
-          "hash": "9cb2a872879d4e7b0dc24896858fdbfa58f9f27a2c2473782c1a2f6eb26673a6",
+          "hash": "009aa2ee272890c33197cf415efb1fa31c4ab9c745016b60f5357acb18629fcc",
           "importsFiles": [
             "crates/runtime-core/src/events.rs",
             "crates/runtime-planner/src/lib.rs"
@@ -579,11 +583,12 @@
           "exports": [
             "render"
           ],
-          "hash": "313cd5341b33ffebd68f4fef8bae1deae91345a25e61508956921988b9fab77e",
+          "hash": "c3daf9b4c6dafde5deb72693449e964f7d1f8f68adaedeb7fc686ffda5ac7ecf",
           "importsFiles": [
             "apps/console/src/model.rs"
           ],
-          "path": "apps/console/src/ui.rs"
+          "path": "apps/console/src/ui.rs",
+          "testsInside": true
         }
       ],
       "globs": [
@@ -593,7 +598,10 @@
       "name": "console",
       "origin": "authored",
       "role": "code",
-      "testedBy": 2,
+      "testRunners": [
+        "cargo test"
+      ],
+      "testedBy": 4,
       "testedInside": true,
       "unresolvedSites": 0
     },
@@ -613,7 +621,7 @@
           "path": "apps/desktop/index.html"
         },
         {
-          "hash": "5b8a5a13a46c10762dd8b3902f8b27e15f39c8f4fe92d93f028c2d2e744b741e",
+          "hash": "e1bfc3e9dd06813af5d1b3d39c2c88c9f1e27e810aa0ca716514ceda152c72b2",
           "path": "apps/desktop/package.json"
         },
         {
@@ -621,7 +629,7 @@
           "path": "apps/desktop/src-tauri/Cargo.lock"
         },
         {
-          "hash": "97f8e819a98c36ba163e2f90a3a12f0b09c7a9702995c07a4fb172cf4e6737fa",
+          "hash": "93bae2f08ac23d458b8b6e39cc794ebe7a961b0aa1608c3ce0f3a4e25dc43aaa",
           "path": "apps/desktop/src-tauri/Cargo.toml"
         },
         {
@@ -955,7 +963,7 @@
           "path": "apps/desktop/src-tauri/src/types/mod.rs"
         },
         {
-          "hash": "82b193f19bfd915aed23b317f6b2c784a45ba9660948be5450e8747c466a21d2",
+          "hash": "d79cc6ecfe39a6a30c5764bbc5ccc2e0f1c836757900543f0f447060405e781c",
           "path": "apps/desktop/src-tauri/tauri.conf.json"
         },
         {
@@ -966,27 +974,17 @@
             {
               "in": "boot",
               "kind": "catch",
-              "line": 228
+              "line": 243
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 236
+              "line": 251
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 258
-            },
-            {
-              "in": "boot",
-              "kind": "catch",
-              "line": 267
-            },
-            {
-              "in": "boot",
-              "kind": "catch",
-              "line": 274
+              "line": 273
             },
             {
               "in": "boot",
@@ -996,85 +994,95 @@
             {
               "in": "boot",
               "kind": "catch",
-              "line": 287
+              "line": 289
+            },
+            {
+              "in": "boot",
+              "kind": "catch",
+              "line": 297
+            },
+            {
+              "in": "boot",
+              "kind": "catch",
+              "line": 302
             },
             {
               "in": "handleSubmit",
               "kind": "catch",
-              "line": 627
+              "line": 645
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 699
+              "line": 732
             },
             {
               "in": "handleInterrupt",
               "kind": "catch",
-              "line": 763
+              "line": 800
             },
             {
               "in": "handleResync",
               "kind": "catch",
-              "line": 773
+              "line": 810
             },
             {
               "in": "handleCreateSession",
               "kind": "catch",
-              "line": 786
+              "line": 823
             },
             {
               "in": "handleCloseSession",
               "kind": "catch",
-              "line": 795
+              "line": 832
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "catch",
-              "line": 834
+              "line": 871
             },
             {
               "in": "handleRunWorkflow",
               "kind": "catch",
-              "line": 1026
+              "line": 1065
             },
             {
               "in": "handleDeleteWorkflow",
               "kind": "catch",
-              "line": 1048
+              "line": 1087
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "catch",
-              "line": 1096
+              "line": 1135
             },
             {
               "in": "handleAcceptSuggestion",
-              "kind": "catch",
-              "line": 1113
-            },
-            {
-              "in": "handleWorkflowEditorConfirm",
               "kind": "catch",
               "line": 1152
             },
             {
+              "in": "handleWorkflowEditorConfirm",
+              "kind": "catch",
+              "line": 1191
+            },
+            {
               "in": "handleDismissSuggestion",
               "kind": "catch",
-              "line": 1172
+              "line": 1211
             },
             {
               "in": "handleDeleteMemory",
               "kind": "catch",
-              "line": 1181
+              "line": 1220
             },
             {
               "in": "generateSuggestions",
               "kind": "catch",
-              "line": 1202
+              "line": 1241
             }
           ],
-          "hash": "07e9c0703f4dafdcefc07b4f24d90ebd4cf9ad38d28eebf5d4e6699cdd585d6a",
+          "hash": "b93825283748d6b54526b3992098124a333fee391c5417f623440618e0b01fa3",
           "importOrder": [
             "packages/domain/src/index.ts",
             "packages/api-contract/src/index.ts",
@@ -1197,9 +1205,11 @@
         },
         {
           "exports": [
-            "PlanPanel"
+            "PlanPanel",
+            "planCanRun",
+            "planNeedsConfirmation"
           ],
-          "hash": "881201bdf71b6b009a897b07f57a6342976e4025af787a7d7c0da7590a501915",
+          "hash": "9314f97f02c6afa733496b4f4706e6ca4332ff4ff2f00909c85d194ab186ca97",
           "importsFiles": [
             "packages/state/src/index.ts"
           ],
@@ -1349,7 +1359,7 @@
           "exports": [
             "useShortcuts"
           ],
-          "hash": "57012cee6d983ba37d3105f645955f479c259cdd3d022e8cdcfbc9b0814a0f2f",
+          "hash": "cd90476ac268bff3b060739b7b785be93a5236c63912d2ee97523b625abb249f",
           "importOrder": [
             "packages/state/src/index.ts",
             "apps/desktop/src/lib/shortcuts.ts"
@@ -1381,7 +1391,7 @@
           "path": "apps/desktop/src/lib/mockBridge.ts"
         },
         {
-          "hash": "58c3541ec2efcaf8c57419605a7f89320038799f02c9d33b9a84be23cba37c07",
+          "hash": "ae9d8c764f0be9b2c8cc8df39257b6c890e2eb135feeac686fa505e710388c0b",
           "importsFiles": [
             "apps/desktop/src/lib/shortcuts.ts"
           ],
@@ -1395,7 +1405,7 @@
             "parseCombo",
             "resolveShortcut"
           ],
-          "hash": "9626ec39ea42ba3ef3d752d70b5d1263116331e1f8ef72c3b8a4c5eb447b415e",
+          "hash": "456f12fb22b02edd52b5e6bfebff41c9c3062a99b99969e8384695e7551e2b9d",
           "importsFiles": [
             "packages/state/src/index.ts"
           ],
@@ -1463,6 +1473,10 @@
       ],
       "outsideWrites": 1,
       "role": "code",
+      "testRunners": [
+        "cargo test",
+        "vitest"
+      ],
       "testedBy": 4,
       "unresolvedSites": 0
     },
@@ -1483,7 +1497,7 @@
           "path": "docs/handbook/SUMMARY.md"
         },
         {
-          "hash": "4fb89928c56010489b316545ba91ca0048ee5b893e9c370b1ca1c4aa4c9b832e",
+          "hash": "ed9c590a4ecde5d5afd6875b935b4a3bcbf1db0fe5ffee3853488f690e35f654",
           "path": "docs/handbook/src/architecture/layers.md"
         },
         {
@@ -1587,7 +1601,7 @@
           "path": "docs/handbook/src/user-guide/workflows.md"
         },
         {
-          "hash": "00cfaaab57c510ca15502d5bea7cf8bd5593eb44109a3412da79d9c54eb5e69b",
+          "hash": "54afb4f8328d6b3c0a1033892158f4ccbde29b52d416f272cfc128d70ec3bd2a",
           "path": "docs/product/desktop-packaging-checklist.md"
         },
         {
@@ -1599,7 +1613,7 @@
           "path": "docs/product/icon-spec.md"
         },
         {
-          "hash": "5da5706fba10e26832b911d3830c752e885d36da657913b4caf8aaa25c07c201",
+          "hash": "f9893f442539bc2ac5de48cb626b7333bc9fcbed6b408b8ec8420e6a569e8bf2",
           "path": "docs/product/known-limitations.md"
         },
         {
@@ -1607,7 +1621,7 @@
           "path": "docs/product/release-checklist.md"
         },
         {
-          "hash": "2b8f411fa18feca9af348987051355ab9f2a57adb4a95e15a24205ed9d2e225e",
+          "hash": "615500e31f83e80151a23bcdfbe9c2dee5aad8dcdbfbc98fff67b2908482a2d7",
           "path": "docs/product/windows-notes.md"
         },
         {
@@ -1752,6 +1766,9 @@
       "name": "domain",
       "origin": "authored",
       "role": "code",
+      "testRunners": [
+        "vitest"
+      ],
       "testedBy": 2,
       "unresolvedSites": 0
     },
@@ -1764,7 +1781,182 @@
       "externals": 0,
       "files": [
         {
-          "hash": "b235c5bff3559d4dfffe88e9c734ed226f1915c420e1deb7d0c9def3c1c3985e",
+          "hash": "c1158676e380054d7b4dd4e90a546ce1bcc51e2338e99592ed7e3a9789b5d344",
+          "path": "packaging/msix/AppxManifest.xml"
+        },
+        {
+          "hash": "5fa75656a0a6196597c31e59c92a45f57ac5ba05d17c66fe4aff942a72cf8bae",
+          "path": "packaging/msix/Assets/SplashScreen.scale-100.png"
+        },
+        {
+          "hash": "aaf5817b5bd14d813809f2369e3ba701852c3c86e4c3643f444aed4d09b51062",
+          "path": "packaging/msix/Assets/SplashScreen.scale-200.png"
+        },
+        {
+          "hash": "762325aae0892734afbc2048314a89c4e8e8b8b53bcc5312da2c6a0ab78833c5",
+          "path": "packaging/msix/Assets/Square150x150Logo.scale-100.png"
+        },
+        {
+          "hash": "43bd948186177f19bbb440db8ab94753306745413730850bff2922920c7c1423",
+          "path": "packaging/msix/Assets/Square150x150Logo.scale-125.png"
+        },
+        {
+          "hash": "4c00c0b3ff1dcf71eea68fb6274dfe771614049a9a59644323ea66f679932643",
+          "path": "packaging/msix/Assets/Square150x150Logo.scale-150.png"
+        },
+        {
+          "hash": "a386e0d8e67683b803cc973d9bd7671f1499c91d7338851083f14bd111812b87",
+          "path": "packaging/msix/Assets/Square150x150Logo.scale-200.png"
+        },
+        {
+          "hash": "485c92332906e1165343ec9cbaeafcbd1547c5c59632cd05ad77608988b2a69f",
+          "path": "packaging/msix/Assets/Square150x150Logo.scale-400.png"
+        },
+        {
+          "hash": "df6adf22b0cacb72fa2ece3d288174e821a2d9f685ef188014a37378ddcf17f0",
+          "path": "packaging/msix/Assets/Square310x310Logo.scale-100.png"
+        },
+        {
+          "hash": "65ac213fd0590dd5e672df2a301e84f5a356c13a3d5c960f2c263cdf55e01577",
+          "path": "packaging/msix/Assets/Square310x310Logo.scale-125.png"
+        },
+        {
+          "hash": "925cbf7b9867d1dbda3da8637e5e8bdf547ef7113bb77e02f7e6dc379d258864",
+          "path": "packaging/msix/Assets/Square310x310Logo.scale-150.png"
+        },
+        {
+          "hash": "0a569cc17888d808217264ba8a056965dc716dc1198f0cb4c811a3a2997e4a27",
+          "path": "packaging/msix/Assets/Square310x310Logo.scale-200.png"
+        },
+        {
+          "hash": "a551cd499e62fe91b3fa8e0a9e76b4f66d0f0af6dac68f4481fb3d3e57fb5961",
+          "path": "packaging/msix/Assets/Square310x310Logo.scale-400.png"
+        },
+        {
+          "hash": "7e0a313b12debc82ebbc7851541feb31a50f57ad2ce327ea8afb810cd818dd76",
+          "path": "packaging/msix/Assets/Square44x44Logo.scale-100.png"
+        },
+        {
+          "hash": "52fe314dc8865e7a8b9bd614d47777e801a5b490173abe29c89f9ea9b3d10eb4",
+          "path": "packaging/msix/Assets/Square44x44Logo.scale-125.png"
+        },
+        {
+          "hash": "0f0778d43884ca5efc245fe6244c9e9526dae77b6db803978615375ab2bc20ff",
+          "path": "packaging/msix/Assets/Square44x44Logo.scale-150.png"
+        },
+        {
+          "hash": "db504ddc6e118b4dcb458880777718827cfde6ce23631aedf511d31a09d03f06",
+          "path": "packaging/msix/Assets/Square44x44Logo.scale-200.png"
+        },
+        {
+          "hash": "75b8ebb96b67236e126468ba24ec673ef61d7a55d9da65f94be3b0f7aa2ff52b",
+          "path": "packaging/msix/Assets/Square44x44Logo.scale-400.png"
+        },
+        {
+          "hash": "c62b7e27d57214b91633e94bd4cc7cf916341ae509f9c64cd51a293bca4d526e",
+          "path": "packaging/msix/Assets/Square44x44Logo.targetsize-16.png"
+        },
+        {
+          "hash": "ef3e4b4e6ead8caf02334cceb9f62ba242fc4d39d959811c5086c3eb10e2ba0a",
+          "path": "packaging/msix/Assets/Square44x44Logo.targetsize-24.png"
+        },
+        {
+          "hash": "c72f9ee98fce3d08c6b7e48ac3f7df8f6ca7ceaca29386852e21f6804dd9e11c",
+          "path": "packaging/msix/Assets/Square44x44Logo.targetsize-256.png"
+        },
+        {
+          "hash": "5784676f3d603fb93e8bc7514d8b6ddaa6378124bb8c0f48a6caa51af5baee88",
+          "path": "packaging/msix/Assets/Square44x44Logo.targetsize-32.png"
+        },
+        {
+          "hash": "40d8bd5ab2960428a840a07c1014b8df730881b351f043484370a98f47afeff7",
+          "path": "packaging/msix/Assets/Square44x44Logo.targetsize-48.png"
+        },
+        {
+          "hash": "97fe5ac2bf021dcc0b6fe4da0f93e7faac852b8e9d5cd561adcb97c246effe60",
+          "path": "packaging/msix/Assets/StoreLogo.scale-100.png"
+        },
+        {
+          "hash": "cc69369ff2180671a05f15d5375f4efadac2d3bc24c3f15f0920a76519f40e99",
+          "path": "packaging/msix/Assets/StoreLogo.scale-125.png"
+        },
+        {
+          "hash": "5c75aeea559fc4ef531f74ba02b9e237a38d3cdd4273dd14dc491e994dc93d6a",
+          "path": "packaging/msix/Assets/StoreLogo.scale-150.png"
+        },
+        {
+          "hash": "d235068ff089c205ca0595649869bf4355ae0b2bca287c88ea5891aee59d24c0",
+          "path": "packaging/msix/Assets/StoreLogo.scale-200.png"
+        },
+        {
+          "hash": "b67039035ff23e8593adb6f509d0cee7063197134cf1873d2c4fc14a5edc5cfc",
+          "path": "packaging/msix/Assets/StoreLogo.scale-400.png"
+        },
+        {
+          "hash": "0a11a632b1767792a1e1d51b263653eb74f71146f2f5b0058d437c8ba28ec8be",
+          "path": "packaging/msix/Assets/Wide310x150Logo.scale-100.png"
+        },
+        {
+          "hash": "5b1e2bbd85711e78a6ca8845224f1e694afe62f67c234487c1f870175a8964c9",
+          "path": "packaging/msix/Assets/Wide310x150Logo.scale-125.png"
+        },
+        {
+          "hash": "77e0d792a0a3ca0ac50cba5cb43bd08e9c354df387cb87ac8ba21965ea3f86b4",
+          "path": "packaging/msix/Assets/Wide310x150Logo.scale-150.png"
+        },
+        {
+          "hash": "5fa75656a0a6196597c31e59c92a45f57ac5ba05d17c66fe4aff942a72cf8bae",
+          "path": "packaging/msix/Assets/Wide310x150Logo.scale-200.png"
+        },
+        {
+          "hash": "aaf5817b5bd14d813809f2369e3ba701852c3c86e4c3643f444aed4d09b51062",
+          "path": "packaging/msix/Assets/Wide310x150Logo.scale-400.png"
+        },
+        {
+          "hash": "0dab1bca14a8e043663e46cf1603aa0f3dfdbdb6c06d12bf9e6a39cf0aef933c",
+          "path": "packaging/msix/resources.pri"
+        },
+        {
+          "hash": "45e137648b46eaddf4fe412c142f75086e5e0edfb2ebfe233a19e4d7e23852c0",
+          "path": "packaging/msix/resources.scale-125.pri"
+        },
+        {
+          "hash": "01e7bae2d55a4bd775f506d9e2228ce66fc51ff119b3ecac3706160deff8be5f",
+          "path": "packaging/msix/resources.scale-150.pri"
+        },
+        {
+          "hash": "89dc57fc609d10ce2f29e8d0aa243d9e85d4e6e07b82beb0035ee345ae787dd5",
+          "path": "packaging/msix/resources.scale-200.pri"
+        },
+        {
+          "hash": "1f26aa6a0cda0171a36f474e12bd64d5907090f68ba104bc4686a3d2dd1b46cf",
+          "path": "packaging/msix/resources.scale-400.pri"
+        },
+        {
+          "hash": "47619bc54004a3a7308fdf758f64a94b711e691515e791bcb574517c5278703d",
+          "path": "packaging/pack-msix.ps1"
+        }
+      ],
+      "globs": [
+        "packaging/**"
+      ],
+      "importConfidence": "full",
+      "name": "packaging",
+      "origin": "authored",
+      "role": "config",
+      "testedBy": 0,
+      "unresolvedSites": 0
+    },
+    {
+      "dynamicReads": 0,
+      "dynamicSpawns": 0,
+      "dynamicSpawnsInTests": 0,
+      "dynamicWrites": 0,
+      "entryPoints": [],
+      "externals": 0,
+      "files": [
+        {
+          "hash": "c2b1103e7238a110218d2426ced0448449aacdf6742f151ec2a57655a7033643",
           "path": ".gitignore"
         },
         {
@@ -1772,11 +1964,11 @@
           "path": ".prettierignore"
         },
         {
-          "hash": "f616bdbe4813bbf89df611a84f1461770702fbfd506c155aba5f47258ef37403",
+          "hash": "bba266c4745da8d9c60ad1aefb2702f9d216497e7dfb827449a3a01c96305863",
           "path": "CHANGELOG.md"
         },
         {
-          "hash": "60abcb8e0afa3b0812c9732421644434783a3321e5009c7ddca19c35aded1a79",
+          "hash": "cf654d73151e54ba3f6fdd1d3188d7d451b5f30bb06e549d643cac8c6b121186",
           "path": "Cargo.lock"
         },
         {
@@ -1808,7 +2000,7 @@
           "path": "README.ja.md"
         },
         {
-          "hash": "afbded39260ef74e1386a42c4a2f8d019ea8618486cebeb2424cdef1131bc9d4",
+          "hash": "9d35634ce3f7acf67022c2d6d932bea5c3974f4580b7b738869b5f9a2f0b2094",
           "path": "README.md"
         },
         {
@@ -1824,7 +2016,7 @@
           "path": "SECURITY.md"
         },
         {
-          "hash": "4f1a22e26d3f551c9c85ac11e7905a0d95d946f59b0d905851edd85e2f40542a",
+          "hash": "d75519f74de99b54482552dfa5ae0e467aab081b877615b335c59269abc437e9",
           "path": "package.json"
         },
         {
@@ -1887,7 +2079,7 @@
           "testsInside": true
         },
         {
-          "hash": "4fd932ce26cb32f2f13f22ea9aa905838f79c4610be6e674facbcf51dc081d62",
+          "hash": "bf564250cecb30940123a65965c1ddb0b395da55f702ede7311cdbc9e62046eb",
           "importsFiles": [
             "crates/runtime-core/src/events.rs",
             "crates/runtime-core/src/pty.rs",
@@ -1900,7 +2092,9 @@
         {
           "exports": [
             "bootstrap_prompt",
+            "clone_reader",
             "default_shell",
+            "spawn_reader",
             "spawn_reader_loop",
             "spawn_shell",
             "write_command",
@@ -1908,12 +2102,12 @@
           ],
           "failurePaths": [
             {
-              "in": "spawn_reader_loop",
+              "in": "spawn_reader",
               "kind": "match-err",
-              "line": 118
+              "line": 120
             }
           ],
-          "hash": "ed7da3738a1b2089d0d0825ea68b40af11fd6de56fd84d810cd1452d703c6180",
+          "hash": "245bc1f7010cda2429039020c9d3cd327ebf1491382f9a554314eeb6b31caf76",
           "path": "crates/runtime-core/src/pty.rs"
         },
         {
@@ -1929,10 +2123,15 @@
             {
               "in": "update_cwd",
               "kind": "err",
-              "line": 143
+              "line": 150
+            },
+            {
+              "in": "process_reader_chunk",
+              "kind": "match-err",
+              "line": 192
             }
           ],
-          "hash": "f37a286cdc5853997da147a4dcbf23c4e5334a4540a129b024c040ec0e7c5fe5",
+          "hash": "ce086dae5857a47f07dcb7e608785d62c669cf4a21553965b58132e78d6a20be",
           "importsFiles": [
             "crates/runtime-core/src/events.rs",
             "crates/runtime-core/src/pty.rs",
@@ -1951,11 +2150,6 @@
             {
               "in": "execute",
               "kind": "err",
-              "line": 56
-            },
-            {
-              "in": "execute",
-              "kind": "err",
               "line": 59
             },
             {
@@ -1964,12 +2158,37 @@
               "line": 62
             },
             {
+              "in": "execute",
+              "kind": "err",
+              "line": 65
+            },
+            {
+              "in": "execute",
+              "kind": "match-err",
+              "line": 76
+            },
+            {
+              "in": "execute",
+              "kind": "err",
+              "line": 83
+            },
+            {
+              "in": "execute",
+              "kind": "err",
+              "line": 85
+            },
+            {
+              "in": "execute",
+              "kind": "err",
+              "line": 92
+            },
+            {
               "in": "interrupt",
               "kind": "err",
-              "line": 114
+              "line": 129
             }
           ],
-          "hash": "780ab96899a211733a4ad7ab3fec3a9c6e519b9ac4f28d3d5a70614f4b6c4f52",
+          "hash": "4607b8f0cf2be4301977d601d425a1e65a861465228fa1cc15e63a3dddca30c0",
           "importsFiles": [
             "crates/runtime-core/src/events.rs",
             "crates/runtime-core/src/pty.rs",
@@ -1979,7 +2198,7 @@
           "testsInside": true
         },
         {
-          "hash": "beb6206dfae96eda63edc570e64d54cc26f61977c1a7d7ca20df2c020cf2589e",
+          "hash": "5920ed3703f9a985fbbb10d737c17158aeb168e79f33911033fa9b6a58491863",
           "importsFiles": [
             "crates/runtime-core/src/pty.rs"
           ],
@@ -2167,7 +2386,7 @@
           "exports": [
             "generate"
           ],
-          "hash": "b0fad539c6771624bba20004107e262d7abde28b1a9056e33c6845688d132e68",
+          "hash": "d9980bc2a03b67b135bbbf967d9767eae5a83e0f99e2de307a31e0f52de6b6cc",
           "importsFiles": [
             "crates/runtime-planner/src/types.rs"
           ],
@@ -2282,7 +2501,7 @@
           "path": "site/astro.config.mjs"
         },
         {
-          "hash": "3044af950115eeb3cd3cf51e00c703e57ea12d7f194558d8e86932058bf6bf93",
+          "hash": "879b119da80a5792a7bc7d40eea751d7c87ad60f00e00ee3859fd7bd9e268bfb",
           "path": "site/package-lock.json"
         },
         {
@@ -2295,7 +2514,7 @@
           "path": "site/src/content.config.ts"
         },
         {
-          "hash": "2e6a8cccd7010d1eaeb286e90add6056607562aab363642f4fd315c4042d44d7",
+          "hash": "e7765bae16b95f7a13b616a2ef0e1b7bbe69cce45400f2ff2718e3c6c232bcbc",
           "path": "site/src/content/docs/handbook/beginners.md"
         },
         {
@@ -2351,7 +2570,7 @@
           "path": "site/src/content/docs/handbook/keyboard-shortcuts.md"
         },
         {
-          "hash": "5780c7bc256ea6484034f9e1b949b695f66bdfc840e87882bcad7b0266661052",
+          "hash": "8672ecec01b0db11cc5c75ed9e973f9de2e4c60e297973cd4d24246a85965ae2",
           "path": "site/src/content/docs/handbook/layers.md"
         },
         {
@@ -2367,7 +2586,7 @@
           "path": "site/src/content/docs/handbook/operations/known-limitations.md"
         },
         {
-          "hash": "84a9dbc31cbbb473e4464602ca9306a301a7074a548314f8543e64c9a7deb7bf",
+          "hash": "72942e3361d7f4305782f58e8ca35972f09992d1adcf42964e7a87024762c9c5",
           "path": "site/src/content/docs/handbook/operations/release-checklist.md"
         },
         {
@@ -2432,7 +2651,7 @@
         },
         {
           "constantOnly": true,
-          "hash": "88020691091bfaffb182e3b96357869aa6b8ada0945f254fc1fb4b3129eb16f8",
+          "hash": "d4e5e3e1d37ecd4ddf5eb44c3a3e0c19950009f8e5406c7d0e782a67a54089a6",
           "path": "site/src/site-config.ts"
         },
         {
@@ -2519,6 +2738,9 @@
       "name": "state",
       "origin": "authored",
       "role": "code",
+      "testRunners": [
+        "vitest"
+      ],
       "testedBy": 4,
       "unresolvedSites": 0
     },
@@ -2590,7 +2812,7 @@
   ],
   "doors": [
     {
-      "checksCount": 2,
+      "checksCount": 5,
       "commands": [
         {
           "dir": "",
@@ -2623,6 +2845,23 @@
             "cargo"
           ],
           "step": "Cargo test (crates)"
+        },
+        {
+          "dir": "",
+          "job": "check-and-test",
+          "programs": [
+            "npm",
+            "pnpm"
+          ],
+          "step": "Install workspace dependencies"
+        },
+        {
+          "dir": "",
+          "job": "check-and-test",
+          "programs": [
+            "pnpm"
+          ],
+          "step": "pnpm test"
         }
       ],
       "elsewhere": [],
@@ -2658,12 +2897,34 @@
           ]
         }
       ],
-      "landings": [],
+      "landings": [
+        "apps/desktop/src-tauri/gen/schemas"
+      ],
       "mentions": [],
       "name": "CI",
       "permissions": [],
       "pushes": false,
       "reach": [
+        {
+          "boundary": "api-contract",
+          "depth": 0,
+          "files": 13
+        },
+        {
+          "boundary": "console",
+          "depth": 0,
+          "files": 7
+        },
+        {
+          "boundary": "desktop",
+          "depth": 0,
+          "files": 29
+        },
+        {
+          "boundary": "domain",
+          "depth": 0,
+          "files": 9
+        },
         {
           "boundary": "runtime-core",
           "depth": 0,
@@ -2678,10 +2939,99 @@
           "boundary": "runtime-planner",
           "depth": 0,
           "files": 7
+        },
+        {
+          "boundary": "state",
+          "depth": 0,
+          "files": 3
         }
       ],
       "readers": [],
       "runs": [
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/console/src/input.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/console/src/main.rs",
+          "runKind": "checks",
+          "via": "cargo check"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/console/src/model.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/console/src/planner.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/console/src/ui.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/desktop/src-tauri/build.rs",
+          "runKind": "executes",
+          "via": "cargo check"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/desktop/src-tauri/src/commands/planner.rs",
+          "runKind": "executes",
+          "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/desktop/src-tauri/src/lib.rs",
+          "runKind": "checks",
+          "via": "cargo check"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/desktop/src-tauri/src/main.rs",
+          "runKind": "checks",
+          "via": "cargo check"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/desktop/src/components/InputComposer.test.tsx",
+          "runKind": "executes",
+          "via": "vitest apps/desktop/vite.config.ts"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/desktop/src/components/PlanPanel.test.tsx",
+          "runKind": "executes",
+          "via": "vitest apps/desktop/vite.config.ts"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/desktop/src/lib/shortcuts.test.ts",
+          "runKind": "executes",
+          "via": "vitest apps/desktop/vite.config.ts"
+        },
         {
           "job": "check-and-test",
           "matched": true,
@@ -2779,9 +3129,30 @@
           "path": "crates/runtime-planner/src/validate.rs",
           "runKind": "executes",
           "via": "cargo test"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "packages/api-contract/src/contracts.test.ts",
+          "runKind": "executes",
+          "via": "vitest"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "packages/domain/src/memoryDetectors.test.ts",
+          "runKind": "executes",
+          "via": "vitest"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "packages/state/src/index.test.ts",
+          "runKind": "executes",
+          "via": "vitest"
         }
       ],
-      "runsCount": 14,
+      "runsCount": 29,
       "secrets": [],
       "sends": {
         "deploysPages": false,
@@ -2796,10 +3167,66 @@
       "stages": [],
       "tests": [
         {
-          "files": 12,
+          "files": 18,
           "job": "check-and-test",
           "runner": "cargo test",
           "step": "Cargo test (crates)"
+        },
+        {
+          "config": "apps/desktop/vite.config.ts",
+          "dir": "apps/desktop",
+          "files": 3,
+          "job": "check-and-test",
+          "runner": "vitest",
+          "step": "pnpm test",
+          "through": [
+            "pnpm test",
+            "pnpm test (apps/desktop)"
+          ]
+        },
+        {
+          "dir": "packages/api-contract",
+          "files": 1,
+          "job": "check-and-test",
+          "runner": "vitest",
+          "step": "pnpm test",
+          "through": [
+            "pnpm test",
+            "pnpm test (packages/api-contract)"
+          ]
+        },
+        {
+          "dir": "packages/domain",
+          "files": 1,
+          "job": "check-and-test",
+          "runner": "vitest",
+          "step": "pnpm test",
+          "through": [
+            "pnpm test",
+            "pnpm test (packages/domain)"
+          ]
+        },
+        {
+          "dir": "packages/state",
+          "files": 1,
+          "job": "check-and-test",
+          "runner": "vitest",
+          "step": "pnpm test",
+          "through": [
+            "pnpm test",
+            "pnpm test (packages/state)"
+          ]
+        },
+        {
+          "dir": "packages/ui",
+          "files": 0,
+          "job": "check-and-test",
+          "runner": "vitest",
+          "step": "pnpm test",
+          "through": [
+            "pnpm test",
+            "pnpm test (packages/ui)"
+          ]
         }
       ],
       "triggers": [
@@ -2815,6 +3242,9 @@
             "apps/**",
             "atlas/**",
             "crates/**",
+            "package.json",
+            "packages/**",
+            "pnpm-lock.yaml",
             "site/astro.config.mjs",
             "site/package-lock.json",
             "site/package.json"
@@ -2991,6 +3421,14 @@
             "pnpm"
           ],
           "step": "Build Tauri app"
+        },
+        {
+          "dir": "",
+          "job": "build-windows",
+          "programs": [
+            "./packaging/pack-msix.ps1"
+          ],
+          "step": "Pack unsigned Store MSIX"
         }
       ],
       "elsewhere": [],
@@ -3003,6 +3441,7 @@
           "pushes": false,
           "sends": [
             "assets:msi",
+            "assets:msix",
             "assets:nsis"
           ],
           "stages": [],
@@ -3055,6 +3494,11 @@
           "boundary": "desktop",
           "depth": 0,
           "files": 55
+        },
+        {
+          "boundary": "packaging",
+          "depth": 0,
+          "files": 1
         },
         {
           "boundary": "api-contract",
@@ -3149,9 +3593,14 @@
           "path": "apps/desktop/vite.config.ts",
           "runKind": "executes",
           "via": "tauri build → vite build"
+        },
+        {
+          "job": "build-windows",
+          "path": "packaging/pack-msix.ps1",
+          "runKind": "executes"
         }
       ],
-      "runsCount": 5,
+      "runsCount": 6,
       "secrets": [],
       "sends": {
         "deploysPages": false,
@@ -3376,8 +3825,8 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "9b77cf9ec98ef47063da46ac5300d1f240cd21e6",
-    "tracked": 300
+    "commit": "4ce0e200efba303011b5072252c335a418e97b8a",
+    "tracked": 339
   },
   "landings": [
     {
@@ -3583,6 +4032,83 @@
     {
       "readers": [
         {
+          "by": "packaging/pack-msix.ps1",
+          "call": "Copy-Item",
+          "confidence": "text"
+        }
+      ],
+      "target": "packaging/msix",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "packaging/msix/AppxManifest.xml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "packaging/msix/Assets/SplashScreen.scale-200.png",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "packaging/msix/AppxManifest.xml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "packaging/msix/Assets/Square150x150Logo.scale-200.png",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "packaging/msix/AppxManifest.xml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "packaging/msix/Assets/Square310x310Logo.scale-200.png",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "packaging/msix/AppxManifest.xml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "packaging/msix/Assets/Square44x44Logo.scale-200.png",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "packaging/msix/AppxManifest.xml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "packaging/msix/Assets/StoreLogo.scale-200.png",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "packaging/msix/AppxManifest.xml",
+          "call": "configuration",
+          "confidence": "config"
+        }
+      ],
+      "target": "packaging/msix/Assets/Wide310x150Logo.scale-200.png",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
           "by": "site/astro.config.mjs",
           "call": "content-collection",
           "confidence": "ast"
@@ -3606,12 +4132,7 @@
   "overlaps": [],
   "submodules": [],
   "symlinks": [],
-  "testFiles": 22,
-  "testsNotRun": [
-    "packages/api-contract/src/contracts.test.ts",
-    "packages/domain/src/memoryDetectors.test.ts",
-    "packages/state/src/index.test.ts"
-  ],
+  "testFiles": 24,
   "unassigned": [],
   "workspaces": [
     "apps/desktop",

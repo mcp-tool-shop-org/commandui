@@ -28,6 +28,10 @@ boundaries:
     globs:
       - packages/domain/**
     role: code
+  - name: packaging
+    globs:
+      - packaging/**
+    role: config
   - name: root
     globs:
       - "*"

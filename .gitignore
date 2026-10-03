@@ -10,3 +10,4 @@ site/.astro/
 *.nsis
 release/
 .polyglot-cache.json
+.swarm/

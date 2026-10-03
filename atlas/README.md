@@ -1,31 +1,36 @@
 # commandui: how it works
 
-Mapped at 2026-10-01 from commit 9b77cf9 by Atlas 1.24.0.
+Mapped at 2026-10-03 from commit 4ce0e20 by Atlas 1.24.0.
 
 ## What this is
 
-15 parts, in TypeScript (59 files), Rust (53 files), CSS (3 files), Astro (2 files), HTML (1 file) and JavaScript (1 file). Work enters through 5 doors; the busiest is Release Desktop, which reaches 7 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).
+16 parts, in TypeScript (59 files), Rust (53 files), CSS (3 files), Astro (2 files), HTML (1 file), JavaScript (1 file) and PowerShell (1 file). Work enters through 5 doors; CI and Release Desktop each reach 8 parts, and CI is followed because a pull request goes through it. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).
 
-## What changed since 2026-09-30 (842976b)
+## What changed since 2026-10-01 (9b77cf9)
 
-- CI's pull request trigger no longer names `.github/workflows/**`, `Cargo.lock`, `Cargo.toml`, `apps/**`, `atlas/**`, `crates/**`, `site/astro.config.mjs`, `site/package-lock.json` and `site/package.json`.
-- 1 file changed content, across 1 part.
+- CI's push trigger now also names `package.json`, `packages/**` and `pnpm-lock.yaml`.
+- CI now also runs apps/console/src/input.rs, apps/console/src/model.rs, apps/console/src/planner.rs and 9 more.
+- CI now also checks apps/console/src/main.rs, apps/desktop/src-tauri/src/lib.rs and apps/desktop/src-tauri/src/main.rs.
+- And 1 more change to a door.
+- packaging/msix/ is now read by packaging/pack-msix.ps1.
+- packaging/msix/Assets/SplashScreen.scale-200.png is now read by packaging/msix/AppxManifest.xml.
+- packaging/msix/Assets/Square150x150Logo.scale-200.png is now read by packaging/msix/AppxManifest.xml.
+- And 4 more new writers and readers of places.
+- packaging is a new part, drawn from `packaging/**`.
+- 39 files added and 34 changed content, across 9 parts.
 
 ## What comes in
 
-1. **Release Desktop.** When a release is published; or by hand. Runs apps/desktop/src-tauri/build.rs, apps/desktop/src/ and apps/desktop/vite.config.ts; builds apps/desktop/src-tauri/src/main.rs; checks apps/desktop/src-tauri/src/lib.rs.
-2. **CI.** On a pull request; on a push touching 9 paths; or by hand. Runs crates/runtime-core/src/events.rs, crates/runtime-core/src/lib.rs, crates/runtime-core/src/parity.rs and 9 more; checks crates/runtime-persistence/src/lib.rs and crates/runtime-planner/src/lib.rs.
+1. **CI.** On a pull request; on a push touching 12 paths; or by hand. Runs apps/console/src/input.rs, apps/console/src/model.rs, apps/console/src/planner.rs and 21 more; checks apps/console/src/main.rs, apps/desktop/src-tauri/src/lib.rs, apps/desktop/src-tauri/src/main.rs and 2 more.
+2. **Release Desktop.** When a release is published; or by hand. Runs packaging/pack-msix.ps1, apps/desktop/src-tauri/build.rs, apps/desktop/src/ and 1 more; builds apps/desktop/src-tauri/src/main.rs; checks apps/desktop/src-tauri/src/lib.rs.
 3. **Deploy site to GitHub Pages.** On a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
 4. **commandui-desktop** (the desktop app people install). Runs apps/desktop/src-tauri/src/main.rs.
 5. **commandui-console** (a command built from apps/console, which nothing ships). Runs apps/console/src/main.rs.
 
-## What happens through Release Desktop
+## What happens through CI
 
-1. The workflow runs apps/desktop/src-tauri/build.rs, apps/desktop/src/ and apps/desktop/vite.config.ts in desktop; it checks apps/desktop/src-tauri/src/lib.rs in desktop.
-2. That reaches api-contract (12 files), domain (8 files) and state (2 files).
-3. That reaches runtime-core (6 files), runtime-persistence (6 files) and runtime-planner (7 files).
-4. It writes to apps/desktop/src-tauri/gen/schemas/.
-5. It builds apps/desktop/src-tauri/src/main.rs into MSI and NSIS installers and uploads them to the release on a release event.
+1. The workflow runs packages/api-contract/src/contracts.test.ts in api-contract, 4 files in console, 5 files in desktop, packages/domain/src/memoryDetectors.test.ts in domain, 6 files in runtime-core, and 7 files in 3 more parts; it checks apps/console/src/main.rs in console, apps/desktop/src-tauri/src/lib.rs and apps/desktop/src-tauri/src/main.rs in desktop, crates/runtime-persistence/src/lib.rs in runtime-persistence, and crates/runtime-planner/src/lib.rs in runtime-planner.
+2. It writes to apps/desktop/src-tauri/gen/schemas/.
 
 ## Who reads the results
 
@@ -33,7 +38,7 @@ Mapped at 2026-10-01 from commit 9b77cf9 by Atlas 1.24.0.
 
 ## The other doors
 
-**CI** runs crates/runtime-core/src/events.rs, crates/runtime-core/src/lib.rs, crates/runtime-core/src/parity.rs and 9 more, and checks crates/runtime-persistence/src/lib.rs and crates/runtime-planner/src/lib.rs.
+**Release Desktop** runs packaging/pack-msix.ps1, apps/desktop/src-tauri/build.rs, apps/desktop/src/ and 1 more, checks apps/desktop/src-tauri/src/lib.rs, reaches api-contract, domain, runtime-core, runtime-persistence, runtime-planner and state, writes to apps/desktop/src-tauri/gen/schemas/, and builds apps/desktop/src-tauri/src/main.rs into MSI and NSIS installers and an MSIX package, and uploads them to the release, on a release event.
 
 **Deploy site to GitHub Pages** runs site/astro.config.mjs and site/src/, and deploys the site.
 
@@ -43,13 +48,14 @@ Mapped at 2026-10-01 from commit 9b77cf9 by Atlas 1.24.0.
 
 ## What breaks what
 
-- **domain** is imported by 3 parts (api-contract, desktop, state) and sits on the path of 1 door.
+- **domain** is imported by 3 parts (api-contract, desktop, state) and sits on the path of 2 doors.
 - **runtime-core** is imported by 2 parts (console, desktop) and sits on the path of 4 doors.
 - **runtime-planner** is imported by 2 parts (console, desktop) and sits on the path of 4 doors.
-- **api-contract** is imported by 2 parts (desktop, state) and sits on the path of 1 door.
+- **api-contract** is imported by 2 parts (desktop, state) and sits on the path of 2 doors.
 - **runtime-persistence** is imported by 1 part (desktop) and sits on the path of 3 doors.
-- **state** is imported by 1 part (desktop) and sits on the path of 1 door.
-- **desktop** is imported by no other part and sits on the path of 2 doors.
+- **state** is imported by 1 part (desktop) and sits on the path of 2 doors.
+- **desktop** is imported by no other part and sits on the path of 3 doors.
+- **console** is imported by no other part and sits on the path of 2 doors.
 
 ## What tends to change together
 
@@ -69,8 +75,6 @@ runtime-persistence is tested only by the unit tests in its own files.
 
 runtime-planner is tested only by the unit tests in its own files.
 
-3 test files run in no workflow: packages/api-contract/src/contracts.test.ts, packages/domain/src/memoryDetectors.test.ts and packages/state/src/index.test.ts.
-
 ## Written but never read
 
 - **apps/desktop/src-tauri/gen/schemas/** is written by apps/desktop/src-tauri/build.rs (a build script) and read by nothing else in this repository.
@@ -85,13 +89,13 @@ No two parts export a helper that looks alike.
 
 ## Hand-authored
 
-People write .claude/, .github/, docs/, the repository root, site/ and winget/. Nothing in this repository writes to them.
+People write .claude/, .github/, docs/, packaging/, the repository root, site/ and winget/. Nothing in this repository writes to them.
 
 ## Where to start
 
 apps/desktop/src-tauri/src/main.rs → apps/desktop/src-tauri/src/lib.rs → apps/desktop/src-tauri/src/commands/planner.rs → crates/runtime-planner/src/lib.rs → crates/runtime-planner/src/client.rs → crates/runtime-planner/src/prompt.rs → crates/runtime-planner/src/types.rs
 
-Read those in order to follow one run of commandui-desktop end to end. This path follows commandui-desktop (the desktop app people install) from its entry, since CI runs only tests and checks.
+Read those in order to follow one run of commandui-desktop end to end. This path follows commandui-desktop (the desktop app people install) from its entry, since CI runs only tests, scripts that import no code here and checks.
 
 ## What this map cannot see
 
