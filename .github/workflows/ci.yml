@@ -5,8 +5,11 @@ on:
     paths:
       - 'crates/**'
       - 'apps/**'
+      - 'packages/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/**'
       - 'site/package.json'
       - 'site/package-lock.json'
@@ -53,7 +56,13 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cargo check (crates)
-        run: cargo check -p commandui-runtime-core -p commandui-runtime-persistence -p commandui-runtime-planner
+        run: cargo check -p commandui-runtime-core -p commandui-runtime-persistence -p commandui-runtime-planner -p commandui-console -p commandui-desktop
 
       - name: Cargo test (crates)
-        run: cargo test -p commandui-runtime-core -p commandui-runtime-persistence -p commandui-runtime-planner
+        run: cargo test -p commandui-runtime-core -p commandui-runtime-persistence -p commandui-runtime-planner -p commandui-console -p commandui-desktop
+
+      - name: Install workspace dependencies
+        run: npm install -g pnpm@10.0.0 && pnpm install --frozen-lockfile
+
+      - name: pnpm test
+        run: pnpm test
