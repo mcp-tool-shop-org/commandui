@@ -257,15 +257,14 @@ fn database_commands_round_trip() {
         )
         .unwrap(),
     );
-    // Unknown ids update zero rows and still return Ok.
-    assert_ok(
-        &ipc(
-            &webview,
-            "history_update",
-            json!({ "request": { "historyId": "missing-history", "status": "gone" } }),
-        )
-        .unwrap(),
-    );
+    // An unknown id changes no row and is reported, not silently accepted.
+    let missing = ipc(
+        &webview,
+        "history_update",
+        json!({ "request": { "historyId": "missing-history", "status": "gone" } }),
+    )
+    .unwrap_err();
+    assert_api_error(&missing, "DATABASE_ERROR", "no history item");
     let listed = ipc(
         &webview,
         "history_list",
@@ -425,14 +424,13 @@ fn database_commands_round_trip() {
     assert_eq!(workflows["workflows"][0]["id"], "w1");
     assert_eq!(workflows["workflows"][0]["command"], "git status --short");
     assert_ok(&ipc(&webview, "workflow_delete", json!({ "request": { "id": "w1" } })).unwrap());
-    assert_ok(
-        &ipc(
-            &webview,
-            "workflow_delete",
-            json!({ "request": { "id": "missing-workflow" } }),
-        )
-        .unwrap(),
-    );
+    let missing = ipc(
+        &webview,
+        "workflow_delete",
+        json!({ "request": { "id": "missing-workflow" } }),
+    )
+    .unwrap_err();
+    assert_api_error(&missing, "DATABASE_ERROR", "no workflow");
     let workflows = ipc(&webview, "workflow_list", json!({})).unwrap();
     assert!(workflows["workflows"].as_array().unwrap().is_empty());
 
