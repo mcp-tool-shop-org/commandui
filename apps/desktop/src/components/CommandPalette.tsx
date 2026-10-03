@@ -49,17 +49,21 @@ export function CommandPalette({ isOpen, onClose, actions }: Props) {
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelectedIndex((i) => (i + 1) % filtered.length);
+      if (filtered.length === 0) return;
+      setSelectedIndex((i) => (Math.min(i, filtered.length - 1) + 1) % filtered.length);
       return;
     }
     if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelectedIndex((i) => (i - 1 + filtered.length) % filtered.length);
+      if (filtered.length === 0) return;
+      setSelectedIndex(
+        (i) => (Math.min(i, filtered.length - 1) - 1 + filtered.length) % filtered.length,
+      );
       return;
     }
     if (e.key === "Enter" && filtered.length > 0) {
       e.preventDefault();
-      filtered[selectedIndex].action();
+      filtered[Math.min(Math.max(0, selectedIndex), filtered.length - 1)].action();
       onClose();
       return;
     }

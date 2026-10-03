@@ -62,7 +62,12 @@ export function HistoryDrawer({
   if (!isOpen) return null;
 
   // Determine which items to show based on session filter
-  const baseItems = sessionFilter === "all" ? allItems : items;
+  const baseItems =
+    sessionFilter === "all"
+      ? allItems
+      : sessionFilter === "current"
+        ? items
+        : allItems.filter((item) => item.sessionId === sessionFilter);
 
   // Apply text search
   const filtered = search

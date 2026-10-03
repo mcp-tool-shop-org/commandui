@@ -89,6 +89,11 @@ import { waitForTerminalStatus } from "./workflowStepWait";
 
 const APP_VERSION = "1.0.2";
 const SESSION_BUSY_MESSAGE = "A command is already running in this session.";
+const SESSION_NOT_READY_MESSAGE =
+  "The terminal is not ready yet. Wait for the session to finish starting, or resync it.";
+/** Per-session replay buffer cap; xterm keeps its own scrollback. */
+const TERMINAL_REPLAY_MAX_LINES = 5000;
+const TERMINAL_REPLAY_TRUNCATED_MARKER = "[earlier output truncated]\r\n";
 
 type SessionBadgeStatus = "idle" | "running" | "success" | "failure";
 
@@ -180,9 +185,9 @@ export function AppShell() {
   } | null>(null);
 
   // Background buffer for session-switch replay
-  const [terminalLinesBySession, setTerminalLinesBySession] = useState<
-    Record<string, string[]>
-  >({});
+  // A ref (not state): appending must not re-render per PTY chunk. Capped per
+  // session; xterm keeps the real scrollback.
+  const terminalLinesBySessionRef = useRef<Record<string, string[]>>({});
   const executionToHistoryRef = useRef<Record<string, string>>({});
   const bootedRef = useRef(false);
   const settingsHydratedRef = useRef(false);
@@ -270,15 +275,28 @@ export function AppShell() {
     : historyItems;
 
   // --- Helpers ---
+  function clearTerminalView() {
+    const sid = activeSessionIdRef.current;
+    if (sid) delete terminalLinesBySessionRef.current[sid];
+    terminalPaneRef.current?.clear();
+  }
+
+  function sessionNotReady(sessionId: string): boolean {
+    const exec = useExecutionStore.getState().sessionExecStates[sessionId] ?? "booting";
+    return exec === "booting" || exec === "desynced";
+  }
+
   function appendTerminalLine(sessionId: string, line: string) {
     const clutter = useSettingsStore.getState().reducedClutter;
     if (clutter && (line.startsWith("[exec:") || line.startsWith("[active]"))) return;
 
     // Store in background buffer
-    setTerminalLinesBySession((prev) => ({
-      ...prev,
-      [sessionId]: [...(prev[sessionId] ?? []), line],
-    }));
+    const buffers = terminalLinesBySessionRef.current;
+    const buffer = buffers[sessionId] ?? (buffers[sessionId] = []);
+    buffer.push(line);
+    if (buffer.length > TERMINAL_REPLAY_MAX_LINES) {
+      buffer.splice(0, buffer.length - TERMINAL_REPLAY_MAX_LINES + 1, TERMINAL_REPLAY_TRUNCATED_MARKER);
+    }
 
     // Write to terminal if this is the active session
     if (sessionId === activeSessionIdRef.current) {
@@ -532,7 +550,7 @@ export function AppShell() {
     if (!pane) return;
 
     pane.clear();
-    const buffer = terminalLinesBySession[activeSessionId] ?? [];
+    const buffer = terminalLinesBySessionRef.current[activeSessionId] ?? [];
     for (const line of buffer) {
       pane.write(line);
     }
@@ -601,7 +619,7 @@ export function AppShell() {
     const defs: ShortcutDef[] = [
       { id: "palette",       combo: "ctrl+k",       context: ["global"], action: () => setPaletteOpen(true) },
       { id: "focus-composer", combo: "ctrl+j",       context: ["global"], action: focusComposer },
-      { id: "clear-terminal", combo: "ctrl+l",       context: ["global"], action: () => terminalPaneRef.current?.clear() },
+      { id: "clear-terminal", combo: "ctrl+l",       context: ["global"], action: clearTerminalView },
       { id: "new-session",   combo: "ctrl+t",        context: ["global"], action: handleCreateSession },
       { id: "history",       combo: "ctrl+h",        context: ["global"], action: () => setHistoryOpen((v) => !v) },
       { id: "workflows",     combo: "ctrl+shift+w",  context: ["global"], action: () => setWorkflowOpen((v) => !v) },
@@ -659,7 +677,7 @@ export function AppShell() {
     const actions: PaletteAction[] = [
       { id: "new-session",    label: "New Session",        shortcut: "Ctrl+T",       action: handleCreateSession },
       { id: "focus-composer",  label: "Focus Composer",    shortcut: "Ctrl+J",       action: focusComposer },
-      { id: "clear-terminal",  label: "Clear Terminal",    shortcut: "Ctrl+L",       action: () => terminalPaneRef.current?.clear() },
+      { id: "clear-terminal",  label: "Clear Terminal",    shortcut: "Ctrl+L",       action: clearTerminalView },
       { id: "open-history",    label: "Open History",      shortcut: "Ctrl+H",       action: () => setHistoryOpen(true) },
       { id: "open-workflows",  label: "Open Workflows",   shortcut: "Ctrl+Shift+W", action: () => setWorkflowOpen(true) },
       { id: "open-memory",     label: "Open Memory",      shortcut: "Ctrl+M",       action: () => setMemoryOpen(true) },
@@ -683,6 +701,14 @@ export function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessions, isRunning, activeExecState]);
 
+  // execute() rejected before any ExecutionFinished event: close the row out.
+  function failRejectedExecution(historyId: string, err: unknown) {
+    const finishedAt = new Date().toISOString();
+    updateHistoryItem(historyId, { status: "failure", finishedAt });
+    void historyUpdate({ historyId, status: "failure", finishedAt });
+    void err;
+  }
+
   // --- Submit handler ---
   async function handleSubmit(value: string) {
     if (!session) return;
@@ -692,6 +718,10 @@ export function AppShell() {
       return;
     }
     const sessionId = session.id;
+    if (inputMode === "command" && sessionNotReady(sessionId)) {
+      setError(SESSION_NOT_READY_MESSAGE);
+      return;
+    }
     lockSession(sessionId);
     setError(null);
 
@@ -726,6 +756,9 @@ export function AppShell() {
             command: value,
             source: "raw",
           });
+        } catch (err) {
+          failRejectedExecution(historyItem.id, err);
+          throw err;
         } finally {
           inFlightExecRef.current.delete(sessionId);
         }
@@ -790,6 +823,10 @@ export function AppShell() {
       setError(SESSION_BUSY_MESSAGE);
       return;
     }
+    if (sessionNotReady(session.id)) {
+      setError(SESSION_NOT_READY_MESSAGE);
+      return;
+    }
     const trimmed = approvedCommand.trim();
     const gate = planGateRef.current;
     // Same rule as PlanPanel's Run button. Shortcuts pass the edited command
@@ -816,19 +853,36 @@ export function AppShell() {
       inFlightExecRef.current.add(sessionId);
       const executionId = crypto.randomUUID();
 
+      // A plan opened from history has no live row (currentPlanHistoryId is
+      // null): the run gets a NEW row and the original outcome is untouched.
+      let runHistoryId: string;
+      let createdRunRow = false;
       if (currentPlanHistoryId) {
-        updateHistoryItem(currentPlanHistoryId, {
+        runHistoryId = currentPlanHistoryId;
+        updateHistoryItem(runHistoryId, { executedCommand: trimmed });
+        void historyUpdate({ historyId: runHistoryId, executedCommand: trimmed });
+      } else {
+        runHistoryId = executionId;
+        createdRunRow = true;
+        const newRow: HistoryItem = {
+          id: runHistoryId,
+          sessionId,
+          source: "semantic",
+          userInput: plan.plan.userIntent,
+          generatedCommand: plan.plan.command,
           executedCommand: trimmed,
-        });
-        executionToHistoryRef.current[executionId] = currentPlanHistoryId;
-
-        void historyUpdate({
-          historyId: currentPlanHistoryId,
-          executedCommand: trimmed,
-        });
+          linkedPlanId: plan.plan.id,
+          status: "planned",
+          createdAt: new Date().toISOString(),
+          cwd: session.cwd,
+        };
+        appendHistoryItem(newRow);
+        void historyAppend({ item: newRow });
       }
+      executionToHistoryRef.current[executionId] = runHistoryId;
 
-      // Check for edit-based memory suggestion
+      // Check for edit-based memory suggestion (persisted after execute accepts)
+      let pendingSuggestion: MemorySuggestion | null = null;
       if (
         trimmed !== plan.plan.command &&
         session.cwd
@@ -850,13 +904,11 @@ export function AppShell() {
             proposedKey: plan.plan.command,
             proposedValue: trimmed,
             confidence: 0.72,
-            derivedFromHistoryIds: currentPlanHistoryId
-              ? [currentPlanHistoryId]
-              : [],
+            derivedFromHistoryIds: [runHistoryId],
             status: "pending",
             createdAt: new Date().toISOString(),
           };
-          setMemorySuggestions((prev) => [suggestion, ...prev]);
+          pendingSuggestion = suggestion;
         }
       }
 
@@ -870,8 +922,30 @@ export function AppShell() {
           source: "semantic",
           linkedPlanId: plan.plan.id,
         });
+      } catch (err) {
+        if (createdRunRow) {
+          failRejectedExecution(runHistoryId, err);
+        } else {
+          // Row existed before the run: record the failure, drop the claim it ran.
+          const finishedAt = new Date().toISOString();
+          updateHistoryItem(runHistoryId, { status: "failure", executedCommand: undefined, finishedAt });
+          void historyUpdate({ historyId: runHistoryId, status: "failure", executedCommand: undefined, finishedAt });
+        }
+        throw err;
       } finally {
         inFlightExecRef.current.delete(sessionId);
+      }
+
+      if (pendingSuggestion) {
+        const toStore: MemorySuggestion = pendingSuggestion;
+        try {
+          await memoryStoreSuggestion({ suggestion: toStore });
+          setMemorySuggestions((prev) => [toStore, ...prev]);
+        } catch (storeErr) {
+          setError(
+            `Could not save the memory suggestion: ${storeErr instanceof Error ? storeErr.message : String(storeErr)}`,
+          );
+        }
       }
 
       setPlan(null);
@@ -978,6 +1052,7 @@ export function AppShell() {
     try {
       await closeSession({ sessionId });
       removeSession(sessionId);
+      delete terminalLinesBySessionRef.current[sessionId];
       clearSessionRunning(sessionId);
       inFlightExecRef.current.delete(sessionId);
       unlockSession(sessionId);
@@ -993,6 +1068,11 @@ export function AppShell() {
     if (!command) return;
     if (sessionIsRunning(session.id) || busySessionsRef.current.has(session.id)) {
       setError(SESSION_BUSY_MESSAGE);
+      return;
+    }
+
+    if (sessionNotReady(session.id)) {
+      setError(SESSION_NOT_READY_MESSAGE);
       return;
     }
 
@@ -1029,6 +1109,9 @@ export function AppShell() {
           source: item.source,
           linkedPlanId: item.linkedPlanId,
         });
+      } catch (err) {
+        failRejectedExecution(executionId, err);
+        throw err;
       } finally {
         inFlightExecRef.current.delete(sessionId);
       }
@@ -1074,7 +1157,8 @@ export function AppShell() {
       },
     });
     setPlanNonce((n) => n + 1);
-    setCurrentPlanHistoryId(item.id);
+    // Do NOT adopt the historical id: reject/approve must not rewrite that row.
+    setCurrentPlanHistoryId(null);
     setHistoryOpen(false);
   }
 
@@ -1138,6 +1222,10 @@ export function AppShell() {
     const runSessionId = session.id;
     if (sessionIsRunning(runSessionId) || busySessionsRef.current.has(runSessionId)) {
       setError(SESSION_BUSY_MESSAGE);
+      return;
+    }
+    if (sessionNotReady(runSessionId)) {
+      setError(SESSION_NOT_READY_MESSAGE);
       return;
     }
     lockSession(runSessionId);
@@ -1214,6 +1302,9 @@ export function AppShell() {
             command: cmd,
             source: historySource,
           });
+        } catch (err) {
+          failRejectedExecution(executionId, err);
+          throw err;
         } finally {
           inFlightExecRef.current.delete(runSessionId);
         }
@@ -1233,9 +1324,19 @@ export function AppShell() {
           if (latestRun) {
             writeRunSummary(runSessionId, { ...latestRun, finishedAt: Date.now() }, "failed");
           }
-          clearSessionRunning(runSessionId);
           if (waited.reason === "timeout") {
-            setError("Workflow step timed out before the terminal reported a result.");
+            // The command may still be running in the PTY. Stop it and leave the
+            // local running state to execution_finished instead of writing Ready.
+            try {
+              await interruptTerminal({ sessionId: runSessionId });
+            } catch {
+              // surfaced through the error below
+            }
+            setError(
+              "Workflow step timed out; the running command was interrupted. The session stays busy until the terminal reports it finished.",
+            );
+          } else {
+            clearSessionRunning(runSessionId);
           }
           return;
         }
@@ -1601,7 +1702,7 @@ export function AppShell() {
             busy={composerBusy}
             isRunning={isRunning}
             onInterrupt={handleInterrupt}
-            disabled={activeExecState !== "ready" && activeExecState !== "booting"}
+            disabled={activeExecState !== "ready"}
           />
         </section>
 
