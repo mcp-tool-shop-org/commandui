@@ -23,7 +23,8 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
             finished_at TEXT,
             duration_ms INTEGER,
             cwd TEXT,
-            planner_source TEXT
+            planner_source TEXT,
+            workflow_run_id TEXT
         );
 
         CREATE TABLE IF NOT EXISTS workflows (
@@ -84,6 +85,7 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
         "ALTER TABLE history_items ADD COLUMN duration_ms INTEGER",
         "ALTER TABLE history_items ADD COLUMN cwd TEXT",
         "ALTER TABLE history_items ADD COLUMN planner_source TEXT",
+        "ALTER TABLE history_items ADD COLUMN workflow_run_id TEXT",
         "ALTER TABLE workflows ADD COLUMN steps_json TEXT",
     ];
     for sql in migrations {
@@ -102,6 +104,7 @@ const REQUIRED_COLUMNS: &[(&str, &str)] = &[
     ("history_items", "duration_ms"),
     ("history_items", "cwd"),
     ("history_items", "planner_source"),
+    ("history_items", "workflow_run_id"),
     ("workflows", "steps_json"),
 ];
 
@@ -221,6 +224,7 @@ mod tests {
         require_column(&conn, "history_items", "duration_ms").unwrap();
         require_column(&conn, "history_items", "cwd").unwrap();
         require_column(&conn, "history_items", "planner_source").unwrap();
+        require_column(&conn, "history_items", "workflow_run_id").unwrap();
     }
 
     #[test]

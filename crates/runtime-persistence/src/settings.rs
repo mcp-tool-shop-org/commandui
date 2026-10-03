@@ -60,17 +60,20 @@ fn fill_defaults(settings: SettingsSnapshot) -> SettingsSnapshot {
 }
 
 pub fn get(conn: &Connection) -> Result<SettingsSnapshot, String> {
-    let result: Result<String, _> = conn.query_row(
+    let result: Result<String, rusqlite::Error> = conn.query_row(
         "SELECT value_json FROM settings WHERE key = 'app'",
         [],
         |row| row.get(0),
     );
 
+    // Only a missing row means "never saved". Any other read error (locked,
+    // busy, corrupt) must surface so update() cannot persist defaults over it.
     let settings = match result {
         Ok(json) => serde_json::from_str(&json)
             .map(fill_defaults)
             .unwrap_or_else(|_| default_settings()),
-        Err(_) => default_settings(),
+        Err(rusqlite::Error::QueryReturnedNoRows) => default_settings(),
+        Err(e) => return Err(format!("settings get: {e}")),
     };
 
     Ok(settings)
@@ -257,8 +260,39 @@ mod tests {
         assert_eq!(stored.font_size.as_deref(), Some("md"));
 
         let bare = Connection::open_in_memory().unwrap();
-        assert_eq!(get(&bare).unwrap().theme.as_deref(), Some("dark"));
+        let err = get(&bare).err().unwrap();
+        assert!(err.contains("settings get"), "{err}");
         let err = update(&bare, &default_settings()).unwrap_err();
-        assert!(err.contains("settings update"), "{err}");
+        assert!(err.contains("settings"), "{err}");
+    }
+
+    #[test]
+    fn a_read_error_is_not_treated_as_missing_and_leaves_the_row_alone() {
+        let conn = open();
+        conn.execute(
+            "INSERT INTO settings (key, value_json) VALUES ('app', ?1)",
+            [r#"{"theme":"light"}"#],
+        )
+        .unwrap();
+        // A non-text value makes query_row fail with a type error, not NoRows.
+        conn.execute(
+            "UPDATE settings SET value_json = ?1 WHERE key = 'app'",
+            [rusqlite::types::Value::Blob(vec![0xff])],
+        )
+        .unwrap();
+        assert!(get(&conn).is_err());
+        let patch = SettingsSnapshot {
+            font_size: Some("lg".to_string()),
+            ..default_settings()
+        };
+        assert!(update(&conn, &patch).is_err());
+        let blob: Vec<u8> = conn
+            .query_row(
+                "SELECT value_json FROM settings WHERE key = 'app'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(blob, vec![0xff]);
     }
 }

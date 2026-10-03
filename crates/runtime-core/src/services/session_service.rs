@@ -17,6 +17,12 @@ use crate::pty::{
 use crate::session::{SessionExecState, SessionRecord, SessionRegistry};
 use std::sync::{Arc, Mutex};
 
+/// Most bytes of an unfinished line the reader keeps for a session.
+const MAX_READ_BUFFER: usize = 1024 * 1024;
+/// Bytes kept from the end of an oversized line so a marker that follows can
+/// still be parsed.
+const READ_BUFFER_TAIL: usize = 4096;
+
 /// Summary of a session — returned by create/list operations.
 /// No Tauri types. Adapters map this to their own response shapes.
 #[derive(Clone, Debug)]
@@ -57,9 +63,15 @@ impl SessionService {
         let id = uuid::Uuid::new_v4().to_string();
         let label = request.label.unwrap_or_else(|| "Session".to_string());
         let shell = request.shell.unwrap_or_else(default_shell);
-        let cwd = request
-            .cwd
-            .unwrap_or_else(|| std::env::current_dir().unwrap().to_string_lossy().to_string());
+        // Resolve the default cwd before anything is spawned. current_dir()
+        // fails if the process directory was removed.
+        let cwd = match request.cwd {
+            Some(cwd) => cwd,
+            None => std::env::current_dir()
+                .map_err(|e| format!("Failed to resolve working directory: {e}"))?
+                .to_string_lossy()
+                .to_string(),
+        };
         let now = chrono::Utc::now().to_rfc3339();
         let nonce = new_marker_nonce();
         let Some(prompt_cmd) = bootstrap_prompt(&shell, &nonce) else {
@@ -192,7 +204,10 @@ impl SessionService {
                     record.read_buffer.push_str(text);
                     let exec_id = record.pending_execution_id.clone();
                     let nonce = record.marker_nonce.clone();
-                    let complete = drain_complete_lines(&mut record.read_buffer);
+                    let mut complete = drain_complete_lines(&mut record.read_buffer);
+                    if let Some(notice) = truncate_read_buffer(&mut record.read_buffer) {
+                        complete.push_str(&notice);
+                    }
                     (exec_id, complete, Some(nonce))
                 } else {
                     let mut scratch = text.to_string();
@@ -242,6 +257,10 @@ impl SessionService {
                 display_text.push_str(line);
                 continue;
             };
+
+            // The marker is written after a newline of its own, which shows
+            // up as a blank line right before it. Hide that one line.
+            drop_trailing_blank_line(&mut display_text);
 
             sink.emit(RuntimeEvent::SessionCwdChanged(SessionCwdChangedEvent {
                 session_id: session_id.to_string(),
@@ -321,24 +340,87 @@ fn persist_bootstrap(
 /// Marker|nonce|cwd|exit. The nonce must match this session.
 /// A missing exit code is not a prompt, and it is not treated as 0.
 /// A literal ~ cwd is not stored.
+///
+/// The exit code is the last `|` field and the nonce is the second, so the cwd
+/// in between may itself contain `|`. `%25`, `%0D` and `%0A` in the cwd are
+/// decoded (the shells escape `%`, CR and LF). Text before the last carriage
+/// return is a redraw that the terminal overwrote, so it is ignored.
+///
+/// This does not authenticate the sender: any command running in the session
+/// can read the nonce from shell state and print a matching line.
 fn parse_prompt_line(line: &str, nonce: &str) -> Option<ParsedPrompt> {
     let trimmed = line.trim();
-    if !trimmed.starts_with(PROMPT_MARKER) {
+    let visible = trimmed.rsplit('\r').next().unwrap_or(trimmed).trim_start();
+    if !visible.starts_with(PROMPT_MARKER) {
         return None;
     }
-    let parts: Vec<&str> = trimmed.split('|').collect();
-    if parts.len() != 4 || parts[0] != PROMPT_MARKER || parts[1] != nonce {
+    let (head, exit) = visible.rsplit_once('|')?;
+    let rest = head.strip_prefix(PROMPT_MARKER)?.strip_prefix('|')?;
+    let (line_nonce, raw_cwd) = rest.split_once('|')?;
+    if line_nonce != nonce {
         return None;
     }
-    let cwd = parts[2].trim();
+    let cwd = unescape_cwd(raw_cwd.trim());
     if cwd.is_empty() || cwd == "~" || cwd.starts_with("~/") || cwd.starts_with("~\\") {
         return None;
     }
-    let exit_code = parts[3].trim().parse::<i32>().ok()?;
-    Some(ParsedPrompt {
-        cwd: cwd.to_string(),
-        exit_code,
-    })
+    let exit_code = exit.trim().parse::<i32>().ok()?;
+    Some(ParsedPrompt { cwd, exit_code })
+}
+
+/// Undo the shells' cwd escaping: `%25` -> `%`, `%0D` -> CR, `%0A` -> LF.
+/// Any other `%` is kept as written.
+fn unescape_cwd(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut rest = raw;
+    while let Some(pos) = rest.find('%') {
+        out.push_str(&rest[..pos]);
+        let tail = &rest[pos..];
+        let decoded = [("%25", '%'), ("%0D", '\r'), ("%0A", '\n')]
+            .iter()
+            .find(|(code, _)| tail.starts_with(code));
+        match decoded {
+            Some((code, ch)) => {
+                out.push(*ch);
+                rest = &tail[code.len()..];
+            }
+            None => {
+                out.push('%');
+                rest = &tail[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Bound the unfinished-line buffer. When it exceeds MAX_READ_BUFFER only a
+/// short tail is kept, and a visible notice line is returned so the cut is
+/// not silent.
+fn truncate_read_buffer(buffer: &mut String) -> Option<String> {
+    if buffer.len() <= MAX_READ_BUFFER {
+        return None;
+    }
+    let mut cut = buffer.len() - READ_BUFFER_TAIL;
+    while !buffer.is_char_boundary(cut) {
+        cut += 1;
+    }
+    buffer.drain(..cut);
+    Some(format!(
+        "[commandui: line too long, {cut} bytes of output dropped]\n"
+    ))
+}
+
+/// Remove one whitespace-only last line from `text`.
+fn drop_trailing_blank_line(text: &mut String) {
+    let body_end = text.trim_end_matches(['\r', '\n']).len();
+    if body_end == text.len() {
+        return;
+    }
+    let line_start = text[..body_end].rfind('\n').map(|i| i + 1).unwrap_or(0);
+    if text[line_start..body_end].trim().is_empty() {
+        text.truncate(line_start);
+    }
 }
 
 fn drain_complete_lines(buffer: &mut String) -> String {
@@ -636,6 +718,138 @@ mod tests {
         assert!(record.boot_prompt_received);
         assert_eq!(record.cwd, "/home/user");
         assert!(record.read_buffer.is_empty());
+    }
+
+    fn finished_statuses(sink: &CollectingSink) -> Vec<(String, i32)> {
+        sink.events()
+            .iter()
+            .filter_map(|e| match e {
+                RuntimeEvent::ExecutionFinished(f) => Some((f.status.clone(), f.exit_code)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn marker_glued_to_unterminated_output_still_finishes() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Running,
+            true,
+            Some("exec-1".to_string()),
+        );
+
+        // printf hello (no newline), then the prompt writes its own newline first.
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", "hello");
+        let marker = format!("\n{}|test-nonce|/tmp|0\n", PROMPT_MARKER);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
+        assert_eq!(finished_statuses(&sink), vec![("success".to_string(), 0)]);
+        let reg = sessions.lock().unwrap();
+        assert_eq!(reg.get("s1").unwrap().exec_state, SessionExecState::Ready);
+        assert!(reg.get("s1").unwrap().pending_execution_id.is_none());
+        drop(reg);
+        let shown: String = sink
+            .events()
+            .iter()
+            .filter_map(|e| match e {
+                RuntimeEvent::TerminalLine(t) => Some(t.text.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(shown, "hello\n");
+    }
+
+    #[test]
+    fn carriage_return_redraw_before_marker_still_finishes() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Running,
+            true,
+            Some("exec-1".to_string()),
+        );
+        let chunk = format!("progress 50%\r{}|test-nonce|/tmp|3\r\n", PROMPT_MARKER);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &chunk);
+        assert_eq!(finished_statuses(&sink), vec![("failure".to_string(), 3)]);
+    }
+
+    #[test]
+    fn cwd_with_pipe_or_escaped_newline_is_parsed() {
+        let parsed = parse_prompt_line(
+            &format!("{PROMPT_MARKER}|test-nonce|/work/a|b|c|7\n"),
+            "test-nonce",
+        )
+        .unwrap();
+        assert_eq!(parsed.cwd, "/work/a|b|c");
+        assert_eq!(parsed.exit_code, 7);
+
+        let parsed = parse_prompt_line(
+            &format!("{PROMPT_MARKER}|test-nonce|/work/x%0Ay%250A50%25|0\n"),
+            "test-nonce",
+        )
+        .unwrap();
+        assert_eq!(parsed.cwd, "/work/x\ny%0A50%");
+
+        assert!(parse_prompt_line(
+            &format!("{PROMPT_MARKER}|other-nonce|/work/a|b|0\n"),
+            "test-nonce"
+        )
+        .is_none());
+
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Running,
+            true,
+            Some("exec-1".to_string()),
+        );
+        let chunk = format!("{PROMPT_MARKER}|test-nonce|/tmp/a|b|0\n");
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &chunk);
+        assert_eq!(finished_statuses(&sink).len(), 1);
+        assert_eq!(sessions.lock().unwrap().get("s1").unwrap().cwd, "/tmp/a|b");
+    }
+
+    #[test]
+    fn reading_the_shell_prompt_state_is_not_a_secret_but_is_documented() {
+        // The nonce appears in the bootstrap text, so a command that echoes it
+        // can forge a marker. This pins that the parser accepts such a line, so
+        // nobody assumes the nonce is a security boundary.
+        let bootstrap = bootstrap_prompt("bash", "test-nonce").unwrap();
+        assert!(bootstrap.contains("test-nonce"));
+        let forged = format!("{PROMPT_MARKER}|test-nonce|/chosen|0\n");
+        assert!(parse_prompt_line(&forged, "test-nonce").is_some());
+    }
+
+    #[test]
+    fn unterminated_output_is_bounded_with_a_visible_notice() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(&sessions, "s1", SessionExecState::Running, true, Some("e".to_string()));
+        let big = "a".repeat(MAX_READ_BUFFER + 10);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &big);
+        {
+            let reg = sessions.lock().unwrap();
+            assert!(reg.get("s1").unwrap().read_buffer.len() <= READ_BUFFER_TAIL);
+        }
+        assert!(sink.events().iter().any(|e| matches!(
+            e,
+            RuntimeEvent::TerminalLine(t) if t.text.contains("dropped")
+        )));
+        // A marker after the oversized line is still recognised.
+        let marker = format!("\n{}|test-nonce|/tmp|0\n", PROMPT_MARKER);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
+        assert_eq!(finished_statuses(&sink), vec![("success".to_string(), 0)]);
     }
 
     #[test]

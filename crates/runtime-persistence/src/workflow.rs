@@ -41,17 +41,23 @@ pub fn list(conn: &Connection) -> Result<Vec<Workflow>, String> {
             })
         })
         .map_err(|e| format!("workflow list: {e}"))?;
-    let workflows = rows.filter_map(|r| r.ok()).collect();
+    let workflows = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("workflow list: {e}"))?;
 
     Ok(workflows)
 }
 
 pub fn delete(conn: &Connection, id: &str) -> Result<(), String> {
-    conn.execute(
+    let changed = conn
+        .execute(
         "DELETE FROM workflows WHERE id = ?1",
         rusqlite::params![id],
     )
     .map_err(|e| format!("workflow delete: {e}"))?;
+    if changed == 0 {
+        return Err(format!("workflow delete: no workflow with id {id}"));
+    }
     Ok(())
 }
 
@@ -94,14 +100,14 @@ mod tests {
         assert!(listed[1].project_root.is_none());
 
         delete(&conn, "w2").unwrap();
-        delete(&conn, "missing").unwrap();
+        expect_err(delete(&conn, "missing"), "no workflow");
         let listed = list(&conn).unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, "w1");
     }
 
     #[test]
-    fn a_row_that_cannot_map_is_skipped() {
+    fn a_row_that_cannot_map_is_an_error() {
         let conn = Connection::open_in_memory().unwrap();
         init_schema(&conn).unwrap();
         add(&conn, &sample("good", "2026-01-01T00:00:00Z")).unwrap();
@@ -111,9 +117,7 @@ mod tests {
             [rusqlite::types::Value::Blob(vec![0xff])],
         )
         .unwrap();
-        let listed = list(&conn).unwrap();
-        assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].id, "good");
+        expect_err(list(&conn), "workflow list");
     }
 
     fn expect_err<T>(result: Result<T, String>, needle: &str) {

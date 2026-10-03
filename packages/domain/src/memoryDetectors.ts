@@ -22,6 +22,14 @@ export function normalizeCommand(cmd: string): { family: string; full: string } 
 
 // --- Helpers ---
 
+// The persistence primary key is this id, so it must differ across scopes and
+// project roots: a global suggestion for a value must not shadow the same
+// value proposed for a project (or the reverse).
+function suggestionId(prefix: string, value: string, input: DetectorInput): string {
+  const scope = input.projectRoot ? `project:${input.projectRoot}` : "global";
+  return `${prefix}-${scope}-${value}`;
+}
+
 function isDismissedOrExists(
   kind: MemorySuggestionKind,
   proposedValue: string,
@@ -100,7 +108,7 @@ export function detectPreferredCwd(input: DetectorInput): MemorySuggestion[] {
     if (isDismissedOrExists("preferred_cwd", cwd, input)) continue;
 
     results.push({
-      id: `cwd-${cwd}`,
+      id: suggestionId("cwd", cwd, input),
       scope: input.projectRoot ? "project" : "global",
       projectRoot: input.projectRoot,
       kind: "preferred_cwd",
@@ -159,7 +167,7 @@ export function detectRecurringCommands(
         : "";
 
     results.push({
-      id: `cmd-${family}`,
+      id: suggestionId("cmd", family, input),
       scope: input.projectRoot ? "project" : "global",
       projectRoot: input.projectRoot,
       kind: "recurring_command",
@@ -256,7 +264,7 @@ export function detectWorkflowPatterns(
     if (isDismissedOrExists("workflow_pattern", value, input)) continue;
 
     results.push({
-      id: `seq-${triple}`,
+      id: suggestionId("seq", triple, input),
       scope: input.projectRoot ? "project" : "global",
       projectRoot: input.projectRoot,
       kind: "workflow_pattern",
@@ -285,7 +293,7 @@ export function detectWorkflowPatterns(
     if (isDismissedOrExists("workflow_pattern", value, input)) continue;
 
     results.push({
-      id: `seq-${pair}`,
+      id: suggestionId("seq", pair, input),
       scope: input.projectRoot ? "project" : "global",
       projectRoot: input.projectRoot,
       kind: "workflow_pattern",

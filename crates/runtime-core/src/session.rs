@@ -34,7 +34,10 @@ pub struct SessionRecord {
     pub pty_pair: PtyPair,
     pub writer: PtyHandle,
     pub pending_execution_id: Option<String>,
-    /// Secret the shell prompt echoes. Command output cannot know it.
+    /// Per-session token the shell prompt echoes. It filters stale or unrelated
+    /// output, but it is readable shell state (PROMPT_COMMAND, the prompt
+    /// function, the echoed cmd line), so a command running in the session can
+    /// still forge a completion marker. It is not a security boundary.
     pub marker_nonce: String,
     pub exec_state: SessionExecState,
     pub boot_prompt_received: bool,
@@ -72,8 +75,12 @@ impl SessionRegistry {
         self.sessions.remove(session_id)
     }
 
+    /// Sessions in a stable order: oldest first, id as the tie-break. HashMap
+    /// iteration order changes between processes and rebuilds.
     pub fn list(&self) -> Vec<&SessionRecord> {
-        self.sessions.values().collect()
+        let mut records: Vec<&SessionRecord> = self.sessions.values().collect();
+        records.sort_by(|a, b| a.created_at.cmp(&b.created_at).then_with(|| a.id.cmp(&b.id)));
+        records
     }
 
     pub fn resize(&mut self, session_id: &str, cols: u16, rows: u16) -> Result<(), String> {
@@ -214,6 +221,23 @@ mod tests {
         assert_eq!(removed.id, "s1");
         assert!(registry.get("s1").is_none());
         assert!(registry.remove("s1").is_none());
+    }
+
+    #[test]
+    fn list_is_ordered_by_created_at_then_id() {
+        let mut registry = SessionRegistry::new();
+        for (id, created) in [
+            ("s-c", "2026-01-01T00:00:03Z"),
+            ("s-b", "2026-01-01T00:00:01Z"),
+            ("s-z", "2026-01-01T00:00:02Z"),
+            ("s-a", "2026-01-01T00:00:02Z"),
+        ] {
+            let mut rec = record(id);
+            rec.created_at = created.into();
+            registry.insert(rec);
+        }
+        let ids: Vec<&str> = registry.list().iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["s-b", "s-a", "s-z", "s-c"]);
     }
 
     #[test]

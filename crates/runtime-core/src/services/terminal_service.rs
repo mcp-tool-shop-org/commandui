@@ -93,20 +93,50 @@ impl TerminalService {
         ));
 
         if let Err(write_err) = write_raw(&writer, &line) {
-            let found = {
+            // Roll back only while this execution still owns the record. A
+            // partial write can let the reader finish this id before the flush
+            // fails, and a newer execute may already hold the session.
+            enum Rollback {
+                Done,
+                NotOurs,
+                Missing,
+            }
+            let outcome = {
                 let mut registry = self.sessions.lock().map_err(|e| e.to_string())?;
-                if let Some(record) = registry.get_mut(&request.session_id) {
-                    record.exec_state = SessionExecState::Ready;
-                    record.pending_execution_id = None;
-                    record.command_sent_at = None;
-                    true
-                } else {
-                    false
+                match registry.get_mut(&request.session_id) {
+                    Some(record)
+                        if record.pending_execution_id.as_deref()
+                            == Some(request.execution_id.as_str())
+                            && record.exec_state == SessionExecState::Running =>
+                    {
+                        record.exec_state = SessionExecState::Ready;
+                        record.pending_execution_id = None;
+                        record.command_sent_at = None;
+                        Rollback::Done
+                    }
+                    Some(_) => Rollback::NotOurs,
+                    None => Rollback::Missing,
                 }
             };
-            self.emit_execution_finished(&request.session_id, &request.execution_id, "failure", 1);
-            if !found {
-                return Err(format!("Session not found: {}", request.session_id));
+            match outcome {
+                Rollback::Done => {
+                    self.emit_execution_finished(
+                        &request.session_id,
+                        &request.execution_id,
+                        "failure",
+                        1,
+                    );
+                }
+                Rollback::NotOurs => {}
+                Rollback::Missing => {
+                    self.emit_execution_finished(
+                        &request.session_id,
+                        &request.execution_id,
+                        "failure",
+                        1,
+                    );
+                    return Err(format!("Session not found: {}", request.session_id));
+                }
             }
             return Err(write_err);
         }
@@ -166,27 +196,48 @@ impl TerminalService {
     }
 
     pub fn resync(&self, session_id: &str) -> Result<(), String> {
-        let (writer, pending, probe) = {
-            let mut registry = self.sessions.lock().map_err(|e| e.to_string())?;
+        let (writer, seen_pending, seen_state, probe) = {
+            let registry = self.sessions.lock().map_err(|e| e.to_string())?;
 
+            let record = registry
+                .get(session_id)
+                .ok_or_else(|| format!("Session not found: {session_id}"))?;
+
+            (
+                record.writer.clone(),
+                record.pending_execution_id.clone(),
+                record.exec_state.clone(),
+                resync_input(&record.shell, &record.marker_nonce),
+            )
+        };
+
+        // Write the probe first. If it fails nothing was sent, so the session
+        // and its in-flight command are left exactly as they were.
+        write_raw(&writer, &probe)?;
+
+        // Only move to Booting if the reader has not already answered the
+        // probe (or finished the command) while the lock was dropped.
+        let transition = {
+            let mut registry = self.sessions.lock().map_err(|e| e.to_string())?;
             let record = registry
                 .get_mut(session_id)
                 .ok_or_else(|| format!("Session not found: {session_id}"))?;
-
-            let pending = record.pending_execution_id.take();
-            let probe = resync_input(&record.shell, &record.marker_nonce);
-            record.exec_state = SessionExecState::Booting;
-            record.command_sent_at = None;
-            (record.writer.clone(), pending, probe)
+            if record.pending_execution_id == seen_pending && record.exec_state == seen_state {
+                let pending = record.pending_execution_id.take();
+                record.exec_state = SessionExecState::Booting;
+                record.command_sent_at = None;
+                Some(pending)
+            } else {
+                None
+            }
         };
 
-        if let Some(exec_id) = pending {
-            self.emit_execution_finished(session_id, &exec_id, "interrupted", 130);
+        if let Some(pending) = transition {
+            if let Some(exec_id) = pending {
+                self.emit_execution_finished(session_id, &exec_id, "interrupted", 130);
+            }
+            self.emit_exec_state(session_id, &SessionExecState::Booting);
         }
-
-        self.emit_exec_state(session_id, &SessionExecState::Booting);
-
-        write_raw(&writer, &probe)?;
         eprintln!("[terminal] resync initiated for session {}", session_id);
 
         Ok(())
@@ -417,6 +468,53 @@ mod tests {
     }
 
     #[test]
+    fn test_execute_write_failure_after_reader_finished_emits_no_second_finish() {
+        struct FinishThenFail {
+            sessions: Arc<Mutex<SessionRegistry>>,
+            sink: Arc<CollectingSink>,
+        }
+        impl std::io::Write for FinishThenFail {
+            fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+                // The reader finished e1 and a newer execute (e2) took over.
+                let mut reg = self.sessions.lock().unwrap();
+                let record = reg.get_mut("s1").unwrap();
+                record.pending_execution_id = Some("e2".to_string());
+                record.exec_state = SessionExecState::Running;
+                self.sink.emit(RuntimeEvent::ExecutionFinished(ExecutionFinishedEvent {
+                    execution_id: "e1".to_string(),
+                    session_id: "s1".to_string(),
+                    exit_code: 0,
+                    finished_at: "t".to_string(),
+                    status: "success".to_string(),
+                }));
+                Err(std::io::Error::other("flush failed"))
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let writer = Arc::new(Mutex::new(Box::new(FinishThenFail {
+            sessions: sessions.clone(),
+            sink: sink.clone(),
+        }) as Box<dyn std::io::Write + Send>));
+        insert_ready(&sessions, "s1", writer);
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+        assert!(svc.execute(exec_request("e1")).is_err());
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.pending_execution_id.as_deref(), Some("e2"));
+        assert_eq!(record.exec_state, SessionExecState::Running);
+        let finishes = sink
+            .events()
+            .iter()
+            .filter(|e| matches!(e, RuntimeEvent::ExecutionFinished(_)))
+            .count();
+        assert_eq!(finishes, 1);
+    }
+
+    #[test]
     fn test_execute_missing_session_after_write_is_err() {
         let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
         let sink = Arc::new(CollectingSink::new());
@@ -533,8 +631,8 @@ mod tests {
         .unwrap();
         let bytes = captured.lock().unwrap();
         let text = String::from_utf8_lossy(&bytes);
-        assert!(text.starts_with("dir & echo "));
-        assert!(text.contains("!ERRORLEVEL!"));
+        assert!(text.starts_with("dir & call set __cui_ec=%^ERRORLEVEL% & "));
+        assert!(text.contains("!__cui_ec!"));
         assert!(text.contains("test-nonce"));
         assert!(!text.contains('~'));
     }
@@ -643,7 +741,7 @@ mod tests {
     }
 
     #[test]
-    fn resync_write_failure_still_finishes_pending() {
+    fn resync_write_failure_leaves_the_session_untouched() {
         let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
         let sink = Arc::new(CollectingSink::new());
         {
@@ -668,11 +766,15 @@ mod tests {
         }
         let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
         assert!(svc.resync("s1").is_err());
-        assert!(sessions.lock().unwrap().get("s1").unwrap().pending_execution_id.is_none());
-        assert!(sink.events().iter().any(|e| matches!(
+        {
+            let reg = sessions.lock().unwrap();
+            let record = reg.get("s1").unwrap();
+            assert_eq!(record.pending_execution_id.as_deref(), Some("e9"));
+            assert_eq!(record.exec_state, SessionExecState::Running);
+        }
+        assert!(sink.events().iter().all(|e| !matches!(
             e,
-            RuntimeEvent::ExecutionFinished(fin)
-                if fin.execution_id == "e9" && fin.status == "interrupted"
+            RuntimeEvent::ExecutionFinished(_) | RuntimeEvent::SessionExecStateChanged(_)
         )));
     }
 

@@ -19,6 +19,7 @@ pub struct HistoryItem {
     pub duration_ms: Option<i64>,
     pub cwd: Option<String>,
     pub planner_source: Option<String>,
+    pub workflow_run_id: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -35,12 +36,13 @@ pub struct PlanRow {
 
 pub fn append(conn: &Connection, item: &HistoryItem) -> Result<(), String> {
     conn.execute(
-        "INSERT OR REPLACE INTO history_items (id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at, finished_at, duration_ms, cwd, planner_source) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+        "INSERT OR REPLACE INTO history_items (id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at, finished_at, duration_ms, cwd, planner_source, workflow_run_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         rusqlite::params![
             item.id, item.session_id, item.source, item.user_input,
             item.generated_command, item.executed_command, item.linked_plan_id,
             item.planner_request_id, item.status, item.exit_code, item.created_at,
             item.finished_at, item.duration_ms, item.cwd, item.planner_source,
+            item.workflow_run_id,
         ],
     ).map_err(|e| format!("history append: {e}"))?;
     Ok(())
@@ -54,25 +56,27 @@ pub fn list(
     let items = if let Some(sid) = session_id {
         let mut stmt = conn
             .prepare(
-                "SELECT id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at, finished_at, duration_ms, cwd, planner_source FROM history_items WHERE session_id = ?1 ORDER BY created_at DESC LIMIT ?2",
+                "SELECT id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at, finished_at, duration_ms, cwd, planner_source, workflow_run_id FROM history_items WHERE session_id = ?1 ORDER BY created_at DESC LIMIT ?2",
             )
             .map_err(|e| format!("history list: {e}"))?;
 
         let rows = stmt
             .query_map(rusqlite::params![sid, limit], map_row)
             .map_err(|e| format!("history list: {e}"))?;
-        rows.filter_map(|r| r.ok()).collect()
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("history list: {e}"))?
     } else {
         let mut stmt = conn
             .prepare(
-                "SELECT id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at, finished_at, duration_ms, cwd, planner_source FROM history_items ORDER BY created_at DESC LIMIT ?1",
+                "SELECT id, session_id, source, user_input, generated_command, executed_command, linked_plan_id, planner_request_id, status, exit_code, created_at, finished_at, duration_ms, cwd, planner_source, workflow_run_id FROM history_items ORDER BY created_at DESC LIMIT ?1",
             )
             .map_err(|e| format!("history list: {e}"))?;
 
         let rows = stmt
             .query_map(rusqlite::params![limit], map_row)
             .map_err(|e| format!("history list: {e}"))?;
-        rows.filter_map(|r| r.ok()).collect()
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("history list: {e}"))?
     };
 
     Ok(items)
@@ -87,11 +91,14 @@ pub fn update(
     finished_at: Option<&str>,
     duration_ms: Option<i64>,
 ) -> Result<(), String> {
-    conn.execute(
+    let changed = conn.execute(
         "UPDATE history_items SET status = COALESCE(?1, status), exit_code = COALESCE(?2, exit_code), executed_command = COALESCE(?3, executed_command), finished_at = COALESCE(?4, finished_at), duration_ms = COALESCE(?5, duration_ms) WHERE id = ?6",
         rusqlite::params![status, exit_code, executed_command, finished_at, duration_ms, history_id],
     )
     .map_err(|e| format!("history update: {e}"))?;
+    if changed == 0 {
+        return Err(format!("history update: no history item with id {history_id}"));
+    }
     Ok(())
 }
 
@@ -120,6 +127,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<HistoryItem> {
         duration_ms: row.get(12)?,
         cwd: row.get(13)?,
         planner_source: row.get(14)?,
+        workflow_run_id: row.get(15)?,
     })
 }
 
@@ -152,6 +160,7 @@ mod tests {
             duration_ms: None,
             cwd: Some("/work".into()),
             planner_source: Some("mock".into()),
+            workflow_run_id: Some("run-1".into()),
         }
     }
 
@@ -174,6 +183,7 @@ mod tests {
         assert_eq!(all[1].id, "h2");
         assert_eq!(all[0].cwd.as_deref(), Some("/work"));
         assert_eq!(all[0].planner_source.as_deref(), Some("mock"));
+        assert_eq!(all[0].workflow_run_id.as_deref(), Some("run-1"));
 
         let session = list(&conn, Some("s1"), 10).unwrap();
         assert_eq!(session.len(), 2);
@@ -215,7 +225,10 @@ mod tests {
         assert_eq!(done.finished_at.as_deref(), Some("2026-01-02T00:00:01Z"));
         assert_eq!(done.duration_ms, Some(12));
 
-        update(&conn, "missing", Some("done"), Some(1), None, None, None).unwrap();
+        expect_err(
+            update(&conn, "missing", Some("done"), Some(1), None, None, None),
+            "no history item",
+        );
 
         let plan = PlanRow {
             id: "plan-1".into(),
@@ -244,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn a_row_that_cannot_map_is_skipped() {
+    fn a_row_that_cannot_map_is_an_error() {
         let conn = open();
         append(&conn, &item("good", "s1", "2026-01-01T00:00:00Z")).unwrap();
         append(&conn, &item("bad", "s1", "2026-01-01T00:00:01Z")).unwrap();
@@ -253,9 +266,8 @@ mod tests {
             [rusqlite::types::Value::Blob(vec![0xff])],
         )
         .unwrap();
-        let items = list(&conn, None, 10).unwrap();
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].id, "good");
+        expect_err(list(&conn, None, 10), "history list");
+        expect_err(list(&conn, Some("s1"), 10), "history list");
     }
 
     fn expect_err<T>(result: Result<T, String>, needle: &str) {

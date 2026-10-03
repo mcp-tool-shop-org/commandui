@@ -246,8 +246,11 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   setWorkflows: (items) => set({ items }),
   addWorkflow: (workflow) =>
     set((state) =>
+      // Upsert by id: a second save of the same workflow is an edit.
       state.items.some((w) => w.id === workflow.id)
-        ? state
+        ? {
+            items: state.items.map((w) => (w.id === workflow.id ? workflow : w)),
+          }
         : { items: [workflow, ...state.items] },
     ),
   removeWorkflow: (id) =>

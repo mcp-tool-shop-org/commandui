@@ -93,12 +93,36 @@ pub(crate) fn command_floor(command: &str) -> CommandFloor {
         destructive: false,
         escalates_privileges: false,
     };
-    for token in command_tokens(command) {
-        let base = token_base(&token);
-        if matches!(base, "rm" | "del" | "remove-item" | "mkfs") || base.starts_with("mkfs.") {
+    let tokens = command_tokens(command);
+    let has_after = |start: usize, wanted: &str| tokens[start + 1..].iter().any(|t| t == wanted);
+    for (i, token) in tokens.iter().enumerate() {
+        let base = token_base(token);
+        if matches!(
+            base,
+            "rm" | "del"
+                | "erase"
+                | "remove-item"
+                | "mkfs"
+                | "format"
+                | "format-volume"
+                | "clear-disk"
+                | "dd"
+                | "diskpart"
+                | "shred"
+                | "rmdir"
+                | "rd"
+        ) || base.starts_with("mkfs.")
+        {
             floor.destructive = true;
         }
-        if base == "sudo" {
+        if base == "find" && has_after(i, "-delete") {
+            floor.destructive = true;
+        }
+        if base == "git" && (has_after(i, "clean") || (has_after(i, "reset") && has_after(i, "--hard")))
+        {
+            floor.destructive = true;
+        }
+        if matches!(base, "sudo" | "doas" | "pkexec" | "gsudo" | "runas") {
             floor.escalates_privileges = true;
         }
     }
@@ -296,6 +320,44 @@ mod tests {
         del.risk = "low".to_string();
         accept_llm_plan(&mut del).unwrap();
         assert!(del.destructive);
+    }
+
+    #[test]
+    fn command_text_floor_covers_wipe_and_privilege_commands() {
+        for command in [
+            "format E:",
+            "Format-Volume -DriveLetter E",
+            "dd if=/dev/zero of=/dev/sda",
+            "diskpart",
+            "shred -u secrets.txt",
+            "rmdir /s /q build",
+            "rd /s build",
+            "Clear-Disk -Number 1",
+            "find . -delete",
+            "git clean -fdx",
+            "git reset --hard HEAD~1",
+            "echo ok
+format E:",
+        ] {
+            let mut p = valid_plan();
+            p.command = command.to_string();
+            accept_llm_plan(&mut p).unwrap();
+            assert!(p.destructive, "{command}");
+            assert_eq!(p.risk, "high", "{command}");
+            assert!(p.requires_approval, "{command}");
+        }
+        for command in ["doas ls", "pkexec ls", "gsudo ls", "runas /user:admin cmd"] {
+            let mut p = valid_plan();
+            p.command = command.to_string();
+            accept_llm_plan(&mut p).unwrap();
+            assert!(p.escalates_privileges, "{command}");
+            assert_eq!(p.risk, "high", "{command}");
+            assert!(p.requires_approval, "{command}");
+        }
+        let mut status = valid_plan();
+        status.command = "git status".to_string();
+        accept_llm_plan(&mut status).unwrap();
+        assert!(!status.destructive);
     }
 
     #[test]

@@ -53,7 +53,8 @@ pub fn list_items(conn: &Connection) -> Result<Vec<MemoryItem>, String> {
             })
         })
         .map_err(|e| format!("memory list: {e}"))?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("memory list: {e}"))
 }
 
 pub fn list_pending_suggestions(conn: &Connection) -> Result<Vec<MemorySuggestion>, String> {
@@ -81,7 +82,8 @@ pub fn list_pending_suggestions(conn: &Connection) -> Result<Vec<MemorySuggestio
             })
         })
         .map_err(|e| format!("memory suggestions: {e}"))?;
-    Ok(rows.filter_map(|r| r.ok()).collect())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("memory suggestions: {e}"))
 }
 
 pub fn add_item(conn: &Connection, item: &MemoryItem) -> Result<(), String> {
@@ -134,34 +136,50 @@ pub fn accept_suggestion(conn: &Connection, suggestion_id: &str) -> Result<Memor
         updated_at: now,
     };
 
-    // Insert memory item
-    add_item(conn, &created_item)?;
-
-    // Update suggestion status
-    conn.execute(
-        "UPDATE memory_suggestions SET status = 'accepted' WHERE id = ?1",
-        rusqlite::params![suggestion_id],
-    )
-    .map_err(|e| format!("accept suggestion: {e}"))?;
+    // Claim the suggestion and insert the item atomically, so a second accept
+    // (or a retry after a partial failure) cannot create a duplicate item.
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| format!("accept suggestion: {e}"))?;
+    let changed = tx
+        .execute(
+            "UPDATE memory_suggestions SET status = 'accepted' WHERE id = ?1 AND status = 'pending'",
+            rusqlite::params![suggestion_id],
+        )
+        .map_err(|e| format!("accept suggestion: {e}"))?;
+    if changed == 0 {
+        return Err(format!("suggestion not pending: {suggestion_id}"));
+    }
+    add_item(&tx, &created_item)?;
+    tx.commit()
+        .map_err(|e| format!("accept suggestion: {e}"))?;
 
     Ok(created_item)
 }
 
 pub fn dismiss_suggestion(conn: &Connection, suggestion_id: &str) -> Result<(), String> {
-    conn.execute(
-        "UPDATE memory_suggestions SET status = 'dismissed' WHERE id = ?1",
-        rusqlite::params![suggestion_id],
-    )
-    .map_err(|e| format!("dismiss suggestion: {e}"))?;
+    let changed = conn
+        .execute(
+            "UPDATE memory_suggestions SET status = 'dismissed' WHERE id = ?1",
+            rusqlite::params![suggestion_id],
+        )
+        .map_err(|e| format!("dismiss suggestion: {e}"))?;
+    if changed == 0 {
+        return Err(format!("dismiss suggestion: no suggestion with id {suggestion_id}"));
+    }
     Ok(())
 }
 
 pub fn delete_item(conn: &Connection, memory_id: &str) -> Result<(), String> {
-    conn.execute(
-        "DELETE FROM memory_items WHERE id = ?1",
-        rusqlite::params![memory_id],
-    )
-    .map_err(|e| format!("memory delete: {e}"))?;
+    let changed = conn
+        .execute(
+            "DELETE FROM memory_items WHERE id = ?1",
+            rusqlite::params![memory_id],
+        )
+        .map_err(|e| format!("memory delete: {e}"))?;
+    if changed == 0 {
+        return Err(format!("memory delete: no memory item with id {memory_id}"));
+    }
     Ok(())
 }
 
@@ -238,7 +256,7 @@ mod tests {
         assert!(listed[1].project_root.is_none());
 
         delete_item(&conn, "m1").unwrap();
-        delete_item(&conn, "missing").unwrap();
+        expect_err(delete_item(&conn, "missing"), "no memory item");
         let listed = list_items(&conn).unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, "m2");
@@ -264,7 +282,7 @@ mod tests {
         assert!(good.project_root.is_none());
 
         dismiss_suggestion(&conn, "sg3").unwrap();
-        dismiss_suggestion(&conn, "missing").unwrap();
+        expect_err(dismiss_suggestion(&conn, "missing"), "no suggestion");
         let pending = list_pending_suggestions(&conn).unwrap();
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].id, "sg1");
@@ -274,11 +292,12 @@ mod tests {
         assert_eq!(created.key, "ls");
         assert_eq!(created.value, "Get-ChildItem");
         assert!(created.project_root.is_none());
-        let again = accept_suggestion(&conn, "sg1").unwrap();
-        assert_ne!(created.id, again.id);
+        let items_before = list_items(&conn).unwrap().len();
+        expect_err(accept_suggestion(&conn, "sg1"), "not pending");
+        expect_err(accept_suggestion(&conn, "sg2"), "not pending");
         let items = list_items(&conn).unwrap();
+        assert_eq!(items.len(), items_before);
         assert!(items.iter().any(|row| row.id == created.id));
-        assert!(items.iter().any(|row| row.id == again.id));
         assert!(list_pending_suggestions(&conn).unwrap().is_empty());
     }
 
