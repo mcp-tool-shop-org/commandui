@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-dismiss-suggestion"
+description = "Enables the memory_dismiss_suggestion command without any pre-configured scope."
+commands.allow = ["memory_dismiss_suggestion"]
+
+[[permission]]
+identifier = "deny-memory-dismiss-suggestion"
+description = "Denies the memory_dismiss_suggestion command without any pre-configured scope."
+commands.deny = ["memory_dismiss_suggestion"]

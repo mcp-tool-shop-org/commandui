@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-accept-suggestion"
+description = "Enables the memory_accept_suggestion command without any pre-configured scope."
+commands.allow = ["memory_accept_suggestion"]
+
+[[permission]]
+identifier = "deny-memory-accept-suggestion"
+description = "Denies the memory_accept_suggestion command without any pre-configured scope."
+commands.deny = ["memory_accept_suggestion"]

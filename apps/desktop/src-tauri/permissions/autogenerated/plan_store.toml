@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-plan-store"
+description = "Enables the plan_store command without any pre-configured scope."
+commands.allow = ["plan_store"]
+
+[[permission]]
+identifier = "deny-plan-store"
+description = "Denies the plan_store command without any pre-configured scope."
+commands.deny = ["plan_store"]

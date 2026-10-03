@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-memory-store-suggestion"
+description = "Enables the memory_store_suggestion command without any pre-configured scope."
+commands.allow = ["memory_store_suggestion"]
+
+[[permission]]
+identifier = "deny-memory-store-suggestion"
+description = "Denies the memory_store_suggestion command without any pre-configured scope."
+commands.deny = ["memory_store_suggestion"]

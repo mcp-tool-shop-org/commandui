@@ -177,6 +177,294 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the history_append command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-history-append",
+          "markdownDescription": "Enables the history_append command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the history_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-history-list",
+          "markdownDescription": "Enables the history_list command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the history_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-history-update",
+          "markdownDescription": "Enables the history_update command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the memory_accept_suggestion command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-memory-accept-suggestion",
+          "markdownDescription": "Enables the memory_accept_suggestion command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the memory_add command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-memory-add",
+          "markdownDescription": "Enables the memory_add command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the memory_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-memory-delete",
+          "markdownDescription": "Enables the memory_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the memory_dismiss_suggestion command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-memory-dismiss-suggestion",
+          "markdownDescription": "Enables the memory_dismiss_suggestion command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the memory_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-memory-list",
+          "markdownDescription": "Enables the memory_list command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the memory_store_suggestion command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-memory-store-suggestion",
+          "markdownDescription": "Enables the memory_store_suggestion command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the plan_store command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-plan-store",
+          "markdownDescription": "Enables the plan_store command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the planner_generate_plan command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-planner-generate-plan",
+          "markdownDescription": "Enables the planner_generate_plan command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the session_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-session-close",
+          "markdownDescription": "Enables the session_close command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the session_create command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-session-create",
+          "markdownDescription": "Enables the session_create command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the session_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-session-list",
+          "markdownDescription": "Enables the session_list command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the settings_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-settings-get",
+          "markdownDescription": "Enables the settings_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the settings_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-settings-update",
+          "markdownDescription": "Enables the settings_update command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the terminal_execute command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-terminal-execute",
+          "markdownDescription": "Enables the terminal_execute command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the terminal_interrupt command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-terminal-interrupt",
+          "markdownDescription": "Enables the terminal_interrupt command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the terminal_resize command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-terminal-resize",
+          "markdownDescription": "Enables the terminal_resize command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the terminal_resync command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-terminal-resync",
+          "markdownDescription": "Enables the terminal_resync command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the terminal_write command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-terminal-write",
+          "markdownDescription": "Enables the terminal_write command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the workflow_add command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-workflow-add",
+          "markdownDescription": "Enables the workflow_add command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the workflow_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-workflow-delete",
+          "markdownDescription": "Enables the workflow_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the workflow_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-workflow-list",
+          "markdownDescription": "Enables the workflow_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the history_append command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-history-append",
+          "markdownDescription": "Denies the history_append command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the history_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-history-list",
+          "markdownDescription": "Denies the history_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the history_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-history-update",
+          "markdownDescription": "Denies the history_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the memory_accept_suggestion command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-memory-accept-suggestion",
+          "markdownDescription": "Denies the memory_accept_suggestion command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the memory_add command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-memory-add",
+          "markdownDescription": "Denies the memory_add command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the memory_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-memory-delete",
+          "markdownDescription": "Denies the memory_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the memory_dismiss_suggestion command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-memory-dismiss-suggestion",
+          "markdownDescription": "Denies the memory_dismiss_suggestion command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the memory_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-memory-list",
+          "markdownDescription": "Denies the memory_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the memory_store_suggestion command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-memory-store-suggestion",
+          "markdownDescription": "Denies the memory_store_suggestion command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the plan_store command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-plan-store",
+          "markdownDescription": "Denies the plan_store command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the planner_generate_plan command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-planner-generate-plan",
+          "markdownDescription": "Denies the planner_generate_plan command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the session_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-session-close",
+          "markdownDescription": "Denies the session_close command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the session_create command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-session-create",
+          "markdownDescription": "Denies the session_create command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the session_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-session-list",
+          "markdownDescription": "Denies the session_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the settings_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-settings-get",
+          "markdownDescription": "Denies the settings_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the settings_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-settings-update",
+          "markdownDescription": "Denies the settings_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the terminal_execute command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-terminal-execute",
+          "markdownDescription": "Denies the terminal_execute command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the terminal_interrupt command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-terminal-interrupt",
+          "markdownDescription": "Denies the terminal_interrupt command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the terminal_resize command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-terminal-resize",
+          "markdownDescription": "Denies the terminal_resize command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the terminal_resync command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-terminal-resync",
+          "markdownDescription": "Denies the terminal_resync command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the terminal_write command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-terminal-write",
+          "markdownDescription": "Denies the terminal_write command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the workflow_add command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-workflow-add",
+          "markdownDescription": "Denies the workflow_add command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the workflow_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-workflow-delete",
+          "markdownDescription": "Denies the workflow_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the workflow_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-workflow-list",
+          "markdownDescription": "Denies the workflow_list command without any pre-configured scope."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",

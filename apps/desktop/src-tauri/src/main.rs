@@ -1,12 +1,21 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use commandui_desktop::events::TauriEventSink;
+use commandui_desktop::navigation::app_navigation_allowed;
 use commandui_desktop::state::AppState;
 use std::sync::Arc;
 use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry, ()>::new("navigation-guard")
+                .on_navigation(|webview, url| {
+                    let dev_url = webview.app_handle().config().build.dev_url.as_ref();
+                    app_navigation_allowed(url, dev_url)
+                })
+                .build(),
+        )
         .setup(|app| {
             // Create the event sink with the real AppHandle
             let sink = Arc::new(TauriEventSink::new(app.handle().clone()));

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-workflow-add"
+description = "Enables the workflow_add command without any pre-configured scope."
+commands.allow = ["workflow_add"]
+
+[[permission]]
+identifier = "deny-workflow-add"
+description = "Denies the workflow_add command without any pre-configured scope."
+commands.deny = ["workflow_add"]

@@ -1,0 +1,33 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-window",
+  "description": "The local main window may call the CommandUI commands the desktop UI invokes. Remote origins are not granted.",
+  "windows": ["main"],
+  "local": true,
+  "permissions": [
+    "allow-session-create",
+    "allow-session-list",
+    "allow-session-close",
+    "allow-terminal-execute",
+    "allow-terminal-interrupt",
+    "allow-terminal-resize",
+    "allow-terminal-resync",
+    "allow-terminal-write",
+    "allow-planner-generate-plan",
+    "allow-history-append",
+    "allow-history-list",
+    "allow-history-update",
+    "allow-plan-store",
+    "allow-settings-get",
+    "allow-settings-update",
+    "allow-workflow-add",
+    "allow-workflow-delete",
+    "allow-workflow-list",
+    "allow-memory-list",
+    "allow-memory-add",
+    "allow-memory-accept-suggestion",
+    "allow-memory-dismiss-suggestion",
+    "allow-memory-delete",
+    "allow-memory-store-suggestion"
+  ]
+}

@@ -461,7 +461,15 @@ select {
   font-size: 12px;
   font-weight: 600;
   flex-shrink: 0;
+  color: #98a2b3;
 }
+
+.history-status--planned { color: #8dc4ff; }
+.history-status--success { color: #8de0a8; }
+.history-status--failure,
+.history-status--rejected { color: #ffb4c0; }
+.history-status--interrupted { color: #ffd48d; }
+.history-status--unknown { color: #98a2b3; }
 
 .history-main {
   font-size: 14px;
@@ -634,10 +642,21 @@ select {
 .memory-confidence-bar {
   display: block;
   height: 100%;
+  width: 0%;
   background: var(--accent);
   border-radius: 2px;
-  transition: width 0.2s ease;
 }
+
+.memory-confidence-bar--10 { width: 10%; }
+.memory-confidence-bar--20 { width: 20%; }
+.memory-confidence-bar--30 { width: 30%; }
+.memory-confidence-bar--40 { width: 40%; }
+.memory-confidence-bar--50 { width: 50%; }
+.memory-confidence-bar--60 { width: 60%; }
+.memory-confidence-bar--70 { width: 70%; }
+.memory-confidence-bar--80 { width: 80%; }
+.memory-confidence-bar--90 { width: 90%; }
+.memory-confidence-bar--100 { width: 100%; }
 
 .memory-confidence-pct {
   font-size: 11px;

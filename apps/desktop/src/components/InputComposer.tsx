@@ -46,8 +46,8 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
     useEffect(() => {
       const el = textareaRef.current;
       if (!el) return;
-      el.style.height = "auto";
-      el.style.height = `${el.scrollHeight}px`;
+      const lines = value.split("\n").length;
+      el.rows = Math.min(12, Math.max(1, lines));
     }, [value]);
 
     const cantSubmit = busy || isRunning || disabled;

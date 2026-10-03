@@ -42,8 +42,7 @@ export function MemorySuggestions({ suggestions, onAccept, onDismiss }: Props) {
               )}
               <span className="memory-confidence-wrap">
                 <span
-                  className="memory-confidence-bar"
-                  style={{ width: `${confidencePct}%` }}
+                  className={`memory-confidence-bar memory-confidence-bar--${Math.round(confidencePct / 10) * 10}`}
                 />
               </span>
               <span className="memory-confidence-pct">{confidencePct}%</span>

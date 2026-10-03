@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-terminal-resync"
+description = "Enables the terminal_resync command without any pre-configured scope."
+commands.allow = ["terminal_resync"]
+
+[[permission]]
+identifier = "deny-terminal-resync"
+description = "Denies the terminal_resync command without any pre-configured scope."
+commands.deny = ["terminal_resync"]

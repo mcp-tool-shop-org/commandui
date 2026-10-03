@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-planner-generate-plan"
+description = "Enables the planner_generate_plan command without any pre-configured scope."
+commands.allow = ["planner_generate_plan"]
+
+[[permission]]
+identifier = "deny-planner-generate-plan"
+description = "Denies the planner_generate_plan command without any pre-configured scope."
+commands.deny = ["planner_generate_plan"]

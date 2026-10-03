@@ -9,7 +9,12 @@ import type {
   WorkflowStepRun,
 } from "@commandui/domain";
 import { runDetectors } from "@commandui/domain";
-import type { PlannerGeneratePlanResponse, SessionExecState } from "@commandui/api-contract";
+import type {
+  PlannerGeneratePlanResponse,
+  SessionExecState,
+  TerminalExecutionFinishedEvent,
+  TerminalExecutionStartedEvent,
+} from "@commandui/api-contract";
 import {
   useComposerStore,
   useExecutionStore,
@@ -80,8 +85,12 @@ import { WorkflowEditor } from "../components/WorkflowEditor";
 import { WorkflowRunBanner } from "../components/WorkflowRunBanner";
 import { isTauriRuntime } from "../lib/tauriInvoke";
 import { onMockEvent } from "../lib/mockBridge";
+import { waitForTerminalStatus } from "./workflowStepWait";
 
 const APP_VERSION = "1.0.2";
+const SESSION_BUSY_MESSAGE = "A command is already running in this session.";
+
+type SessionBadgeStatus = "idle" | "running" | "success" | "failure";
 
 function simplifyText(text: string): string {
   const first = text.split(/[.!?]\s/)[0];
@@ -102,7 +111,6 @@ export function AppShell() {
     setActiveExecution,
     setExecutionStatus,
     setLastExecutionId,
-    executionStatus,
     sessionExecStates,
     setSessionExecState,
   } = useExecutionStore();
@@ -149,7 +157,8 @@ export function AppShell() {
   const [currentPlanHistoryId, setCurrentPlanHistoryId] = useState<
     string | null
   >(null);
-  const [busy, setBusy] = useState(false);
+  const [busySessions, setBusySessions] = useState<ReadonlySet<string>>(new Set());
+  const [sessionBadge, setSessionBadge] = useState<Record<string, SessionBadgeStatus>>({});
   const [error, setError] = useState<string | null>(null);
   const [bootPhase, setBootPhase] = useState<"booting" | "ready" | "failed">("booting");
   const [bootError, setBootError] = useState<string | null>(null);
@@ -176,6 +185,11 @@ export function AppShell() {
   >({});
   const executionToHistoryRef = useRef<Record<string, string>>({});
   const bootedRef = useRef(false);
+  const settingsHydratedRef = useRef(false);
+  const sessionBadgeRef = useRef<Record<string, SessionBadgeStatus>>({});
+  const inFlightExecRef = useRef(new Set<string>());
+  const busySessionsRef = useRef(new Set<string>());
+  const workflowAbortBySessionRef = useRef(new Map<string, AbortController>());
   const terminalPaneRef = useRef<TerminalPaneHandle>(null);
   const composerRef = useRef<InputComposerHandle>(null);
   const activeSessionIdRef = useRef<string | null>(null);
@@ -201,7 +215,55 @@ export function AppShell() {
 
   const activeExecState: SessionExecState =
     (activeSessionId ? sessionExecStates[activeSessionId] : undefined) ?? "booting";
-  const isRunning = executionStatus === "running";
+  const activeBadge: SessionBadgeStatus =
+    (activeSessionId && sessionBadge[activeSessionId]) || "idle";
+  const isRunning =
+    activeBadge === "running" ||
+    activeExecState === "running" ||
+    activeExecState === "interrupting";
+  const visibleExecutionStatus: "idle" | "running" | "success" | "failure" | "interrupted" =
+    isRunning ? "running" : activeBadge;
+  const composerBusy = activeSessionId ? busySessions.has(activeSessionId) : false;
+
+  function publishBadge(sessionId: string, status: SessionBadgeStatus) {
+    const next = { ...sessionBadgeRef.current, [sessionId]: status };
+    sessionBadgeRef.current = next;
+    setSessionBadge(next);
+    if (sessionId === activeSessionIdRef.current) {
+      setExecutionStatus(status);
+    }
+  }
+
+  function sessionIsRunning(sessionId: string | null | undefined): boolean {
+    if (!sessionId) return false;
+    if (inFlightExecRef.current.has(sessionId)) return true;
+    if (sessionBadgeRef.current[sessionId] === "running") return true;
+    const exec = useExecutionStore.getState().sessionExecStates[sessionId];
+    return exec === "running" || exec === "interrupting";
+  }
+
+  function lockSession(sessionId: string) {
+    const next = new Set(busySessionsRef.current);
+    next.add(sessionId);
+    busySessionsRef.current = next;
+    setBusySessions(next);
+  }
+
+  function unlockSession(sessionId: string) {
+    if (!busySessionsRef.current.has(sessionId)) return;
+    const next = new Set(busySessionsRef.current);
+    next.delete(sessionId);
+    busySessionsRef.current = next;
+    setBusySessions(next);
+  }
+
+  function clearSessionRunning(sessionId: string) {
+    publishBadge(sessionId, "idle");
+    const exec = useExecutionStore.getState().sessionExecStates[sessionId];
+    if (exec === "running" || exec === "interrupting") {
+      setSessionExecState(sessionId, "ready");
+    }
+  }
 
   const visibleHistoryItems = activeSessionId
     ? historyItems.filter((h) => h.sessionId === activeSessionId)
@@ -209,7 +271,8 @@ export function AppShell() {
 
   // --- Helpers ---
   function appendTerminalLine(sessionId: string, line: string) {
-    if (reducedClutter && (line.startsWith("[exec:") || line.startsWith("[active]"))) return;
+    const clutter = useSettingsStore.getState().reducedClutter;
+    if (clutter && (line.startsWith("[exec:") || line.startsWith("[active]"))) return;
 
     // Store in background buffer
     setTerminalLinesBySession((prev) => ({
@@ -230,8 +293,10 @@ export function AppShell() {
       bootedRef.current = true;
       try {
         // Settings
+        let settingsLoaded = false;
         try {
           const settingsRes = await settingsGet();
+          settingsLoaded = true;
           if (settingsRes.settings) {
             const s = settingsRes.settings as Record<string, unknown>;
             if (typeof s.productMode === "string") setProductMode(s.productMode as "classic" | "guided");
@@ -241,7 +306,7 @@ export function AppShell() {
             if (typeof s.confirmMediumRisk === "boolean") setConfirmMediumRisk(s.confirmMediumRisk);
           }
         } catch {
-          // settings not critical
+          // settings not critical — do not hydrate, or a later write would replace saved preferences
         }
 
         // Sessions
@@ -298,6 +363,9 @@ export function AppShell() {
           // workflows not critical
         }
 
+        if (settingsLoaded) {
+          settingsHydratedRef.current = true;
+        }
         setBootPhase("ready");
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -315,45 +383,97 @@ export function AppShell() {
     setInputMode(defaultInputMode);
   }, [defaultInputMode, setInputMode]);
 
+  function noteExecutionStarted(event: TerminalExecutionStartedEvent) {
+    const sessionId = event.execution.sessionId;
+    if (!sessionId) return;
+    publishBadge(sessionId, "running");
+    setSessionExecState(sessionId, "running");
+    if (sessionId === activeSessionIdRef.current) {
+      setActiveExecution(event.execution.id);
+    }
+  }
+
+  function noteExecutionFinished(event: TerminalExecutionFinishedEvent) {
+    const status = event.status;
+    const badge: SessionBadgeStatus =
+      status === "failure" ? "failure" : status === "success" ? "success" : "idle";
+    if (event.sessionId) {
+      publishBadge(event.sessionId, badge);
+      const exec = useExecutionStore.getState().sessionExecStates[event.sessionId];
+      if (exec === "running" || exec === "interrupting") {
+        setSessionExecState(event.sessionId, "ready");
+      }
+      if (event.sessionId === activeSessionIdRef.current) {
+        setActiveExecution(null);
+      }
+    }
+    setLastExecutionId(event.executionId);
+
+    const historyId =
+      executionToHistoryRef.current[event.executionId] ?? event.executionId;
+    const finishedAt = new Date().toISOString();
+    const historyItem = useHistoryStore.getState().items.find((h) => h.id === historyId);
+    const durationMs = historyItem
+      ? Date.now() - new Date(historyItem.createdAt).getTime()
+      : undefined;
+
+    updateHistoryItem(historyId, {
+      status,
+      exitCode: event.exitCode,
+      finishedAt,
+      durationMs,
+    });
+    void historyUpdate({
+      historyId,
+      status,
+      exitCode: event.exitCode,
+      finishedAt,
+      durationMs,
+    });
+    void generateSuggestions();
+  }
+
+  // Drop in-flight workflow polls if this shell unmounts (including StrictMode's remount).
+  useEffect(() => {
+    const controllers = workflowAbortBySessionRef.current;
+    return () => {
+      for (const controller of controllers.values()) controller.abort();
+      controllers.clear();
+    };
+  }, []);
+
   // --- Terminal event subscriptions ---
   useEffect(() => {
+    let disposed = false;
+    const pending: Array<Promise<() => void>> = [];
+
+    const remember = (subscription: Promise<() => void>) => {
+      const tracked = subscription.then(
+        (unlisten) => {
+          if (disposed) {
+            unlisten();
+            return () => {};
+          }
+          return unlisten;
+        },
+        () => () => {},
+      );
+      pending.push(tracked);
+    };
+
     if (browserPreview) {
-      // Use mock event bus in browser preview mode
       const unlisteners = [
         onMockEvent<{ sessionId: string; executionId?: string; text: string }>(
           "terminal:line",
           (event) => appendTerminalLine(event.sessionId, event.text),
         ),
-        onMockEvent<{ execution: { id: string } }>(
+        onMockEvent<TerminalExecutionStartedEvent>(
           "terminal:execution_started",
-          (event) => {
-            setActiveExecution(event.execution.id);
-            setExecutionStatus("running");
-          },
+          (event) => noteExecutionStarted(event),
         ),
-        onMockEvent<{ executionId: string; status: string; exitCode: number }>(
+        onMockEvent<TerminalExecutionFinishedEvent>(
           "terminal:execution_finished",
-          (event) => {
-            setActiveExecution(null);
-            setLastExecutionId(event.executionId);
-            const status = event.status as "success" | "failure" | "interrupted";
-            setExecutionStatus(status === "interrupted" ? "idle" : status);
-
-            const historyId =
-              executionToHistoryRef.current[event.executionId] ?? event.executionId;
-
-            const finishedAt = new Date().toISOString();
-            const found = useHistoryStore.getState().items.find((h) => h.id === historyId);
-            const durationMs = found
-              ? Date.now() - new Date(found.createdAt).getTime()
-              : undefined;
-
-            updateHistoryItem(historyId, { status, exitCode: event.exitCode, finishedAt, durationMs });
-            void historyUpdate({ historyId, status, exitCode: event.exitCode, finishedAt, durationMs });
-
-            // Run pattern detectors after execution completes
-            void generateSuggestions();
-          },
+          (event) => noteExecutionFinished(event),
         ),
         onMockEvent<{ sessionId: string; cwd: string }>(
           "session:ready",
@@ -368,73 +488,42 @@ export function AppShell() {
           },
         ),
       ];
-      return () => { for (const u of unlisteners) u(); };
+      return () => {
+        disposed = true;
+        for (const unlisten of unlisteners) unlisten();
+      };
     }
 
-    // Tauri runtime — use real event listeners
-    const unlisteners: Array<() => void> = [];
-
-    subscribeToTerminalLines((event) => {
+    remember(subscribeToTerminalLines((event) => {
       appendTerminalLine(event.sessionId, event.text);
-    }).then((u) => unlisteners.push(u));
-
-    subscribeToExecutionStarted((event) => {
-      setActiveExecution(event.execution.id);
-      setExecutionStatus("running");
-    }).then((u) => unlisteners.push(u));
-
-    subscribeToExecutionFinished((event) => {
-      setActiveExecution(null);
-      setLastExecutionId(event.executionId);
-      const status = event.status;
-      setExecutionStatus(status === "interrupted" ? "idle" : status);
-
-      const historyId =
-        executionToHistoryRef.current[event.executionId] ?? event.executionId;
-
-      // Compute duration from createdAt
-      const finishedAt = new Date().toISOString();
-      const historyItem = useHistoryStore.getState().items.find((h) => h.id === historyId);
-      const durationMs = historyItem
-        ? Date.now() - new Date(historyItem.createdAt).getTime()
-        : undefined;
-
-      updateHistoryItem(historyId, {
-        status,
-        exitCode: event.exitCode,
-        finishedAt,
-        durationMs,
-      });
-
-      void historyUpdate({
-        historyId,
-        status,
-        exitCode: event.exitCode,
-        finishedAt,
-        durationMs,
-      });
-
-      // Run pattern detectors after execution completes
-      void generateSuggestions();
-    }).then((u) => unlisteners.push(u));
-
-    subscribeToSessionCwdChanged((event) => {
+    }));
+    remember(subscribeToExecutionStarted((event) => {
+      noteExecutionStarted(event);
+    }));
+    remember(subscribeToExecutionFinished((event) => {
+      noteExecutionFinished(event);
+    }));
+    remember(subscribeToSessionCwdChanged((event) => {
       updateSession(event.sessionId, { cwd: event.cwd });
-    }).then((u) => unlisteners.push(u));
-
-    subscribeToSessionReady((event) => {
+    }));
+    remember(subscribeToSessionReady((event) => {
       setSessionExecState(event.sessionId, "ready");
-    }).then((u) => unlisteners.push(u));
-
-    subscribeToExecStateChanged((event) => {
+    }));
+    remember(subscribeToExecStateChanged((event) => {
       setSessionExecState(event.sessionId, event.execState);
-    }).then((u) => unlisteners.push(u));
+    }));
 
     return () => {
-      for (const u of unlisteners) u();
+      disposed = true;
+      for (const subscription of pending) {
+        void subscription.then((unlisten) => {
+          unlisten();
+        });
+      }
     };
+    // Rebind when reduced clutter changes so the line filter is not stuck on the first render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reducedClutter]);
 
   // --- Replay buffer on session switch ---
   useEffect(() => {
@@ -452,6 +541,7 @@ export function AppShell() {
   // --- Settings persistence ---
   useEffect(() => {
     if (browserPreview) return;
+    if (!settingsHydratedRef.current) return;
     void settingsUpdate({
       settings: {
         productMode,
@@ -461,15 +551,33 @@ export function AppShell() {
         defaultInputMode,
       },
     });
-  }, [productMode, reducedClutter, simplifiedSummaries, confirmMediumRisk, defaultInputMode]);
+  }, [browserPreview, productMode, reducedClutter, simplifiedSummaries, confirmMediumRisk, defaultInputMode]);
 
   // --- Centralized keyboard shortcuts ---
-  const anyDrawerOpen = historyOpen || workflowOpen || memoryOpen || settingsOpen;
+  const overlayRef = useRef({
+    historyOpen: false,
+    workflowOpen: false,
+    memoryOpen: false,
+    settingsOpen: false,
+    paletteOpen: false,
+    editorOpen: false,
+    planOpen: false,
+  });
+  overlayRef.current = {
+    historyOpen,
+    workflowOpen,
+    memoryOpen,
+    settingsOpen,
+    paletteOpen,
+    editorOpen: workflowEditorData !== null,
+    planOpen: plan !== null,
+  };
 
   function closeAllOverlays() {
-    if (workflowEditorData) { setWorkflowEditorData(null); return; }
-    if (paletteOpen) { setPaletteOpen(false); return; }
-    if (anyDrawerOpen) {
+    const overlay = overlayRef.current;
+    if (overlay.editorOpen) { setWorkflowEditorData(null); return; }
+    if (overlay.paletteOpen) { setPaletteOpen(false); return; }
+    if (overlay.historyOpen || overlay.workflowOpen || overlay.memoryOpen || overlay.settingsOpen) {
       setHistoryOpen(false);
       setWorkflowOpen(false);
       setMemoryOpen(false);
@@ -480,9 +588,8 @@ export function AppShell() {
       });
       return;
     }
-    if (plan) {
+    if (overlay.planOpen) {
       handleRejectPlan();
-      return;
     }
   }
 
@@ -532,7 +639,18 @@ export function AppShell() {
 
     return defs;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions, activeSessionId, plan, browserPreview]);
+  }, [
+    sessions,
+    activeSessionId,
+    plan,
+    browserPreview,
+    historyOpen,
+    workflowOpen,
+    memoryOpen,
+    settingsOpen,
+    paletteOpen,
+    workflowEditorData,
+  ]);
 
   useShortcuts(shortcuts);
 
@@ -567,17 +685,28 @@ export function AppShell() {
 
   // --- Submit handler ---
   async function handleSubmit(value: string) {
-    if (!session || busy) return;
-    setBusy(true);
+    if (!session) return;
+    if (busySessionsRef.current.has(session.id)) return;
+    if (inputMode === "command" && sessionIsRunning(session.id)) {
+      setError(SESSION_BUSY_MESSAGE);
+      return;
+    }
+    const sessionId = session.id;
+    lockSession(sessionId);
     setError(null);
 
     try {
       if (inputMode === "command") {
         // --- Raw command flow ---
+        if (sessionIsRunning(sessionId)) {
+          setError(SESSION_BUSY_MESSAGE);
+          return;
+        }
+        inFlightExecRef.current.add(sessionId);
         const executionId = crypto.randomUUID();
         const historyItem: HistoryItem = {
           id: executionId,
-          sessionId: session.id,
+          sessionId,
           source: "raw",
           userInput: value,
           executedCommand: value,
@@ -590,12 +719,16 @@ export function AppShell() {
 
         void historyAppend({ item: historyItem });
 
-        await executeCommand({
-          executionId,
-          sessionId: session.id,
-          command: value,
-          source: "raw",
-        });
+        try {
+          await executeCommand({
+            executionId,
+            sessionId,
+            command: value,
+            source: "raw",
+          });
+        } finally {
+          inFlightExecRef.current.delete(sessionId);
+        }
       } else {
         // --- Semantic flow ---
         const historyId = crypto.randomUUID();
@@ -646,13 +779,17 @@ export function AppShell() {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
     } finally {
-      setBusy(false);
+      unlockSession(sessionId);
     }
   }
 
   // --- Plan actions ---
   async function handleApprovePlan(approvedCommand: string) {
     if (!session || !plan) return;
+    if (sessionIsRunning(session.id) || busySessionsRef.current.has(session.id)) {
+      setError(SESSION_BUSY_MESSAGE);
+      return;
+    }
     const trimmed = approvedCommand.trim();
     const gate = planGateRef.current;
     // Same rule as PlanPanel's Run button. Shortcuts pass the edited command
@@ -668,9 +805,15 @@ export function AppShell() {
     ) {
       return;
     }
-    setBusy(true);
+    const sessionId = session.id;
+    lockSession(sessionId);
 
     try {
+      if (sessionIsRunning(sessionId)) {
+        setError(SESSION_BUSY_MESSAGE);
+        return;
+      }
+      inFlightExecRef.current.add(sessionId);
       const executionId = crypto.randomUUID();
 
       if (currentPlanHistoryId) {
@@ -719,13 +862,17 @@ export function AppShell() {
 
       appendTerminalLine(session.id, `[approved] ${trimmed}\r\n`);
 
-      await executeCommand({
-        executionId,
-        sessionId: session.id,
-        command: trimmed,
-        source: "semantic",
-        linkedPlanId: plan.plan.id,
-      });
+      try {
+        await executeCommand({
+          executionId,
+          sessionId,
+          command: trimmed,
+          source: "semantic",
+          linkedPlanId: plan.plan.id,
+        });
+      } finally {
+        inFlightExecRef.current.delete(sessionId);
+      }
 
       setPlan(null);
       setCurrentPlanHistoryId(null);
@@ -733,7 +880,7 @@ export function AppShell() {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
     } finally {
-      setBusy(false);
+      unlockSession(sessionId);
     }
   }
 
@@ -794,9 +941,10 @@ export function AppShell() {
 
   // --- Interrupt handler ---
   async function handleInterrupt() {
-    if (!activeSessionId) return;
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId || !sessionIsRunning(sessionId)) return;
     try {
-      await interruptTerminal({ sessionId: activeSessionId });
+      await interruptTerminal({ sessionId });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -826,9 +974,13 @@ export function AppShell() {
   }
 
   async function handleCloseSession(sessionId: string) {
+    workflowAbortBySessionRef.current.get(sessionId)?.abort();
     try {
       await closeSession({ sessionId });
       removeSession(sessionId);
+      clearSessionRunning(sessionId);
+      inFlightExecRef.current.delete(sessionId);
+      unlockSession(sessionId);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -839,9 +991,19 @@ export function AppShell() {
     if (!session) return;
     const command = item.executedCommand ?? item.generatedCommand;
     if (!command) return;
+    if (sessionIsRunning(session.id) || busySessionsRef.current.has(session.id)) {
+      setError(SESSION_BUSY_MESSAGE);
+      return;
+    }
 
-    setBusy(true);
+    const sessionId = session.id;
+    lockSession(sessionId);
     try {
+      if (sessionIsRunning(sessionId)) {
+        setError(SESSION_BUSY_MESSAGE);
+        return;
+      }
+      inFlightExecRef.current.add(sessionId);
       const executionId = crypto.randomUUID();
       const historyItem: HistoryItem = {
         id: executionId,
@@ -859,19 +1021,23 @@ export function AppShell() {
       executionToHistoryRef.current[executionId] = executionId;
       void historyAppend({ item: historyItem });
 
-      await executeCommand({
-        executionId,
-        sessionId: session.id,
-        command,
-        source: item.source,
-        linkedPlanId: item.linkedPlanId,
-      });
+      try {
+        await executeCommand({
+          executionId,
+          sessionId,
+          command,
+          source: item.source,
+          linkedPlanId: item.linkedPlanId,
+        });
+      } finally {
+        inFlightExecRef.current.delete(sessionId);
+      }
 
       setHistoryOpen(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      unlockSession(sessionId);
     }
   }
 
@@ -934,15 +1100,12 @@ export function AppShell() {
   }
 
   // --- Workflow run helpers ---
-  function waitForStepCompletion(executionId: string): Promise<HistoryItem> {
-    return new Promise((resolve) => {
-      const check = () => {
-        const item = useHistoryStore.getState().items.find((h) => h.id === executionId);
-        if (item && item.status !== "planned") resolve(item);
-        else setTimeout(check, 100);
-      };
-      setTimeout(check, 100);
-    });
+  function waitForStepCompletion(executionId: string, signal: AbortSignal) {
+    return waitForTerminalStatus(
+      () => useHistoryStore.getState().items.find((h) => h.id === executionId),
+      (item) => item.status !== "planned",
+      signal,
+    );
   }
 
   function formatRunDuration(ms: number): string {
@@ -972,7 +1135,14 @@ export function AppShell() {
   // --- Workflow run handler ---
   async function handleRunWorkflow(workflow: Workflow) {
     if (!session) return;
-    setBusy(true);
+    const runSessionId = session.id;
+    if (sessionIsRunning(runSessionId) || busySessionsRef.current.has(runSessionId)) {
+      setError(SESSION_BUSY_MESSAGE);
+      return;
+    }
+    lockSession(runSessionId);
+    const controller = new AbortController();
+    workflowAbortBySessionRef.current.set(runSessionId, controller);
     setWorkflowOpen(false);
 
     const runId = crypto.randomUUID();
@@ -1007,9 +1177,23 @@ export function AppShell() {
 
         // Create history item linked to this workflow run
         const stepLabel = commands.length > 1 ? ` [${i + 1}/${commands.length}]` : "";
+        if (sessionIsRunning(runSessionId)) {
+          updateActiveRunStep(i, { status: "failed", finishedAt: Date.now() });
+          for (let j = i + 1; j < commands.length; j++) {
+            updateActiveRunStep(j, { status: "skipped" });
+          }
+          const latestRun = useWorkflowRunStore.getState().activeRun;
+          completeActiveRun("failed");
+          if (latestRun) {
+            writeRunSummary(runSessionId, { ...latestRun, finishedAt: Date.now() }, "failed");
+          }
+          setError(SESSION_BUSY_MESSAGE);
+          return;
+        }
+
         const historyItem: HistoryItem = {
           id: executionId,
-          sessionId: session.id,
+          sessionId: runSessionId,
           source: historySource,
           userInput: `${workflow.label}${stepLabel}`,
           executedCommand: cmd,
@@ -1022,15 +1206,40 @@ export function AppShell() {
         executionToHistoryRef.current[executionId] = executionId;
         void historyAppend({ item: historyItem });
 
-        await executeCommand({
-          executionId,
-          sessionId: session.id,
-          command: cmd,
-          source: historySource,
-        });
+        inFlightExecRef.current.add(runSessionId);
+        try {
+          await executeCommand({
+            executionId,
+            sessionId: runSessionId,
+            command: cmd,
+            source: historySource,
+          });
+        } finally {
+          inFlightExecRef.current.delete(runSessionId);
+        }
 
-        // Wait for step completion
-        const finished = await waitForStepCompletion(executionId);
+        const waited = await waitForStepCompletion(executionId, controller.signal);
+        if (!waited.ok) {
+          updateActiveRunStep(i, {
+            status: "failed",
+            finishedAt: Date.now(),
+            historyItemId: executionId,
+          });
+          for (let j = i + 1; j < commands.length; j++) {
+            updateActiveRunStep(j, { status: "skipped" });
+          }
+          const latestRun = useWorkflowRunStore.getState().activeRun;
+          completeActiveRun("failed");
+          if (latestRun) {
+            writeRunSummary(runSessionId, { ...latestRun, finishedAt: Date.now() }, "failed");
+          }
+          clearSessionRunning(runSessionId);
+          if (waited.reason === "timeout") {
+            setError("Workflow step timed out before the terminal reported a result.");
+          }
+          return;
+        }
+        const finished = waited.item;
         const stepStatus = finished.status as "success" | "failure" | "interrupted";
         const mappedStatus = stepStatus === "failure" ? "failed" : stepStatus;
 
@@ -1050,7 +1259,7 @@ export function AppShell() {
           const latestRun = useWorkflowRunStore.getState().activeRun;
           completeActiveRun(mappedStatus === "interrupted" ? "interrupted" : "failed");
           if (latestRun) {
-            writeRunSummary(session.id, { ...latestRun, finishedAt: Date.now() }, mappedStatus === "interrupted" ? "interrupted" : "failed");
+            writeRunSummary(runSessionId, { ...latestRun, finishedAt: Date.now() }, mappedStatus === "interrupted" ? "interrupted" : "failed");
           }
           return;
         }
@@ -1060,7 +1269,7 @@ export function AppShell() {
       const latestRun = useWorkflowRunStore.getState().activeRun;
       completeActiveRun("success");
       if (latestRun) {
-        writeRunSummary(session.id, { ...latestRun, finishedAt: Date.now() }, "success");
+        writeRunSummary(runSessionId, { ...latestRun, finishedAt: Date.now() }, "success");
       }
     } catch (e: unknown) {
       // Mark remaining steps as skipped on unexpected error
@@ -1075,7 +1284,10 @@ export function AppShell() {
       completeActiveRun("failed");
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      if (workflowAbortBySessionRef.current.get(runSessionId) === controller) {
+        workflowAbortBySessionRef.current.delete(runSessionId);
+      }
+      unlockSession(runSessionId);
     }
   }
 
@@ -1124,18 +1336,23 @@ export function AppShell() {
     const suggestion = useMemoryStore.getState().suggestions.find((s) => s.id === suggestionId);
     if (suggestion?.kind === "workflow_pattern") {
       try {
-        const commands: string[] = JSON.parse(suggestion.proposedValue);
+        const parsed: unknown = JSON.parse(suggestion.proposedValue);
+        if (!Array.isArray(parsed) || parsed.some((step) => typeof step !== "string")) {
+          throw new Error("workflow pattern is not a list of commands");
+        }
+        const steps = parsed as string[];
         setWorkflowEditorData({
           workflowId: crypto.randomUUID(),
           suggestionId,
           label: suggestion.proposedKey,
-          steps: commands,
+          steps,
           projectRoot: suggestion.projectRoot,
         });
-      } catch {
-        // invalid JSON — fall through to normal accept
+        return;
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : "invalid workflow pattern";
+        setError(`Could not read that workflow pattern (${detail}). Accepting it as a memory item instead.`);
       }
-      return;
     }
 
     try {
@@ -1226,7 +1443,8 @@ export function AppShell() {
   async function generateSuggestions() {
     const history = useHistoryStore.getState().items;
     const { items: mem, suggestions: sug } = useMemoryStore.getState();
-    const session = sessions.find((s) => s.id === activeSessionId);
+    const { sessions: liveSessions, activeSessionId: liveActiveId } = useSessionStore.getState();
+    const session = liveSessions.find((s) => s.id === liveActiveId);
 
     const candidates = runDetectors({
       history,
@@ -1350,7 +1568,7 @@ export function AppShell() {
           <TerminalPane
             ref={terminalPaneRef}
             sessionId={activeSessionId}
-            executionStatus={executionStatus}
+            executionStatus={visibleExecutionStatus}
             onResize={handleTerminalResize}
             onData={handleTerminalData}
             autoFocus
@@ -1380,7 +1598,7 @@ export function AppShell() {
             mode={inputMode}
             onModeChange={setInputMode}
             onSubmit={handleSubmit}
-            busy={busy}
+            busy={composerBusy}
             isRunning={isRunning}
             onInterrupt={handleInterrupt}
             disabled={activeExecState !== "ready" && activeExecState !== "booting"}

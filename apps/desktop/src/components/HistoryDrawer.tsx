@@ -17,15 +17,6 @@ type Props = {
   initialExpandedId?: string | null;
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  planned: "#8dc4ff",
-  success: "#8de0a8",
-  failure: "#ffb4c0",
-  rejected: "#ffb4c0",
-  interrupted: "#ffd48d",
-  unknown: "#98a2b3",
-};
-
 function formatDuration(ms: number | undefined): string {
   if (ms === undefined || ms < 0) return "";
   if (ms < 1000) return `${ms}ms`;
@@ -140,10 +131,7 @@ export function HistoryDrawer({
                   <span className="history-main">
                     {isExpanded ? "▼" : "▶"} {item.userInput}
                   </span>
-                  <span
-                    className="history-status"
-                    style={{ color: STATUS_COLORS[item.status] ?? "#98a2b3" }}
-                  >
+                  <span className={`history-status history-status--${item.status}`}>
                     {item.status}
                   </span>
                 </div>

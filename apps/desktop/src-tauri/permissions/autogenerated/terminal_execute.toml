@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-terminal-execute"
+description = "Enables the terminal_execute command without any pre-configured scope."
+commands.allow = ["terminal_execute"]
+
+[[permission]]
+identifier = "deny-terminal-execute"
+description = "Denies the terminal_execute command without any pre-configured scope."
+commands.deny = ["terminal_execute"]
