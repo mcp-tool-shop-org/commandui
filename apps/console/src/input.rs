@@ -10,8 +10,9 @@
 //!   - Ctrl+T       → switch to ASK mode
 //!   - Ctrl+N       → create new session
 //!   - Ctrl+W       → close active session
-//!   - Ctrl+Tab / Ctrl+] → next session
-//!   - Ctrl+[ / Shift+Ctrl+Tab → previous session
+//!   - Ctrl+] / Ctrl+5 → next session (Unix crossterm 0.28 reports Ctrl+] as Ctrl+5)
+//!   - Ctrl+[ / Esc → previous session when help is closed
+//!     (Unix crossterm 0.28 reports Ctrl+[ as Esc; Windows still reports Ctrl+[)
 //!   - Shift+PgUp   → scroll active session up
 //!   - Shift+PgDn   → scroll active session down
 //!   - All else     → forward to active session shell
@@ -31,9 +32,11 @@
 //! Fullscreen child policy: NOT SUPPORTED YET.
 
 use crate::model::{InputMode, Model};
+use crate::ui::{command_is_clipped, review_window, visible_command_lines};
 use commandui_runtime_core::services::terminal_service::TerminalService;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+#[derive(Debug, PartialEq)]
 pub enum InputAction {
     Forwarded,
     Interrupted,
@@ -41,8 +44,9 @@ pub enum InputAction {
     Scrolled,
     ModeSwitched,
     SubmitIntent(String),
-    /// Approve proposal — carries (command, owning_session_id).
-    ApproveProposal(String, String),
+    /// Approve proposal — carries (command, owning_session_id, proposal_id).
+    /// The proposal stays in Review until execute returns Ok.
+    ApproveProposal(String, String, String),
     CancelProposal,
     NextSession,
     PrevSession,
@@ -159,15 +163,15 @@ fn handle_shell_key(
                 }
                 return InputAction::Ignored; // Don't close last session
             }
-            // Ctrl+] — next session
-            KeyCode::Char(']') => {
+            // Ctrl+] — next session. Unix crossterm 0.28 emits this byte as Ctrl+5.
+            KeyCode::Char(']') | KeyCode::Char('5') => {
                 if model.session_count() > 1 {
                     model.next_session();
                     return InputAction::NextSession;
                 }
                 return InputAction::Ignored;
             }
-            // Ctrl+[ — previous session
+            // Ctrl+[ — previous session. Windows reports the bracket; Unix reports Esc below.
             KeyCode::Char('[') => {
                 if model.session_count() > 1 {
                     model.prev_session();
@@ -177,6 +181,15 @@ fn handle_shell_key(
             }
             _ => {}
         }
+    }
+
+    // Esc is Ctrl+[ on Unix crossterm 0.28. Help-open Esc is handled above.
+    if key.code == KeyCode::Esc {
+        if model.session_count() > 1 {
+            model.prev_session();
+            return InputAction::PrevSession;
+        }
+        return InputAction::Ignored;
     }
 
     // Everything below requires an active session
@@ -193,18 +206,33 @@ fn handle_shell_key(
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
         let exec_state = model.active_session().map(|s| s.exec_state.as_str());
         if exec_state == Some("running") || exec_state == Some("interrupting") {
-            let _ = terminal_service.interrupt(&session_id);
-            return InputAction::Interrupted;
+            let result = terminal_service.interrupt(&session_id);
+            model.surface_session_result(result);
+            return if model.status_line.is_none() {
+                InputAction::Interrupted
+            } else {
+                InputAction::Ignored
+            };
         } else {
-            let _ = terminal_service.write(&session_id, "\x03");
-            return InputAction::Forwarded;
+            let result = terminal_service.write(&session_id, "\x03");
+            model.surface_session_result(result);
+            return if model.status_line.is_none() {
+                InputAction::Forwarded
+            } else {
+                InputAction::Ignored
+            };
         }
     }
 
     // Ctrl+R — resync
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('r') {
-        let _ = terminal_service.resync(&session_id);
-        return InputAction::Resynced;
+        let result = terminal_service.resync(&session_id);
+        model.surface_session_result(result);
+        return if model.status_line.is_none() {
+            InputAction::Resynced
+        } else {
+            InputAction::Ignored
+        };
     }
 
     // Snap to bottom on typing
@@ -217,8 +245,13 @@ fn handle_shell_key(
     // Forward key to active session's shell
     let data = key_to_bytes(key);
     if !data.is_empty() {
-        let _ = terminal_service.write(&session_id, &data);
-        return InputAction::Forwarded;
+        let result = terminal_service.write(&session_id, &data);
+        model.surface_session_result(result);
+        return if model.status_line.is_none() {
+            InputAction::Forwarded
+        } else {
+            InputAction::Ignored
+        };
     }
 
     InputAction::Ignored
@@ -275,20 +308,49 @@ fn handle_ask_key(key: KeyEvent, model: &mut Model) -> InputAction {
 
 fn handle_review_key(key: KeyEvent, model: &mut Model) -> InputAction {
     match key.code {
-        KeyCode::Enter | KeyCode::Char('y') => {
-            if let (Some(ref proposal), Some(ref session_id)) =
-                (&model.current_proposal, &model.proposal_session_id)
-            {
-                let command = proposal.command.clone();
-                let target_session = session_id.clone();
-                model.input_mode = InputMode::Shell;
-                model.clear_proposal();
-                model.composer_clear();
-                InputAction::ApproveProposal(command, target_session)
-            } else {
-                InputAction::Ignored
-            }
+        KeyCode::Up | KeyCode::Char('k') => {
+            nudge_review(model, -1, 0);
+            InputAction::Ignored
         }
+        KeyCode::Down | KeyCode::Char('j') => {
+            nudge_review(model, 1, 0);
+            InputAction::Ignored
+        }
+        KeyCode::PageUp => {
+            let (rows, _) = review_window(model);
+            nudge_review(model, -(rows.max(1) as isize), 0);
+            InputAction::Ignored
+        }
+        KeyCode::PageDown => {
+            let (rows, _) = review_window(model);
+            nudge_review(model, rows.max(1) as isize, 0);
+            InputAction::Ignored
+        }
+        KeyCode::Left => {
+            nudge_review(model, 0, -4);
+            InputAction::Ignored
+        }
+        KeyCode::Right => {
+            nudge_review(model, 0, 4);
+            InputAction::Ignored
+        }
+        KeyCode::Char('c')
+            if !key.modifiers.contains(KeyModifiers::CONTROL)
+                && !key.modifiers.contains(KeyModifiers::ALT) =>
+        {
+            if model
+                .current_proposal
+                .as_ref()
+                .is_some_and(|proposal| proposal.requires_confirmation)
+            {
+                model.proposal_confirmed = !model.proposal_confirmed;
+                if model.proposal_confirmed {
+                    model.review_error = None;
+                }
+            }
+            InputAction::Ignored
+        }
+        KeyCode::Enter | KeyCode::Char('y') => try_approve(model),
         KeyCode::Esc | KeyCode::Char('n') => {
             model.input_mode = InputMode::Ask;
             model.clear_proposal();
@@ -296,6 +358,73 @@ fn handle_review_key(key: KeyEvent, model: &mut Model) -> InputAction {
         }
         _ => InputAction::Ignored,
     }
+}
+
+fn nudge_review(model: &mut Model, dy: isize, dx: isize) {
+    let lines = model
+        .current_proposal
+        .as_ref()
+        .map(|proposal| visible_command_lines(&proposal.command))
+        .unwrap_or_default();
+    let (rows, cols) = review_window(model);
+    let max_y = lines.len().saturating_sub(rows);
+    let widest = lines
+        .iter()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0);
+    let max_x = widest.saturating_sub(cols);
+    model.review_scroll = move_scroll(model.review_scroll, dy, max_y);
+    model.review_scroll_x = move_scroll(model.review_scroll_x, dx, max_x);
+}
+
+fn move_scroll(current: usize, delta: isize, max: usize) -> usize {
+    let next = if delta < 0 {
+        current.saturating_sub(delta.unsigned_abs())
+    } else {
+        current.saturating_add(delta as usize)
+    };
+    next.min(max)
+}
+
+/// Approve only when the whole command is on screen and confirmation, if required, is done.
+/// Does not clear the proposal — execute does that after Ok.
+fn try_approve(model: &mut Model) -> InputAction {
+    let (Some(proposal), Some(session_id)) = (
+        model.current_proposal.clone(),
+        model.proposal_session_id.clone(),
+    ) else {
+        return InputAction::Ignored;
+    };
+
+    let lines = visible_command_lines(&proposal.command);
+    let (rows, cols) = review_window(model);
+    let max_y = lines.len().saturating_sub(rows);
+    let widest = lines
+        .iter()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0);
+    let max_x = widest.saturating_sub(cols);
+    model.review_scroll = model.review_scroll.min(max_y);
+    model.review_scroll_x = model.review_scroll_x.min(max_x);
+    if command_is_clipped(
+        &lines,
+        model.review_scroll,
+        model.review_scroll_x,
+        rows,
+        cols,
+    ) {
+        model.review_error =
+            Some("Command is clipped — scroll to the end before approve".to_string());
+        return InputAction::Ignored;
+    }
+    if proposal.requires_confirmation && !model.proposal_confirmed {
+        model.review_error = Some("Confirmation required — press c, then Enter".to_string());
+        return InputAction::Ignored;
+    }
+
+    InputAction::ApproveProposal(proposal.command, session_id, proposal.id)
 }
 
 /// Raw play mode — nearly all keys forwarded to the game.
@@ -306,8 +435,12 @@ fn handle_raw_play_key(
     model: &mut Model,
     terminal_service: &TerminalService,
 ) -> InputAction {
-    // Escape chord: Ctrl+\ — exit raw play mode, return to Console
-    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('\\') {
+    // Escape chord: Ctrl+\.
+    // Windows crossterm 0.28 reports Char('\\') + CONTROL.
+    // Unix crossterm 0.28 maps byte 0x1c to Char('4') + CONTROL.
+    if key.modifiers.contains(KeyModifiers::CONTROL)
+        && matches!(key.code, KeyCode::Char('\\') | KeyCode::Char('4'))
+    {
         model.input_mode = InputMode::Shell;
         return InputAction::ExitRawPlay;
     }
@@ -338,8 +471,13 @@ fn handle_raw_play_key(
 
     let data = key_to_bytes(key);
     if !data.is_empty() {
-        let _ = terminal_service.write(&session_id, &data);
-        return InputAction::Forwarded;
+        let result = terminal_service.write(&session_id, &data);
+        model.surface_session_result(result);
+        return if model.status_line.is_none() {
+            InputAction::Forwarded
+        } else {
+            InputAction::Ignored
+        };
     }
 
     InputAction::Ignored
@@ -463,6 +601,11 @@ fn control_byte(c: char) -> Option<u8> {
     match upper {
         b'A'..=b'Z' | b'@' | b'[' | b'\\' | b']' | b'^' | b'_' => Some(upper & 0x1f),
         b' ' => Some(0),
+        // Unix crossterm 0.28 encodes 0x1c..=0x1f as CONTROL + '4'..='7'.
+        b'4' => Some(0x1c),
+        b'5' => Some(0x1d),
+        b'6' => Some(0x1e),
+        b'7' => Some(0x1f),
         _ => None,
     }
 }
@@ -581,6 +724,10 @@ fn function_key(n: u8, param: u8) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{CommandProposal, SessionState};
+    use commandui_runtime_core::events::NoopSink;
+    use commandui_runtime_core::session::SessionRegistry;
+    use std::sync::{Arc, Mutex};
 
     fn press(code: KeyCode, mods: KeyModifiers) -> KeyEvent {
         KeyEvent::new(code, mods)
@@ -606,5 +753,224 @@ mod tests {
         assert_eq!(bytes, "\u{1b}[1;2A");
         let plain = key_to_bytes(press(KeyCode::Up, KeyModifiers::NONE));
         assert_eq!(plain, "\u{1b}[A");
+    }
+
+    #[test]
+    fn unix_high_controls_are_forwarded_as_bytes() {
+        assert_eq!(key_to_bytes(press(KeyCode::Char('4'), KeyModifiers::CONTROL)), "\u{1c}");
+        assert_eq!(key_to_bytes(press(KeyCode::Char('5'), KeyModifiers::CONTROL)), "\u{1d}");
+        assert_eq!(key_to_bytes(press(KeyCode::Char('6'), KeyModifiers::CONTROL)), "\u{1e}");
+        assert_eq!(key_to_bytes(press(KeyCode::Char('7'), KeyModifiers::CONTROL)), "\u{1f}");
+        assert_eq!(key_to_bytes(press(KeyCode::Char('\\'), KeyModifiers::CONTROL)), "\u{1c}");
+    }
+
+    fn service() -> TerminalService {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(NoopSink);
+        TerminalService::new(sessions, sink)
+    }
+
+    fn two_sessions() -> Model {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        model.add_session("s2".into(), "B".into());
+        model.sessions[0].session_state = SessionState::Active;
+        model.sessions[1].session_state = SessionState::Active;
+        model.sessions[0].exec_state = "ready".into();
+        model.sessions[1].exec_state = "ready".into();
+        model
+    }
+
+    fn proposal(command: &str, confirm: bool) -> CommandProposal {
+        CommandProposal {
+            id: "plan-9".to_string(),
+            session_id: "s1".to_string(),
+            source: "mock".to_string(),
+            user_intent: "test".to_string(),
+            command: command.to_string(),
+            cwd: None,
+            explanation: "because".to_string(),
+            assumptions: vec![],
+            confidence: 0.5,
+            risk: "high".to_string(),
+            destructive: false,
+            requires_confirmation: confirm,
+            touches_files: false,
+            touches_network: false,
+            escalates_privileges: false,
+            expected_output: None,
+            generated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn raw_play_exits_on_windows_backslash_and_unix_ctrl_4() {
+        let terminal = service();
+        for code in [KeyCode::Char('\\'), KeyCode::Char('4')] {
+            let mut model = two_sessions();
+            model.input_mode = InputMode::RawPlay;
+            let action = handle_key(press(code, KeyModifiers::CONTROL), &mut model, &terminal);
+            assert_eq!(action, InputAction::ExitRawPlay);
+            assert_eq!(model.input_mode, InputMode::Shell);
+            assert!(model.status_line.is_none());
+        }
+    }
+
+    #[test]
+    fn raw_play_forwards_other_control_bytes() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.input_mode = InputMode::RawPlay;
+        let action = handle_key(
+            press(KeyCode::Char('6'), KeyModifiers::CONTROL),
+            &mut model,
+            &terminal,
+        );
+        assert_eq!(model.input_mode, InputMode::RawPlay);
+        assert_eq!(model.active_index, 0);
+        let status = model.status_line.expect("write error must be surfaced");
+        assert!(status.contains("Session not found"), "{status}");
+        assert_eq!(action, InputAction::Ignored);
+
+        let mut model = two_sessions();
+        model.input_mode = InputMode::RawPlay;
+        handle_key(
+            press(KeyCode::Char('5'), KeyModifiers::CONTROL),
+            &mut model,
+            &terminal,
+        );
+        assert_eq!(model.input_mode, InputMode::RawPlay);
+        assert_eq!(model.active_index, 0);
+        assert!(model.status_line.is_some());
+    }
+
+    #[test]
+    fn shell_next_and_prev_accept_windows_and_unix_events() {
+        let terminal = service();
+        for code in [KeyCode::Char(']'), KeyCode::Char('5')] {
+            let mut model = two_sessions();
+            let action = handle_key(press(code, KeyModifiers::CONTROL), &mut model, &terminal);
+            assert_eq!(action, InputAction::NextSession);
+            assert_eq!(model.active_session_id(), Some("s2"));
+            assert!(model.status_line.is_none());
+        }
+
+        let mut model = two_sessions();
+        model.switch_to(1);
+        let action = handle_key(
+            press(KeyCode::Char('['), KeyModifiers::CONTROL),
+            &mut model,
+            &terminal,
+        );
+        assert_eq!(action, InputAction::PrevSession);
+        assert_eq!(model.active_session_id(), Some("s1"));
+
+        let mut model = two_sessions();
+        model.switch_to(1);
+        let action = handle_key(press(KeyCode::Esc, KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(action, InputAction::PrevSession);
+        assert_eq!(model.active_session_id(), Some("s1"));
+
+        let mut model = two_sessions();
+        model.switch_to(1);
+        model.show_help = true;
+        let action = handle_key(press(KeyCode::Esc, KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+        assert!(!model.show_help);
+        assert_eq!(model.active_session_id(), Some("s2"));
+    }
+
+    #[test]
+    fn approve_stays_in_review_until_execute_and_blocks_while_clipped() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Review;
+        model.review_rows = 4;
+        model.review_cols = 80;
+        let command = (0..12).map(|i| format!("echo {i}")).collect::<Vec<_>>().join("\n");
+        model.set_proposal(proposal(&command, false), "s1".into());
+
+        let blocked = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(blocked, InputAction::Ignored);
+        assert_eq!(model.input_mode, InputMode::Review);
+        assert_eq!(model.current_proposal.as_ref().unwrap().command, command);
+        assert!(model.review_error.as_deref().unwrap().contains("clipped"));
+
+        for _ in 0..6 {
+            handle_key(press(KeyCode::PageDown, KeyModifiers::NONE), &mut model, &terminal);
+        }
+        let action = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(
+            action,
+            InputAction::ApproveProposal(command.clone(), "s1".into(), "plan-9".into())
+        );
+        assert_eq!(model.input_mode, InputMode::Review);
+        assert!(model.current_proposal.is_some());
+    }
+
+    #[test]
+    fn approve_honors_requires_confirmation_and_keeps_the_raw_command() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Review;
+        model.review_rows = 8;
+        model.review_cols = 80;
+        let command = "echo a\necho b\r";
+        model.set_proposal(proposal(command, true), "s1".into());
+
+        let blocked = handle_key(press(KeyCode::Char('y'), KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(blocked, InputAction::Ignored);
+        assert!(model.review_error.as_deref().unwrap().contains("onfirmation"));
+        assert!(model.current_proposal.is_some());
+
+        handle_key(press(KeyCode::Char('c'), KeyModifiers::NONE), &mut model, &terminal);
+        assert!(model.proposal_confirmed);
+        let action = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(
+            action,
+            InputAction::ApproveProposal(command.to_string(), "s1".into(), "plan-9".into())
+        );
+        assert_eq!(model.input_mode, InputMode::Review);
+        assert_eq!(model.current_proposal.as_ref().unwrap().command, command);
+    }
+
+    #[test]
+    fn wide_command_is_blocked_until_scrolled_right() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Review;
+        model.review_rows = 6;
+        model.review_cols = 8;
+        model.set_proposal(proposal("echo hello-from-the-shell", false), "s1".into());
+        let blocked = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(blocked, InputAction::Ignored);
+        assert!(model.review_error.as_deref().unwrap().contains("clipped"));
+
+        for _ in 0..12 {
+            handle_key(press(KeyCode::Right, KeyModifiers::NONE), &mut model, &terminal);
+        }
+        let action = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+        assert!(matches!(action, InputAction::ApproveProposal(_, _, _)));
+    }
+
+    #[test]
+    fn shell_write_interrupt_and_resync_errors_are_surfaced() {
+        let terminal = service();
+        let mut model = two_sessions();
+        let action = handle_key(press(KeyCode::Char('a'), KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+        assert!(model.status_line.as_deref().unwrap().contains("Session not found"));
+
+        model.sessions[0].exec_state = "running".into();
+        model.status_line = None;
+        let action = handle_key(press(KeyCode::Char('c'), KeyModifiers::CONTROL), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+        assert!(model.status_line.as_deref().unwrap().contains("Session not found"));
+
+        model.sessions[0].exec_state = "ready".into();
+        model.status_line = None;
+        let action = handle_key(press(KeyCode::Char('r'), KeyModifiers::CONTROL), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+        assert!(model.status_line.as_deref().unwrap().contains("Session not found"));
     }
 }

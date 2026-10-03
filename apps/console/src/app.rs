@@ -91,8 +91,10 @@ impl App {
         }
 
         // Cleanup — close all sessions
-        for session in &self.model.sessions {
-            let _ = self.session_service.close(&session.id);
+        let ids: Vec<String> = self.model.sessions.iter().map(|s| s.id.clone()).collect();
+        for id in ids {
+            let result = self.session_service.close(&id);
+            self.model.surface_session_result(result);
         }
 
         disable_raw_mode()?;
@@ -148,8 +150,9 @@ impl App {
             }
         }
 
-        // Close in runtime
-        let _ = self.session_service.close(&session_id);
+        // Close in runtime. A missing session stays visible as a one-line status.
+        let result = self.session_service.close(&session_id);
+        self.model.surface_session_result(result);
 
         // Remove from model
         self.model.sessions.remove(idx);
@@ -204,7 +207,7 @@ impl App {
 
                 // 4. Render
                 terminal.draw(|frame| {
-                    ui::render(frame, &self.model);
+                    ui::render(frame, &mut self.model);
                 })?;
 
                 // 5. Poll for crossterm events
@@ -285,7 +288,7 @@ impl App {
                         self.model.pane_cols = cols;
                         self.model.pane_rows = rows;
                         if let Some(ref session_id) = active_id {
-                            let _ = self.terminal_service.resize(session_id, cols, rows);
+                            self.resize_session(session_id, cols, rows);
                         }
                     }
                 }
@@ -293,7 +296,8 @@ impl App {
                     // Crossterm already decoded the paste. Forward that text only.
                     if !text.is_empty() {
                         if let Some(ref session_id) = active_id {
-                            let _ = self.terminal_service.write(session_id, &text);
+                            let result = self.terminal_service.write(session_id, &text);
+                            self.model.surface_session_result(result);
                         }
                     }
                 }
@@ -316,8 +320,8 @@ impl App {
             InputAction::SubmitIntent(intent) => {
                 self.spawn_planner(intent);
             }
-            InputAction::ApproveProposal(command, target_session_id) => {
-                self.execute_on_session(&command, &target_session_id);
+            InputAction::ApproveProposal(command, target_session_id, plan_id) => {
+                self.execute_on_session(&command, &target_session_id, &plan_id);
                 self.sync_pane_size(terminal);
             }
             InputAction::CancelProposal => {
@@ -379,7 +383,7 @@ impl App {
                 self.model.pane_cols = cols;
                 self.model.pane_rows = rows;
                 if let Some(session_id) = self.model.active_session_id().map(|s| s.to_string()) {
-                    let _ = self.terminal_service.resize(&session_id, cols, rows);
+                    self.resize_session(&session_id, cols, rows);
                 }
             }
         }
@@ -436,15 +440,21 @@ impl App {
 
     /// Execute a command on a specific session — not necessarily the active one.
     /// This is the proposal targeting truth: approval executes on the proposal's session.
-    fn execute_on_session(&self, command: &str, session_id: &str) {
-        let request = ExecuteRequest {
-            execution_id: uuid::Uuid::new_v4().to_string(),
-            session_id: session_id.to_string(),
-            command: command.to_string(),
-            source: "ask".to_string(),
-            linked_plan_id: None,
-        };
-        let _ = self.terminal_service.execute(request);
+    /// The proposal stays in Review until execute returns Ok.
+    fn execute_on_session(&mut self, command: &str, session_id: &str, plan_id: &str) {
+        let request = ask_execute_request(
+            uuid::Uuid::new_v4().to_string(),
+            session_id,
+            command,
+            plan_id,
+        );
+        let result = self.terminal_service.execute(request).map(|_| ());
+        apply_execute_result(&mut self.model, result);
+    }
+
+    fn resize_session(&mut self, session_id: &str, cols: u16, rows: u16) {
+        let result = self.terminal_service.resize(session_id, cols, rows);
+        self.model.surface_session_result(result);
     }
 
     fn sync_pane_size(&mut self, terminal: &Terminal<CrosstermBackend<std::io::Stdout>>) {
@@ -469,7 +479,141 @@ impl App {
 
         // Resize the ACTIVE session's PTY only
         if let Some(session_id) = self.model.active_session_id().map(|s| s.to_string()) {
-            let _ = self.terminal_service.resize(&session_id, cols, rows);
+            self.resize_session(&session_id, cols, rows);
         }
+    }
+}
+
+fn ask_execute_request(
+    execution_id: String,
+    session_id: &str,
+    command: &str,
+    plan_id: &str,
+) -> ExecuteRequest {
+    ExecuteRequest {
+        execution_id,
+        session_id: session_id.to_string(),
+        command: command.to_string(),
+        source: "ask".to_string(),
+        linked_plan_id: Some(plan_id.to_string()),
+    }
+}
+
+/// Ok leaves Review and drops the proposal. Err stays on the command and shows the error.
+fn apply_execute_result(model: &mut Model, result: Result<(), String>) {
+    match result {
+        Ok(()) => {
+            model.input_mode = InputMode::Shell;
+            model.composer_clear();
+            model.clear_proposal();
+        }
+        Err(err) => {
+            model.input_mode = InputMode::Review;
+            model.review_error = Some(err);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::CommandProposal;
+    use commandui_runtime_core::events::{NoopSink, RuntimeEventSink};
+    use commandui_runtime_core::session::SessionRegistry;
+    use std::sync::{Arc, Mutex};
+
+    fn test_app() -> App {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(NoopSink);
+        let session_service = SessionService::new(sessions.clone(), sink.clone());
+        let terminal_service = TerminalService::new(sessions, sink);
+        let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        App::new(session_service, terminal_service, rx)
+    }
+
+    fn proposal(command: &str) -> CommandProposal {
+        CommandProposal {
+            id: "plan-9".to_string(),
+            session_id: "s1".to_string(),
+            source: "mock".to_string(),
+            user_intent: "test".to_string(),
+            command: command.to_string(),
+            cwd: None,
+            explanation: "because".to_string(),
+            assumptions: vec![],
+            confidence: 0.5,
+            risk: "low".to_string(),
+            destructive: false,
+            requires_confirmation: false,
+            touches_files: false,
+            touches_network: false,
+            escalates_privileges: false,
+            expected_output: None,
+            generated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn execute_error_keeps_the_proposal_and_shows_the_error() {
+        let mut app = test_app();
+        app.model.add_session("s1".into(), "A".into());
+        app.model
+            .set_proposal(proposal("echo hi\nwhoami"), "s1".into());
+        app.model.input_mode = InputMode::Review;
+        app.model.composer_text = "keep".into();
+
+        app.execute_on_session("echo hi\nwhoami", "s1", "plan-9");
+
+        assert_eq!(app.model.input_mode, InputMode::Review);
+        assert_eq!(
+            app.model.current_proposal.as_ref().unwrap().command,
+            "echo hi\nwhoami"
+        );
+        assert_eq!(app.model.proposal_session_id.as_deref(), Some("s1"));
+        assert_eq!(app.model.composer_text, "keep");
+        let err = app.model.review_error.as_deref().unwrap();
+        assert!(err.contains("Session not found"), "{err}");
+    }
+
+    #[test]
+    fn execute_ok_clears_the_proposal() {
+        let mut app = test_app();
+        app.model.add_session("s1".into(), "A".into());
+        app.model.set_proposal(proposal("echo hi"), "s1".into());
+        app.model.input_mode = InputMode::Review;
+        app.model.composer_text = "typed".into();
+        app.model.review_error = Some("stale".into());
+
+        apply_execute_result(&mut app.model, Ok(()));
+
+        assert_eq!(app.model.input_mode, InputMode::Shell);
+        assert!(app.model.current_proposal.is_none());
+        assert!(app.model.composer_text.is_empty());
+        assert!(app.model.review_error.is_none());
+    }
+
+    #[test]
+    fn execute_request_links_the_proposal_id() {
+        let request = ask_execute_request("e1".into(), "s1", "echo hi\nwhoami", "plan-9");
+        assert_eq!(request.linked_plan_id.as_deref(), Some("plan-9"));
+        assert_eq!(request.command, "echo hi\nwhoami");
+        assert_eq!(request.session_id, "s1");
+        assert_eq!(request.source, "ask");
+    }
+
+    #[test]
+    fn resize_and_close_errors_are_not_swallowed() {
+        let mut app = test_app();
+        app.model.add_session("s1".into(), "A".into());
+        app.model.add_session("s2".into(), "B".into());
+
+        app.resize_session("s1", 80, 24);
+        let status = app.model.status_line.clone().unwrap();
+        assert!(status.contains("Session not found"), "{status}");
+
+        app.model.status_line = None;
+        app.close_active_session();
+        let status = app.model.status_line.as_deref().unwrap();
+        assert!(status.contains("Session not found"), "{status}");
     }
 }

@@ -2,7 +2,7 @@
 //!
 //! Renders the active session's state. Status bar shows session indicator.
 
-use crate::model::{InputMode, Model, SessionState};
+use crate::model::{CommandProposal, InputMode, Model, SessionState};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -30,7 +30,7 @@ impl Drop for TerminalRestoreGuard {
     }
 }
 
-pub fn render(frame: &mut Frame, model: &Model) {
+pub fn render(frame: &mut Frame, model: &mut Model) {
     match model.input_mode {
         InputMode::Shell => render_shell_layout(frame, model),
         InputMode::Ask => render_ask_layout(frame, model),
@@ -76,7 +76,7 @@ fn render_ask_layout(frame: &mut Frame, model: &Model) {
     render_composer(frame, chunks[2], model);
 }
 
-fn render_review_layout(frame: &mut Frame, model: &Model) {
+fn render_review_layout(frame: &mut Frame, model: &mut Model) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -90,7 +90,7 @@ fn render_review_layout(frame: &mut Frame, model: &Model) {
     render_status_bar(frame, chunks[0], model);
     render_terminal_pane(frame, chunks[1], model);
     render_review_panel(frame, chunks[2], model);
-    render_review_footer(frame, chunks[3]);
+    render_review_footer(frame, chunks[3], model);
 }
 
 fn render_switcher_layout(frame: &mut Frame, model: &Model) {
@@ -335,6 +335,13 @@ fn render_shell_footer(frame: &mut Frame, area: Rect, model: &Model) {
         }
     }
 
+    if let Some(ref err) = model.status_line {
+        spans.push(Span::styled(
+            format!("  {err}"),
+            Style::default().fg(Color::Red),
+        ));
+    }
+
     let footer = Paragraph::new(Line::from(spans)).style(Style::default().bg(Color::DarkGray));
     frame.render_widget(footer, area);
 }
@@ -392,93 +399,284 @@ fn render_composer(frame: &mut Frame, area: Rect, model: &Model) {
 
 // ---- Review panel ----
 
-fn render_review_panel(frame: &mut Frame, area: Rect, model: &Model) {
-    // Show which session this proposal targets in the title
-    let title = if let Some(ref owner_id) = model.proposal_session_id {
+fn render_review_panel(frame: &mut Frame, area: Rect, model: &mut Model) {
+    let command_lines = model
+        .current_proposal
+        .as_ref()
+        .map(|proposal| visible_command_lines(&proposal.command))
+        .unwrap_or_default();
+    let meta_len = review_meta_rows(model);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+    let inner = block.inner(area);
+    let (command_rows, meta_rows) = split_review_rows(inner.height as usize, meta_len);
+    model.review_rows = command_rows;
+    model.review_cols = inner.width as usize;
+
+    let clipped = command_is_clipped(
+        &command_lines,
+        model.review_scroll,
+        model.review_scroll_x,
+        command_rows,
+        inner.width as usize,
+    );
+    let title = review_title(model, clipped);
+    let meta = review_meta_lines(model);
+    let block = block.title(title);
+
+    frame.render_widget(block, area);
+    if inner.width == 0 || inner.height == 0 {
+        return;
+    }
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(command_rows as u16),
+            Constraint::Length(meta_rows as u16),
+        ])
+        .split(inner);
+
+    let max_y = command_lines.len().saturating_sub(command_rows);
+    let widest = command_lines
+        .iter()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0);
+    let max_x = widest.saturating_sub(inner.width as usize);
+    let scroll_y = model.review_scroll.min(max_y);
+    let scroll_x = model.review_scroll_x.min(max_x);
+    let command_text: Vec<Line> = command_lines
+        .iter()
+        .map(|line| {
+            Line::from(Span::styled(
+                line.clone(),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ))
+        })
+        .collect();
+    let command = Paragraph::new(command_text).scroll((scroll_u16(scroll_y), scroll_u16(scroll_x)));
+    frame.render_widget(command, chunks[0]);
+
+    let meta_paragraph = Paragraph::new(meta);
+    frame.render_widget(meta_paragraph, chunks[1]);
+}
+
+fn review_title(model: &Model, clipped: bool) -> String {
+    let owner = if let Some(ref owner_id) = model.proposal_session_id {
         let owner_label = model
             .sessions
             .iter()
             .find(|s| s.id == *owner_id)
             .map(|s| s.label.as_str())
             .unwrap_or("?");
-        format!(" Review Proposal → {owner_label} ")
+        format!(" Review Proposal → {owner_label}")
     } else {
-        " Review Proposal ".to_string()
+        " Review Proposal".to_string()
     };
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow))
-        .title(title);
-
-    let content = if let Some(ref proposal) = model.current_proposal {
-        let risk_color = match proposal.risk.as_str() {
-            "low" => Color::Green,
-            "medium" => Color::Yellow,
-            "high" => Color::Red,
-            _ => Color::White,
-        };
-
-        let mut lines = vec![
-            Line::from(vec![
-                Span::styled("Command: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::styled(
-                    &proposal.command,
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
-                ),
-            ]),
-            Line::from(vec![
-                Span::styled("Risk:    ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::styled(
-                    format!(" {} ", proposal.risk.to_uppercase()),
-                    Style::default().fg(Color::Black).bg(risk_color).add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(format!("  confidence: {:.0}%", proposal.confidence * 100.0)),
-                Span::raw(format!("  source: {}", proposal.source)),
-            ]),
-            Line::from(""),
-            Line::from(vec![
-                Span::styled("Explanation: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(&proposal.explanation),
-            ]),
-        ];
-
-        let mut safety_flags = vec![];
-        if proposal.destructive { safety_flags.push("DESTRUCTIVE"); }
-        if proposal.escalates_privileges { safety_flags.push("PRIVILEGE_ESCALATION"); }
-        if proposal.touches_network { safety_flags.push("NETWORK_ACCESS"); }
-
-        if !safety_flags.is_empty() {
-            lines.push(Line::from(""));
-            lines.push(Line::from(vec![
-                Span::styled("Flags: ", Style::default().fg(Color::Red)),
-                Span::styled(safety_flags.join(", "), Style::default().fg(Color::Red)),
-            ]));
-        }
-
-        lines
+    if clipped {
+        format!("{owner} (clipped) ")
     } else {
-        vec![Line::from(Span::styled(
-            "No proposal to review.",
-            Style::default().fg(Color::DarkGray),
-        ))]
-    };
-
-    let paragraph = Paragraph::new(content).block(block).wrap(Wrap { trim: false });
-    frame.render_widget(paragraph, area);
+        format!("{owner} ")
+    }
 }
 
-fn render_review_footer(frame: &mut Frame, area: Rect) {
-    let spans = vec![
+fn render_review_footer(frame: &mut Frame, area: Rect, model: &Model) {
+    let mut spans = vec![
         Span::styled(
             " REVIEW ",
             Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD),
         ),
-        Span::raw("  Enter approve  Esc cancel  ^Q Quit"),
+        Span::raw("  ↑↓ scroll  ←→ wide  c confirm  Enter approve  Esc cancel  ^Q Quit"),
     ];
+    if let Some(ref err) = model.status_line {
+        spans.push(Span::styled(
+            format!("  {err}"),
+            Style::default().fg(Color::Red),
+        ));
+    }
 
     let footer = Paragraph::new(Line::from(spans)).style(Style::default().bg(Color::DarkGray));
     frame.render_widget(footer, area);
+}
+
+/// Inner rows of the fixed 10-row review pane (borders take two).
+pub(crate) const REVIEW_INNER_ROWS: usize = 8;
+
+/// Quoted, control-visible lines for the command the shell will run.
+/// Newlines are separate rows. Other controls are escapes inside the quotes.
+pub(crate) fn visible_command_lines(command: &str) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut start = 0;
+    for (idx, ch) in command.char_indices() {
+        if ch == '\n' {
+            lines.push(quote_segment(&command[start..idx]));
+            start = idx + ch.len_utf8();
+        }
+    }
+    if start < command.len() || command.is_empty() || command.ends_with('\n') {
+        lines.push(quote_segment(&command[start..]));
+    }
+    lines
+}
+
+fn quote_segment(segment: &str) -> String {
+    format!("$ '{}'", escape_segment(segment))
+}
+
+fn escape_segment(segment: &str) -> String {
+    let mut out = String::with_capacity(segment.len());
+    for ch in segment.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '\'' => out.push_str("\\'"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => {
+                let code = u32::from(c);
+                if code <= 0xff {
+                    out.push_str(&format!("\\x{code:02x}"));
+                } else {
+                    out.push_str(&format!("\\u{{{code:x}}}"));
+                }
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+pub(crate) fn review_meta_rows(model: &Model) -> usize {
+    review_meta_lines(model).len()
+}
+
+fn review_meta_lines(model: &Model) -> Vec<Line<'_>> {
+    let Some(proposal) = model.current_proposal.as_ref() else {
+        return vec![Line::from(Span::styled(
+            "No proposal to review.",
+            Style::default().fg(Color::DarkGray),
+        ))];
+    };
+
+    let mut lines = vec![risk_line(proposal), explanation_line(proposal)];
+    let flags = safety_flags(proposal);
+    if !flags.is_empty() {
+        lines.push(Line::from(vec![
+            Span::styled("Flags: ", Style::default().fg(Color::Red)),
+            Span::styled(flags.join(", "), Style::default().fg(Color::Red)),
+        ]));
+    }
+    if proposal.requires_confirmation {
+        let label = if model.proposal_confirmed {
+            "Confirmation: confirmed"
+        } else {
+            "Confirmation required — press c, then Enter"
+        };
+        lines.push(Line::from(Span::styled(
+            label,
+            Style::default().fg(Color::Yellow),
+        )));
+    }
+    let err = model.review_error.as_deref().unwrap_or("");
+    lines.push(Line::from(Span::styled(
+        err,
+        Style::default().fg(Color::Red),
+    )));
+    lines
+}
+
+fn risk_line(proposal: &CommandProposal) -> Line<'_> {
+    let risk_color = match proposal.risk.as_str() {
+        "low" => Color::Green,
+        "medium" => Color::Yellow,
+        "high" => Color::Red,
+        _ => Color::White,
+    };
+    Line::from(vec![
+        Span::styled("Risk:    ", Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!(" {} ", proposal.risk.to_uppercase()),
+            Style::default()
+                .fg(Color::Black)
+                .bg(risk_color)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(format!("  confidence: {:.0}%", proposal.confidence * 100.0)),
+        Span::raw(format!("  source: {}", proposal.source)),
+    ])
+}
+
+fn explanation_line(proposal: &CommandProposal) -> Line<'_> {
+    Line::from(vec![
+        Span::styled("Explanation: ", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(proposal.explanation.as_str()),
+    ])
+}
+
+fn safety_flags(proposal: &CommandProposal) -> Vec<&'static str> {
+    let mut flags = Vec::new();
+    if proposal.destructive {
+        flags.push("DESTRUCTIVE");
+    }
+    if proposal.escalates_privileges {
+        flags.push("PRIVILEGE_ESCALATION");
+    }
+    if proposal.touches_network {
+        flags.push("NETWORK_ACCESS");
+    }
+    flags
+}
+
+/// Split the review pane's inner rows into the command viewport and the meta block.
+/// The command keeps at least one row when the pane is not empty.
+pub(crate) fn split_review_rows(inner_rows: usize, meta_rows: usize) -> (usize, usize) {
+    if inner_rows == 0 {
+        return (0, 0);
+    }
+    let meta = meta_rows.min(inner_rows.saturating_sub(1));
+    let command = inner_rows.saturating_sub(meta);
+    (command, meta)
+}
+
+pub(crate) fn review_window(model: &Model) -> (usize, usize) {
+    let rows = if model.review_rows == 0 {
+        split_review_rows(REVIEW_INNER_ROWS, review_meta_rows(model)).0
+    } else {
+        model.review_rows
+    };
+    let cols = if model.review_cols == 0 {
+        model.pane_cols.max(1) as usize
+    } else {
+        model.review_cols
+    };
+    (rows, cols)
+}
+
+/// True while any command row or the right edge is outside the review viewport.
+pub(crate) fn command_is_clipped(
+    lines: &[String],
+    scroll_y: usize,
+    scroll_x: usize,
+    rows: usize,
+    cols: usize,
+) -> bool {
+    if lines.is_empty() {
+        return false;
+    }
+    if rows == 0 || cols == 0 {
+        return true;
+    }
+    let tail_hidden = scroll_y.saturating_add(rows) < lines.len();
+    let widest = lines.iter().map(|line| line.chars().count()).max().unwrap_or(0);
+    let right_hidden = scroll_x.saturating_add(cols) < widest;
+    tail_hidden || right_hidden
+}
+
+fn scroll_u16(value: usize) -> u16 {
+    u16::try_from(value).unwrap_or(u16::MAX)
 }
 
 // ---- Run selector overlay ----
@@ -693,5 +891,111 @@ mod tests {
         assert!(overlay.height <= host.height);
         assert!(overlay.x.saturating_add(overlay.width) <= frame.width);
         assert!(overlay.y.saturating_add(overlay.height) <= frame.height);
+    }
+
+    #[test]
+    fn visible_command_splits_newlines_and_shows_controls() {
+        let command = "echo a\necho b\r\u{1b}[31m";
+        let lines = visible_command_lines(command);
+        assert_eq!(
+            lines,
+            vec![
+                "$ 'echo a'".to_string(),
+                "$ 'echo b\\r\\x1b[31m'".to_string(),
+            ]
+        );
+        assert!(lines.iter().all(|line| !line.chars().any(|c| c.is_control())));
+        assert_eq!(visible_command_lines("trail\n").len(), 2);
+    }
+
+    #[test]
+    fn command_is_clipped_until_the_tail_and_the_right_edge_are_visible() {
+        let lines: Vec<String> = (0..5).map(|i| format!("$ 'line-{i}'")).collect();
+        assert!(command_is_clipped(&lines, 0, 0, 4, 80));
+        assert!(!command_is_clipped(&lines, 1, 0, 4, 80));
+        let wide = vec!["$ 'abcdefghijklmnopqrstuvwxyz'".to_string()];
+        assert!(command_is_clipped(&wide, 0, 0, 4, 10));
+        assert!(!command_is_clipped(&wide, 0, 20, 4, 10));
+        assert!(command_is_clipped(&wide, 0, 0, 0, 10));
+    }
+
+    fn sample_proposal(command: &str, confirm: bool) -> CommandProposal {
+        CommandProposal {
+            id: "p1".to_string(),
+            session_id: "s1".to_string(),
+            source: "mock".to_string(),
+            user_intent: "test".to_string(),
+            command: command.to_string(),
+            cwd: None,
+            explanation: "because".to_string(),
+            assumptions: vec![],
+            confidence: 0.5,
+            risk: "low".to_string(),
+            destructive: false,
+            requires_confirmation: confirm,
+            touches_files: false,
+            touches_network: false,
+            escalates_privileges: false,
+            expected_output: None,
+            generated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn draw_text(model: &mut Model) -> String {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal.draw(|frame| render(frame, model)).unwrap();
+        let buf = terminal.backend().buffer();
+        let mut out = String::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn review_pane_shows_the_command_the_shell_will_run() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "Run A".into());
+        let mut parts: Vec<String> = (0..20).map(|i| format!("line-{i:02}")).collect();
+        parts[0] = "line-00\r\u{1b}".into();
+        let command = parts.join("\n");
+        model.set_proposal(sample_proposal(&command, true), "s1".into());
+        model.input_mode = InputMode::Review;
+
+        let shown = draw_text(&mut model);
+        assert!(shown.contains("$ 'line-00"), "{shown}");
+        assert!(
+            !shown.contains("$ 'line-19'"),
+            "tail must stay clipped until scrolled:\n{shown}"
+        );
+        assert!(shown.contains("\\r"), "{shown}");
+        assert!(shown.contains("\\x1b"), "{shown}");
+        assert!(
+            shown.contains("Confirmation required"),
+            "requires_confirmation must be on the pane:\n{shown}"
+        );
+        assert!(!shown.chars().any(|c| c == '\r' || c == '\u{1b}'));
+
+        model.review_scroll = 30;
+        let scrolled = draw_text(&mut model);
+        assert!(
+            scrolled.contains("$ 'line-19'"),
+            "scroll must reveal the tail:\n{scrolled}"
+        );
+        assert!(!scrolled.contains("line-00"), "{scrolled}");
+    }
+
+    #[test]
+    fn shell_footer_shows_a_session_error() {
+        let mut model = Model::new();
+        let idx = model.add_session("s1".into(), "A".into());
+        model.sessions[idx].session_state = SessionState::Active;
+        model.status_line = Some("Session not found: s1".into());
+        let shown = draw_text(&mut model);
+        assert!(shown.contains("Session not found: s1"), "{shown}");
     }
 }

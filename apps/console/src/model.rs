@@ -192,6 +192,20 @@ pub struct Model {
     /// The session ID that owns the current proposal.
     /// Approval executes on THIS session, not the active session.
     pub proposal_session_id: Option<String>,
+    /// Vertical offset into the quoted command lines in the review pane.
+    pub review_scroll: usize,
+    /// Horizontal offset into those lines, in characters.
+    pub review_scroll_x: usize,
+    /// Command-line viewport recorded by the last review render. 0 means not yet drawn.
+    pub review_rows: usize,
+    /// Command-line width recorded by the last review render. 0 means not yet drawn.
+    pub review_cols: usize,
+    /// Explicit ack for a proposal whose `requires_confirmation` is set.
+    pub proposal_confirmed: bool,
+    /// Execute or approval-gate error, shown in the review pane.
+    pub review_error: Option<String>,
+    /// One-line status when the active session rejects write, interrupt, resync, resize, or close.
+    pub status_line: Option<String>,
 
     /// Cursor position in the run selector overlay.
     pub switcher_cursor: usize,
@@ -215,6 +229,13 @@ impl Model {
             planner_error: None,
             current_proposal: None,
             proposal_session_id: None,
+            review_scroll: 0,
+            review_scroll_x: 0,
+            review_rows: 0,
+            review_cols: 0,
+            proposal_confirmed: false,
+            review_error: None,
+            status_line: None,
             switcher_cursor: 0,
             show_help: false,
         }
@@ -301,9 +322,14 @@ impl Model {
     // --- Proposal ownership law ---
 
     /// Set a proposal with explicit session binding.
+    /// Scroll and confirmation start over so the new command is reviewed from the top.
     pub fn set_proposal(&mut self, proposal: CommandProposal, session_id: String) {
         self.current_proposal = Some(proposal);
         self.proposal_session_id = Some(session_id);
+        self.review_scroll = 0;
+        self.review_scroll_x = 0;
+        self.proposal_confirmed = false;
+        self.review_error = None;
     }
 
     /// Get the session ID that owns the current proposal.
@@ -311,10 +337,23 @@ impl Model {
         self.proposal_session_id.as_deref()
     }
 
-    /// Clear the current proposal (cancel or after execution).
+    /// Clear the current proposal (cancel or after a successful execution).
     pub fn clear_proposal(&mut self) {
         self.current_proposal = None;
         self.proposal_session_id = None;
+        self.review_scroll = 0;
+        self.review_scroll_x = 0;
+        self.proposal_confirmed = false;
+        self.review_error = None;
+    }
+
+    /// Record a session write, interrupt, resync, resize, or close result.
+    /// Ok clears a stale status. Err replaces it with the error string.
+    pub fn surface_session_result(&mut self, result: Result<(), String>) {
+        match result {
+            Ok(()) => self.status_line = None,
+            Err(err) => self.status_line = Some(err),
+        }
     }
 
     /// Whether a proposal exists and its owning session still exists.
@@ -764,9 +803,33 @@ mod tests {
         assert!(model.current_proposal.is_some());
         assert!(model.proposal_session_id.is_some());
 
+        model.review_scroll = 3;
+        model.proposal_confirmed = true;
+        model.review_error = Some("old".into());
         model.clear_proposal();
         assert!(model.current_proposal.is_none());
         assert!(model.proposal_session_id.is_none());
+        assert_eq!(model.review_scroll, 0);
+        assert!(!model.proposal_confirmed);
+        assert!(model.review_error.is_none());
+    }
+
+    #[test]
+    fn set_proposal_resets_the_review_gate() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        model.review_scroll = 4;
+        model.review_scroll_x = 2;
+        model.proposal_confirmed = true;
+        model.review_error = Some("old".into());
+
+        model.set_proposal(make_proposal("s1"), "s1".into());
+
+        assert_eq!(model.review_scroll, 0);
+        assert_eq!(model.review_scroll_x, 0);
+        assert!(!model.proposal_confirmed);
+        assert!(model.review_error.is_none());
+        assert!(model.current_proposal.is_some());
     }
 
     #[test]
