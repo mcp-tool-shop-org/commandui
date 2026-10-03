@@ -4,6 +4,7 @@ import {
   matchesEvent,
   resolveShortcut,
   hasModifier,
+  isShellChord,
 } from "./shortcuts";
 import type { ShortcutDef } from "./shortcuts";
 
@@ -231,4 +232,65 @@ describe("resolveShortcut", () => {
     const textarea = document.createElement("textarea");
     expect(resolveShortcut(defs, eventFrom(textarea, "Escape"), "plan")?.id).toBe("esc");
   });
+
+  describe("shell chords in the terminal zone", () => {
+    const globalW = [makeDef("close-w", "ctrl+w", ["global"])];
+    const ctrlW = () => mockKeyEvent("w", { ctrlKey: true });
+
+    it("does not resolve a global plain ctrl+letter in the terminal zone", () => {
+      expect(resolveShortcut(globalW, ctrlW(), "terminal")).toBeNull();
+    });
+
+    it("still resolves the same global def in composer and plan zones", () => {
+      expect(resolveShortcut(globalW, ctrlW(), "composer")?.id).toBe("close-w");
+      expect(resolveShortcut(globalW, ctrlW(), "plan")?.id).toBe("close-w");
+    });
+
+    it("resolves a plain ctrl+letter global with no zone", () => {
+      expect(resolveShortcut(globalW, ctrlW(), null)?.id).toBe("close-w");
+    });
+
+    it("resolves a global ctrl+shift+letter in the terminal zone", () => {
+      const defs = [makeDef("close-x", "ctrl+shift+x", ["global"])];
+      const event = mockKeyEvent("X", { ctrlKey: true, shiftKey: true });
+      expect(resolveShortcut(defs, event, "terminal")?.id).toBe("close-x");
+    });
+
+    it("still resolves global ctrl+digit, ctrl+enter and escape in the terminal zone", () => {
+      const defs = [
+        makeDef("d1", "ctrl+1", ["global"]),
+        makeDef("ce", "ctrl+enter", ["global"]),
+        makeDef("esc", "escape", ["global"]),
+      ];
+      expect(resolveShortcut(defs, mockKeyEvent("1", { ctrlKey: true }), "terminal")?.id).toBe("d1");
+      expect(resolveShortcut(defs, mockKeyEvent("Enter", { ctrlKey: true }), "terminal")?.id).toBe("ce");
+      expect(resolveShortcut(defs, mockKeyEvent("Escape"), "terminal")?.id).toBe("esc");
+    });
+
+    it("lets a terminal-zone-specific ctrl+letter def win over the skip", () => {
+      const defs = [
+        makeDef("global-k", "ctrl+k", ["global"]),
+        makeDef("term-k", "ctrl+k", ["terminal"]),
+      ];
+      expect(resolveShortcut(defs, mockKeyEvent("k", { ctrlKey: true }), "terminal")?.id).toBe("term-k");
+    });
+  });
+
+  describe("isShellChord", () => {
+    it.each([
+      ["k", { ctrlKey: true }, true],
+      ["K", { ctrlKey: true }, true],
+      ["k", { ctrlKey: true, shiftKey: true }, false],
+      ["k", { ctrlKey: true, altKey: true }, false],
+      ["k", { metaKey: true }, false],
+      ["k", { ctrlKey: true, metaKey: true }, false],
+      ["1", { ctrlKey: true }, false],
+      [",", { ctrlKey: true }, false],
+      ["Enter", { ctrlKey: true }, false],
+      ["k", {}, false],
+    ])("key %s with %j is %s", (key, opts, expected) => {
+      expect(isShellChord(mockKeyEvent(key, opts))).toBe(expected);
+    });
+  });
+
 });
