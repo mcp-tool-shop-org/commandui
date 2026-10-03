@@ -4,6 +4,8 @@ name: CI
 # one check-and-test job on ubuntu-latest, 3m09s wall (about 4 billed minutes).
 # A cold-cache run (36922825113) took 12m02s. Each PR commit runs once
 # (pull_request); pushes run only on main.
+# windows-shells (added 2026-10-03) is not measured yet; Windows minutes bill
+# at about 2x Linux. Record its cost here from its first real run.
 
 on:
   push:
@@ -91,3 +93,26 @@ jobs:
 
       - name: pnpm test
         run: pnpm test
+
+  # The runtime drives real shells through a Windows ConPTY: line endings,
+  # repaint-by-position output and clear-line keys all differ from a Unix PTY,
+  # and byte-level unit tests passed for a year while no Windows session could
+  # start. tests/live_shell.rs starts cmd, Windows PowerShell 5.1, pwsh 7 and
+  # Git Bash (all on the windows-latest image) and runs a command in each.
+  # Windows-only by necessity; one job, runtime-core only.
+  windows-shells:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master 2026-10-01
+        with:
+          toolchain: stable
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Cargo test (runtime-core, live shells)
+        run: cargo test -p commandui-runtime-core
