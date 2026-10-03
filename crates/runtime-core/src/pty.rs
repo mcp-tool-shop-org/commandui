@@ -239,15 +239,39 @@ pub(crate) fn resync_input(shell: &str, nonce: &str) -> String {
 /// finished line (the output of a command, the prompt marker) can arrive with
 /// no line break at all. The runtime reads output by line, so this turns such
 /// a cursor-position escape into a line break when the row it leaves has text
-/// on it, and drops it otherwise. Every other escape passes through untouched.
+/// on it and the cursor moves to a different row, and drops it otherwise.
+/// A cursor-position escape that stays on the row the cursor is already on
+/// (an in-line redraw) passes through, as does every other escape. The row is
+/// followed from the escapes seen and from line feeds (wrapped long lines are
+/// not counted; an unknown row counts as different).
+/// While the alternate screen is active (`CSI ? 1049/1047/47 h`, alone or
+/// combined with other modes) nothing is rewritten: vim, less and htop need
+/// their cursor positioning. Prompts and markers never appear there.
 /// An escape sequence cut in half by a read is held for the next one.
 #[derive(Default)]
 pub(crate) struct RowNormalizer {
     carry: String,
     row_has_text: bool,
+    alt_screen: bool,
+    row: Option<u32>,
 }
 
 const MAX_ESCAPE_CARRY: usize = 256;
+
+/// `Some(true)` / `Some(false)` when `seq` is a private-mode set / reset that
+/// includes the alternate screen (1049, 1047 or 47), alone or combined.
+fn alt_screen_switch(seq: &str) -> Option<bool> {
+    let body = seq.strip_prefix("\x1b[?")?;
+    let (params, on) = if let Some(p) = body.strip_suffix('h') {
+        (p, true)
+    } else {
+        (body.strip_suffix('l')?, false)
+    };
+    params
+        .split(';')
+        .any(|p| matches!(p, "1049" | "1047" | "47"))
+        .then_some(on)
+}
 
 impl RowNormalizer {
     pub(crate) fn push(&mut self, text: &str) -> String {
@@ -261,6 +285,7 @@ impl RowNormalizer {
                 let ch = input[i..].chars().next().unwrap();
                 if ch == '\n' {
                     self.row_has_text = false;
+                    self.row = self.row.map(|r| r + 1);
                 } else if !ch.is_whitespace() && !ch.is_control() {
                     self.row_has_text = true;
                 }
@@ -300,12 +325,29 @@ impl RowNormalizer {
                 Some(end) if end <= bytes.len() => {
                     let seq = &input[i..end];
                     let is_cup = seq.starts_with("\x1b[") && (seq.ends_with('H') || seq.ends_with('f'));
-                    if is_cup {
-                        if self.row_has_text {
+                    if let Some(on) = alt_screen_switch(seq) {
+                        self.alt_screen = on;
+                        self.row = None;
+                        self.row_has_text = false;
+                    }
+                    if is_cup && !self.alt_screen {
+                        let target = seq[2..seq.len() - 1]
+                            .split(';')
+                            .next()
+                            .map(|r| if r.is_empty() { Some(1) } else { r.parse::<u32>().ok() })
+                            .unwrap_or(Some(1));
+                        let same_row = target.is_some() && target == self.row;
+                        if same_row {
+                            out.push_str(seq);
+                        } else if self.row_has_text {
                             out.push('\n');
                             self.row_has_text = false;
                         }
+                        self.row = target;
                     } else {
+                        if !self.alt_screen && seq.starts_with("\x1b[") && matches!(seq.as_bytes()[seq.len() - 1], b'A' | b'B' | b'E' | b'F' | b'd' | b'J') {
+                            self.row = None;
+                        }
                         out.push_str(seq);
                     }
                     i = end;
@@ -831,6 +873,9 @@ mod tests {
         // A move on an empty row, or the screen clear at start-up, is not a break.
         let mut rows = RowNormalizer::default();
         assert_eq!(rows.push("\x1b[2J\x1b[m\x1b[Hhello\r\n\x1b[4;1H"), "\x1b[2J\x1b[mhello\r\n");
+        // Moving within the row the cursor is on is an in-line redraw: kept.
+        let mut rows = RowNormalizer::default();
+        assert_eq!(rows.push("\x1b[5;1Hab\x1b[5;3Hcd\x1b[6;1Hef"), "ab\x1b[5;3Hcd\nef");
         // Other escapes pass through byte for byte.
         let mut rows = RowNormalizer::default();
         let text = "\x1b[93mred\x1b[0m \x1b]0;title\x07done";
@@ -867,5 +912,42 @@ mod tests {
         assert_eq!(find_on_path("missing.exe", Some(&path)), None);
         assert_eq!(find_on_path("tool.exe", None), None);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn alternate_screen_output_passes_through_untouched() {
+        let screen = "\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;5H\x1b[10;1Hx";
+        let mut rows = RowNormalizer::default();
+        let input = format!("before\x1b[?1049h{screen}\x1b[?1049lafter\x1b[7;1Hz");
+        // Normal screen before, verbatim inside, normal rewriting after.
+        assert_eq!(
+            rows.push(&input),
+            format!("before\x1b[?1049h{screen}\x1b[?1049lafter\nz")
+        );
+        // Enter and exit each cut across two reads.
+        for cut_at in ["\x1b[?10", "\x1b[?1049", "\x1b[?1049h", "\x1b[?1049l", "one\x1b[2;"] {
+            let at = input.find(cut_at).unwrap() + cut_at.len();
+            let mut rows = RowNormalizer::default();
+            let mut out = rows.push(&input[..at]);
+            out.push_str(&rows.push(&input[at..]));
+            assert_eq!(out, format!("before\x1b[?1049h{screen}\x1b[?1049lafter\nz"), "cut after {cut_at:?}");
+        }
+        let split = input.find("\x1b[?1049l").unwrap() + 4;
+        let mut rows = RowNormalizer::default();
+        let mut out = rows.push(&input[..split]);
+        out.push_str(&rows.push(&input[split..]));
+        assert_eq!(out, format!("before\x1b[?1049h{screen}\x1b[?1049lafter\nz"));
+    }
+
+    #[test]
+    fn combined_private_modes_switch_the_alternate_screen() {
+        assert_eq!(alt_screen_switch("\x1b[?1049;1006h"), Some(true));
+        assert_eq!(alt_screen_switch("\x1b[?25;1047l"), Some(false));
+        assert_eq!(alt_screen_switch("\x1b[?47h"), Some(true));
+        assert_eq!(alt_screen_switch("\x1b[?25h"), None);
+        assert_eq!(alt_screen_switch("\x1b[1049h"), None);
+        let mut rows = RowNormalizer::default();
+        let text = "a\x1b[?1049;1006h\x1b[2;1Hb\x1b[3;1Hc\x1b[?1006;1049l";
+        assert_eq!(rows.push(text), text);
     }
 }
