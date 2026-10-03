@@ -29,6 +29,7 @@ import {
 import type { ShortcutDef } from "../lib/shortcuts";
 import type { ShortcutContext } from "../lib/shortcuts";
 import { buildPlannerContext } from "../lib/buildPlannerContext";
+import { persistInBackground } from "../lib/persistInBackground";
 import { useShortcuts } from "../hooks/useShortcuts";
 import {
   createSession,
@@ -441,13 +442,13 @@ export function AppShell() {
       finishedAt,
       durationMs,
     });
-    void historyUpdate({
+    persistInBackground("history update", historyUpdate({
       historyId,
       status,
       exitCode: event.exitCode,
       finishedAt,
       durationMs,
-    });
+    }));
     void generateSuggestions();
   }
 
@@ -560,7 +561,7 @@ export function AppShell() {
   useEffect(() => {
     if (browserPreview) return;
     if (!settingsHydratedRef.current) return;
-    void settingsUpdate({
+    persistInBackground("settings update", settingsUpdate({
       settings: {
         productMode,
         reducedClutter,
@@ -568,7 +569,7 @@ export function AppShell() {
         confirmMediumRisk,
         defaultInputMode,
       },
-    });
+    }));
   }, [browserPreview, productMode, reducedClutter, simplifiedSummaries, confirmMediumRisk, defaultInputMode]);
 
   // --- Centralized keyboard shortcuts ---
@@ -705,7 +706,7 @@ export function AppShell() {
   function failRejectedExecution(historyId: string, err: unknown) {
     const finishedAt = new Date().toISOString();
     updateHistoryItem(historyId, { status: "failure", finishedAt });
-    void historyUpdate({ historyId, status: "failure", finishedAt });
+    persistInBackground("history update", historyUpdate({ historyId, status: "failure", finishedAt }));
     void err;
   }
 
@@ -747,7 +748,7 @@ export function AppShell() {
         appendHistoryItem(historyItem);
         executionToHistoryRef.current[executionId] = executionId;
 
-        void historyAppend({ item: historyItem });
+        persistInBackground("history append", historyAppend({ item: historyItem }));
 
         try {
           await executeCommand({
@@ -802,8 +803,8 @@ export function AppShell() {
         };
         appendHistoryItem(historyItem);
 
-        void historyAppend({ item: historyItem });
-        void planStore({ plan: res.plan });
+        persistInBackground("history append", historyAppend({ item: historyItem }));
+        persistInBackground("plan store", planStore({ plan: res.plan }));
 
         appendTerminalLine(session.id, `? ${value}\r\n`);
         appendTerminalLine(session.id, `[plan] ${res.plan.command}\r\n`);
@@ -860,7 +861,7 @@ export function AppShell() {
       if (currentPlanHistoryId) {
         runHistoryId = currentPlanHistoryId;
         updateHistoryItem(runHistoryId, { executedCommand: trimmed });
-        void historyUpdate({ historyId: runHistoryId, executedCommand: trimmed });
+        persistInBackground("history update", historyUpdate({ historyId: runHistoryId, executedCommand: trimmed }));
       } else {
         runHistoryId = executionId;
         createdRunRow = true;
@@ -877,7 +878,7 @@ export function AppShell() {
           cwd: session.cwd,
         };
         appendHistoryItem(newRow);
-        void historyAppend({ item: newRow });
+        persistInBackground("history append", historyAppend({ item: newRow }));
       }
       executionToHistoryRef.current[executionId] = runHistoryId;
 
@@ -929,7 +930,7 @@ export function AppShell() {
           // Row existed before the run: record the failure, drop the claim it ran.
           const finishedAt = new Date().toISOString();
           updateHistoryItem(runHistoryId, { status: "failure", executedCommand: undefined, finishedAt });
-          void historyUpdate({ historyId: runHistoryId, status: "failure", executedCommand: undefined, finishedAt });
+          persistInBackground("history update", historyUpdate({ historyId: runHistoryId, status: "failure", executedCommand: undefined, finishedAt }));
         }
         throw err;
       } finally {
@@ -967,10 +968,10 @@ export function AppShell() {
 
     if (currentPlanHistoryId) {
       updateHistoryItem(currentPlanHistoryId, { status: "rejected" });
-      void historyUpdate({
+      persistInBackground("history update", historyUpdate({
         historyId: currentPlanHistoryId,
         status: "rejected",
-      });
+      }));
     }
 
     appendTerminalLine(session.id, "[rejected]\r\n");
@@ -992,7 +993,7 @@ export function AppShell() {
     };
 
     addWorkflow(workflow);
-    void workflowAdd({ workflow });
+    persistInBackground("workflow add", workflowAdd({ workflow }));
     appendTerminalLine(session.id, `[workflow:saved] ${workflow.label}\r\n`);
   }
 
@@ -1099,7 +1100,7 @@ export function AppShell() {
       };
       appendHistoryItem(historyItem);
       executionToHistoryRef.current[executionId] = executionId;
-      void historyAppend({ item: historyItem });
+      persistInBackground("history append", historyAppend({ item: historyItem }));
 
       try {
         await executeCommand({
@@ -1178,7 +1179,7 @@ export function AppShell() {
     };
 
     addWorkflow(workflow);
-    void workflowAdd({ workflow });
+    persistInBackground("workflow add", workflowAdd({ workflow }));
     appendTerminalLine(session.id, `[workflow:saved] ${workflow.label}\r\n`);
     setHistoryOpen(false);
   }
@@ -1292,7 +1293,7 @@ export function AppShell() {
         };
         appendHistoryItem(historyItem);
         executionToHistoryRef.current[executionId] = executionId;
-        void historyAppend({ item: historyItem });
+        persistInBackground("history append", historyAppend({ item: historyItem }));
 
         inFlightExecRef.current.add(runSessionId);
         try {
