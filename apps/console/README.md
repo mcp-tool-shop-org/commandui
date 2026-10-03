@@ -4,7 +4,7 @@ A terminal shell with sidecar AI assistance. You play freely in a real PTY shell
 
 ## What it does
 
-- **Line-oriented shell play** — real PTY sessions, your shell of choice, full interactive behavior
+- **Line-oriented shell play** — real PTY sessions in your shell of choice. Prompts and typed input appear as they arrive, before the line ends
 - **Raw Play mode** — fullscreen mode for ncurses apps, terminal games and editors (vim, htop, lazygit). Console leaves its own screen and forwards keys, resizes, paste, mouse and focus events to the app
 - **Ask / Review / Approve** — describe what you want in natural language, review the generated command and its risk assessment, then approve or cancel
 - **Multi-session** — run multiple shell sessions, switch between them with a run selector, see state badges and unread markers
@@ -48,11 +48,13 @@ A terminal shell with sidecar AI assistance. You play freely in a real PTY shell
 
 | Key | Action |
 |-----|--------|
-| `Enter` / `y` | Approve and run on the proposal's session (refused while the command is clipped or confirmation is pending) |
+| `Enter` / `y` | Approve and run on the proposal's session |
 | `c` | Confirm a proposal that requires it |
 | `↑↓` / `jk` / `PgUp/PgDn` | Scroll the command |
 | `Esc` / `n` | Cancel, back to Ask |
 | `^Q` | Quit |
+
+Approval is refused while the command is clipped, while confirmation is pending, for about 0.6 seconds after a proposal appears (so a key pressed while the planner was working cannot approve a command you have not seen), and when the session's directory has changed since you asked. `y` and `n` only count without Ctrl or Alt. Review shows the directory the command will run in on a "Runs in:" line, and flags commands that contain non-ASCII or invisible formatting characters.
 
 ### Run selector
 
@@ -61,7 +63,7 @@ A terminal shell with sidecar AI assistance. You play freely in a real PTY shell
 | `↑↓` / `jk` | Navigate |
 | `Enter` | Select session |
 | `1-9` | Jump to a row in view |
-| `^N` / `^W` | New / close session |
+| `^N` / `^W` | New session / close the highlighted session |
 | `Esc` / `^S` | Close |
 
 ### Raw Play mode
@@ -82,7 +84,7 @@ A terminal shell with sidecar AI assistance. You play freely in a real PTY shell
 
 **Runs** — Run selector overlay. See all sessions with state badges (IDLE, RUN, BOOT, STOP, DONE, ERR!), unread markers, and CWD. Switch, create, or close sessions.
 
-**Raw Play** — Fullscreen mode. Console leaves its alternate screen and the app draws to the host terminal directly. Keys, resizes, bracketed paste, mouse and focus events are forwarded in the encodings the app enabled. Replies the host terminal sends to the app's own queries (cursor position, device attributes) are not forwarded yet. Only `^\` returns to Console. Transcript is captured but visually degraded (raw escape sequences stored as-is).
+**Raw Play** — Fullscreen mode. Console leaves its alternate screen and the app draws to the host terminal directly. Keys, resizes, bracketed paste and focus events are forwarded in the encodings the app enabled. Mouse events reach apps that enable SGR mouse reporting (`?1006`), with drag and motion only when the app asks for them (`?1002` / `?1003`). Replies the host terminal sends to the app's own queries (cursor position, device attributes) are not forwarded yet. `^\` returns to Console and `^Q` returns and quits. If writing to the app fails, the session is marked as an error and Console comes back. The transcript keeps the text with control sequences stripped; cursor movement is not replayed, so full-screen output reads out of order.
 
 ## Architecture
 
@@ -109,9 +111,10 @@ The integration seam is `RuntimeEventSink` — Console implements it via a tokio
 
 ## Limitations
 
-- **Transcript degraded in Raw Play** — output is captured but stored with raw escape sequences, not formatted for replay
+- **Transcript degraded in Raw Play** — control sequences are stripped and cursor movement is not replayed, so full-screen app output is kept as text, not as the screen you saw
 - **No UI during Raw Play** — no split-screen, no real-time AI overlay. Exit Raw Play first to use Console features
-- **Session switching blocked during Raw Play** — must exit with `^\` first
+- **Session switching blocked during Raw Play** — exit with `^\` first
+- **Mouse in Raw Play needs SGR reporting** — apps that only use the older X10 or UTF-8 mouse encodings get no mouse events
 - **No persistence, workflow UI, memory UI, or history reopen yet** — these exist in the Desktop shell but are deferred for Console
 - **Console cannot detect child process exit** — if a fullscreen app quits, you may need to press `^\` manually
 

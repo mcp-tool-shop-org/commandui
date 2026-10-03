@@ -4,22 +4,27 @@ CommandUI is designed for keyboard-first operation. All major actions are reacha
 
 ## Global shortcuts
 
-These work from anywhere in the app:
+While the terminal has focus, plain `Ctrl+<letter>` belongs to the shell: `Ctrl+W` deletes a word, `Ctrl+K` kills to end of line, `Ctrl+L` clears the screen, and so on. Each app action that uses a plain `Ctrl+<letter>` therefore has a `Ctrl+Shift` form that works everywhere, the terminal included.
+
+| Shortcut | Outside the terminal | Everywhere | Action |
+|----------|----------------------|------------|--------|
+| Palette | `Ctrl+K` | `Ctrl+Shift+K` | Open command palette |
+| Composer | `Ctrl+J` | `Ctrl+Shift+J` | Focus composer |
+| Clear | `Ctrl+L` | `Ctrl+Shift+L` | Clear terminal view |
+| New session | `Ctrl+T` | `Ctrl+Shift+T` | New session |
+| History | `Ctrl+H` | `Ctrl+Shift+H` | Toggle history drawer |
+| Memory | `Ctrl+M` | `Ctrl+Shift+M` | Toggle memory drawer |
+| Close session | `Ctrl+W` | `Ctrl+Shift+X` | Close current session (Tauri only); asks first if a command is running |
+
+These have no shell meaning and work from anywhere, the terminal included:
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+K` | Open command palette |
-| `Ctrl+J` | Focus composer |
-| `Ctrl+L` | Clear terminal |
-| `Ctrl+T` | New session |
-| `Ctrl+H` | Toggle history drawer |
 | `Ctrl+Shift+W` | Toggle workflow drawer |
-| `Ctrl+M` | Toggle memory drawer |
 | `Ctrl+,` | Toggle settings drawer |
 | `Ctrl+1` – `Ctrl+9` | Switch to session 1–9 |
-| `Ctrl+W` | Close current session (Tauri only) |
 | `Escape` | Close all open drawers/overlays |
-| `Ctrl+Enter` | Approve and execute the current plan |
+| `Ctrl+Enter` | Approve and execute the current plan, on the session it was planned for |
 
 ## Plan panel shortcuts
 
@@ -54,7 +59,7 @@ The shortcut system is zone-aware. The app tracks which zone has focus:
 1. Zone-specific matches take priority over global matches
 2. Bare-key shortcuts (single letter, no modifier) are suppressed in text-input zones (terminal, composer) to avoid interfering with typing
 3. Special keys (`Escape`, `Enter`, `Tab`) work in text-input zones
-4. Modifier combos (`Ctrl+...`, `Shift+...`) work everywhere
+4. Modifier combos (`Ctrl+...`, `Shift+...`) work everywhere, except plain `Ctrl+<letter>` while the terminal has focus, which goes to the shell
 
 ### Conditional shortcuts
 
