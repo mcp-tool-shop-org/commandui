@@ -52,6 +52,7 @@ mod tests {
             exec_state: SessionExecState::Booting,
             boot_prompt_received: false,
             command_sent_at: None,
+            read_buffer: String::new(),
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
         });
@@ -75,6 +76,7 @@ mod tests {
             exec_state: SessionExecState::Running,
             boot_prompt_received: true,
             command_sent_at: None,
+            read_buffer: String::new(),
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
         });
@@ -98,6 +100,7 @@ mod tests {
             exec_state: SessionExecState::Interrupting,
             boot_prompt_received: true,
             command_sent_at: None,
+            read_buffer: String::new(),
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
         });

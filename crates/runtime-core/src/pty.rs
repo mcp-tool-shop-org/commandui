@@ -97,15 +97,17 @@ pub fn bootstrap_prompt(shell: &str) -> Option<String> {
     }
 }
 
-pub fn spawn_reader_loop<F>(pair: &PtyPair, on_chunk: F)
+pub(crate) fn clone_reader(pair: &PtyPair) -> Result<Box<dyn Read + Send>, String> {
+    pair.master
+        .try_clone_reader()
+        .map_err(|e| format!("Failed to clone PTY reader: {e}"))
+}
+
+pub(crate) fn spawn_reader<R, F>(mut reader: R, on_chunk: F)
 where
+    R: Read + Send + 'static,
     F: Fn(String) + Send + 'static,
 {
-    let mut reader = pair
-        .master
-        .try_clone_reader()
-        .expect("Failed to clone PTY reader");
-
     std::thread::spawn(move || {
         let mut buf = [0u8; 4096];
         loop {
@@ -119,4 +121,15 @@ where
             }
         }
     });
+}
+
+pub fn spawn_reader_loop<F>(pair: &PtyPair, on_chunk: F)
+where
+    F: Fn(String) + Send + 'static,
+{
+    let reader = pair
+        .master
+        .try_clone_reader()
+        .expect("Failed to clone PTY reader");
+    spawn_reader(reader, on_chunk);
 }

@@ -43,12 +43,15 @@ impl TerminalService {
             return Err("command cannot be empty".to_string());
         }
 
-        // Double-submit guard: check exec state before proceeding
-        {
-            let registry = self.sessions.lock().map_err(|e| e.to_string())?;
+        let now = chrono::Utc::now().to_rfc3339();
+
+        // Mark Running and stash the pending id before the write, then drop
+        // the registry lock. The PTY write blocks; it must not hold that lock.
+        let writer = {
+            let mut registry = self.sessions.lock().map_err(|e| e.to_string())?;
 
             let record = registry
-                .get(&request.session_id)
+                .get_mut(&request.session_id)
                 .ok_or_else(|| format!("Session not found: {}", request.session_id))?;
 
             match record.exec_state {
@@ -61,14 +64,35 @@ impl TerminalService {
                 SessionExecState::Desynced => {
                     return Err("Session is desynced — resync first".to_string());
                 }
-                SessionExecState::Ready => {} // proceed
+                SessionExecState::Ready => {}
             }
 
-            // Write command while we hold the lock
-            write_command(&record.writer, &request.command)?;
+            record.exec_state = SessionExecState::Running;
+            record.pending_execution_id = Some(request.execution_id.clone());
+            record.command_sent_at = Some(now.clone());
+            record.writer.clone()
+        };
+
+        if let Err(write_err) = write_command(&writer, &request.command) {
+            let mut registry = self.sessions.lock().map_err(|e| e.to_string())?;
+            if let Some(record) = registry.get_mut(&request.session_id) {
+                record.exec_state = SessionExecState::Ready;
+                record.pending_execution_id = None;
+                record.command_sent_at = None;
+            } else {
+                return Err(format!("Session not found: {}", request.session_id));
+            }
+            return Err(write_err);
         }
 
-        let now = chrono::Utc::now().to_rfc3339();
+        let still_running = {
+            let registry = self.sessions.lock().map_err(|e| e.to_string())?;
+            match registry.get(&request.session_id) {
+                Some(record) => record.exec_state == SessionExecState::Running,
+                None => return Err(format!("Session not found: {}", request.session_id)),
+            }
+        };
+
         let summary = ExecutionSummary {
             id: request.execution_id.clone(),
             session_id: request.session_id.clone(),
@@ -76,7 +100,7 @@ impl TerminalService {
             source: request.source,
             linked_plan_id: request.linked_plan_id,
             status: "running".to_string(),
-            started_at: now.clone(),
+            started_at: now,
             finished_at: None,
             exit_code: None,
         };
@@ -87,18 +111,9 @@ impl TerminalService {
             },
         ));
 
-        // Update state: Running + pending execution
-        {
-            let mut registry = self.sessions.lock().map_err(|e| e.to_string())?;
-
-            if let Some(record) = registry.get_mut(&request.session_id) {
-                record.exec_state = SessionExecState::Running;
-                record.command_sent_at = Some(now);
-                record.pending_execution_id = Some(request.execution_id);
-            }
+        if still_running {
+            self.emit_exec_state(&request.session_id, &SessionExecState::Running);
         }
-
-        self.emit_exec_state(&request.session_id, &SessionExecState::Running);
 
         Ok(summary)
     }
@@ -240,6 +255,7 @@ mod tests {
                 exec_state: SessionExecState::Running,
                 boot_prompt_received: true,
                 command_sent_at: None,
+                read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -277,6 +293,7 @@ mod tests {
                 exec_state: SessionExecState::Ready,
                 boot_prompt_received: true,
                 command_sent_at: None,
+                read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -289,7 +306,131 @@ mod tests {
         assert!(err.contains("No command is currently running"), "unexpected error: {err}");
     }
 
+    #[test]
+    fn test_execute_sets_running_before_returning() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        insert_ready(&sessions, "s1", make_dummy_writer());
+
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+        let result = svc.execute(ExecuteRequest {
+            execution_id: "e1".to_string(),
+            session_id: "s1".to_string(),
+            command: "ls".to_string(),
+            source: "user".to_string(),
+            linked_plan_id: None,
+        });
+
+        assert!(result.is_ok());
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.exec_state, SessionExecState::Running);
+        assert_eq!(record.pending_execution_id.as_deref(), Some("e1"));
+        drop(reg);
+        assert!(sink.len() >= 1);
+    }
+
+    #[test]
+    fn test_execute_write_failure_rolls_back_to_ready() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        insert_ready(&sessions, "s1", failing_writer());
+
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+        let result = svc.execute(ExecuteRequest {
+            execution_id: "e1".to_string(),
+            session_id: "s1".to_string(),
+            command: "ls".to_string(),
+            source: "user".to_string(),
+            linked_plan_id: None,
+        });
+
+        assert!(result.is_err());
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.exec_state, SessionExecState::Ready);
+        assert!(record.pending_execution_id.is_none());
+        assert_eq!(sink.len(), 0);
+    }
+
+    #[test]
+    fn test_execute_missing_session_after_write_is_err() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let writer = Arc::new(Mutex::new(
+            Box::new(DropSessionOnWrite {
+                sessions: sessions.clone(),
+                session_id: "s1".to_string(),
+            }) as Box<dyn std::io::Write + Send>,
+        ));
+        insert_ready(&sessions, "s1", writer);
+
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+        let result = svc.execute(ExecuteRequest {
+            execution_id: "e1".to_string(),
+            session_id: "s1".to_string(),
+            command: "ls".to_string(),
+            source: "user".to_string(),
+            linked_plan_id: None,
+        });
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+        assert!(sessions.lock().unwrap().get("s1").is_none());
+        assert_eq!(sink.len(), 0);
+    }
+
     // --- Test helpers ---
+
+    fn insert_ready(sessions: &Arc<Mutex<SessionRegistry>>, id: &str, writer: crate::pty::PtyHandle) {
+        let mut reg = sessions.lock().unwrap();
+        reg.insert(SessionRecord {
+            id: id.to_string(),
+            label: "Test".to_string(),
+            cwd: "/tmp".to_string(),
+            shell: "bash".to_string(),
+            status: "active".to_string(),
+            pty_pair: make_dummy_pty_pair(),
+            writer,
+            pending_execution_id: None,
+            exec_state: SessionExecState::Ready,
+            boot_prompt_received: true,
+            command_sent_at: None,
+            read_buffer: String::new(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            last_active_at: "2026-01-01T00:00:00Z".to_string(),
+        });
+    }
+
+    fn failing_writer() -> crate::pty::PtyHandle {
+        Arc::new(Mutex::new(Box::new(FailWrite) as Box<dyn std::io::Write + Send>))
+    }
+
+    struct FailWrite;
+
+    impl std::io::Write for FailWrite {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "write failed"))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct DropSessionOnWrite {
+        sessions: Arc<Mutex<SessionRegistry>>,
+        session_id: String,
+    }
+
+    impl std::io::Write for DropSessionOnWrite {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            let _ = self.sessions.lock().unwrap().remove(&self.session_id);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
 
     fn make_dummy_pty_pair() -> portable_pty::PtyPair {
         let pty_system = portable_pty::native_pty_system();

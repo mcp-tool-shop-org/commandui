@@ -10,7 +10,9 @@ use crate::events::{
     ExecutionFinishedEvent, RuntimeEvent, RuntimeEventSink, SessionCwdChangedEvent,
     SessionExecStateChangedEvent, SessionReadyEvent, TerminalLineEvent,
 };
-use crate::pty::{bootstrap_prompt, default_shell, spawn_reader_loop, spawn_shell, write_raw, PROMPT_MARKER};
+use crate::pty::{
+    bootstrap_prompt, clone_reader, default_shell, spawn_reader, spawn_shell, write_raw, PROMPT_MARKER,
+};
 use crate::session::{SessionExecState, SessionRecord, SessionRegistry};
 use std::sync::{Arc, Mutex};
 
@@ -60,25 +62,9 @@ impl SessionService {
         let now = chrono::Utc::now().to_rfc3339();
 
         let (pair, writer) = spawn_shell(&shell, Some(&cwd))?;
-
-        // Start the reader loop with runtime-owned inference
-        let session_id_for_reader = id.clone();
-        let state_sessions = self.sessions.clone();
-        let sink = self.event_sink.clone();
-
-        spawn_reader_loop(&pair, move |text| {
-            Self::process_reader_chunk(
-                &sink,
-                &state_sessions,
-                &session_id_for_reader,
-                &text,
-            );
-        });
-
-        // Inject prompt marker
-        if let Some(prompt_cmd) = bootstrap_prompt(&shell) {
-            write_raw(&writer, &prompt_cmd).ok();
-        }
+        let reader = clone_reader(&pair)?;
+        let bootstrap_writer = writer.clone();
+        let prompt_cmd = bootstrap_prompt(&shell);
 
         let record = SessionRecord {
             id: id.clone(),
@@ -92,6 +78,7 @@ impl SessionService {
             exec_state: SessionExecState::Booting,
             boot_prompt_received: false,
             command_sent_at: None,
+            read_buffer: String::new(),
             created_at: now.clone(),
             last_active_at: now.clone(),
         };
@@ -106,8 +93,28 @@ impl SessionService {
             last_active_at: now,
         };
 
-        let mut registry = self.sessions.lock().map_err(|e| e.to_string())?;
-        registry.insert(record);
+        // The Booting record must be visible before the reader starts and
+        // before the bootstrap write, or an early marker is handled with no session.
+        {
+            let mut registry = self.sessions.lock().map_err(|e| e.to_string())?;
+            registry.insert(record);
+        }
+
+        let session_id_for_reader = id.clone();
+        let state_sessions = self.sessions.clone();
+        let sink = self.event_sink.clone();
+        spawn_reader(reader, move |text| {
+            Self::process_reader_chunk(
+                &sink,
+                &state_sessions,
+                &session_id_for_reader,
+                &text,
+            );
+        });
+
+        if let Some(prompt_cmd) = prompt_cmd {
+            write_raw(&bootstrap_writer, &prompt_cmd).ok();
+        }
 
         Ok(summary)
     }
@@ -168,111 +175,102 @@ impl SessionService {
     ) {
         let mut display_text = String::new();
 
-        // Read current execution_id for attribution
-        let (current_exec_id, _current_exec_state) = sessions
-            .lock()
-            .ok()
-            .and_then(|reg| {
-                let record = reg.get(session_id)?;
-                Some((
-                    record.pending_execution_id.clone(),
-                    record.exec_state.clone(),
-                ))
-            })
-            .unwrap_or((None, SessionExecState::Booting));
+        // Carry a trailing partial line on the session. Chunks are not lines.
+        let (current_exec_id, complete) = match sessions.lock() {
+            Ok(mut reg) => {
+                if let Some(record) = reg.get_mut(session_id) {
+                    record.read_buffer.push_str(text);
+                    let exec_id = record.pending_execution_id.clone();
+                    let complete = drain_complete_lines(&mut record.read_buffer);
+                    (exec_id, complete)
+                } else {
+                    let mut scratch = text.to_string();
+                    let complete = drain_complete_lines(&mut scratch);
+                    (None, complete)
+                }
+            }
+            Err(_) => {
+                let mut scratch = text.to_string();
+                let complete = drain_complete_lines(&mut scratch);
+                (None, complete)
+            }
+        };
 
-        for line in text.split_inclusive('\n') {
-            if line.contains(PROMPT_MARKER) {
-                // Parse marker: __COMMANDUI_PROMPT__|cwd|exitcode
-                let parts: Vec<&str> = line.split('|').collect();
-                if parts.len() >= 2 {
-                    let cwd = parts[1].to_string();
-                    let exit_code = if parts.len() >= 3 {
-                        parts[2].trim().parse::<i32>().unwrap_or(0)
-                    } else {
-                        0
-                    };
+        for line in complete.split_inclusive('\n') {
+            let Some(prompt) = parse_prompt_line(line) else {
+                display_text.push_str(line);
+                continue;
+            };
 
-                    // Update session cwd + check boot status
-                    let (was_booting, pending_exec, was_interrupting) = {
-                        if let Ok(mut reg) = sessions.lock() {
-                            if let Some(record) = reg.get_mut(session_id) {
-                                record.cwd = cwd.clone();
-                                let was_boot = !record.boot_prompt_received;
-                                let was_int =
-                                    record.exec_state == SessionExecState::Interrupting;
-                                let pending = record.pending_execution_id.clone();
-
-                                if was_boot {
-                                    record.boot_prompt_received = true;
-                                }
-
-                                // Transition to Ready
-                                record.exec_state = SessionExecState::Ready;
-                                record.command_sent_at = None;
-
-                                (was_boot, pending, was_int)
-                            } else {
-                                (false, None, false)
-                            }
-                        } else {
-                            (false, None, false)
-                        }
-                    };
-
-                    // Emit cwd changed
-                    sink.emit(RuntimeEvent::SessionCwdChanged(SessionCwdChangedEvent {
-                        session_id: session_id.to_string(),
-                        cwd: cwd.clone(),
-                    }));
-
-                    // Boot detection — first prompt marker
-                    if was_booting {
-                        sink.emit(RuntimeEvent::SessionReady(SessionReadyEvent {
-                            session_id: session_id.to_string(),
-                            cwd: cwd.clone(),
-                        }));
-                        eprintln!("[session] {} ready (cwd: {})", session_id, cwd);
+            // A missing record must not be reported as Ready.
+            let applied = if let Ok(mut reg) = sessions.lock() {
+                if let Some(record) = reg.get_mut(session_id) {
+                    record.cwd = prompt.cwd.clone();
+                    let was_boot = !record.boot_prompt_received;
+                    let was_int = record.exec_state == SessionExecState::Interrupting;
+                    let pending = record.pending_execution_id.clone();
+                    if was_boot {
+                        record.boot_prompt_received = true;
                     }
-
-                    // Execution completion
-                    if let Some(exec_id) = pending_exec {
-                        let status = if was_interrupting {
-                            "interrupted"
-                        } else if exit_code == 0 {
-                            "success"
-                        } else {
-                            "failure"
-                        };
-
-                        sink.emit(RuntimeEvent::ExecutionFinished(ExecutionFinishedEvent {
-                            execution_id: exec_id,
-                            session_id: session_id.to_string(),
-                            exit_code,
-                            finished_at: chrono::Utc::now().to_rfc3339(),
-                            status: status.to_string(),
-                        }));
-
-                        if let Ok(mut reg) = sessions.lock() {
-                            let _ = reg.set_pending_execution(session_id, None);
-                        }
-                    }
-
-                    // Emit state change to Ready
-                    sink.emit(RuntimeEvent::SessionExecStateChanged(
-                        SessionExecStateChangedEvent {
-                            session_id: session_id.to_string(),
-                            exec_state: SessionExecState::Ready.to_string(),
-                            changed_at: chrono::Utc::now().to_rfc3339(),
-                        },
-                    ));
+                    record.exec_state = SessionExecState::Ready;
+                    record.command_sent_at = None;
+                    Some((was_boot, pending, was_int))
+                } else {
+                    None
                 }
             } else {
+                None
+            };
+
+            let Some((was_booting, pending_exec, was_interrupting)) = applied else {
                 display_text.push_str(line);
+                continue;
+            };
+
+            sink.emit(RuntimeEvent::SessionCwdChanged(SessionCwdChangedEvent {
+                session_id: session_id.to_string(),
+                cwd: prompt.cwd.clone(),
+            }));
+
+            if was_booting {
+                sink.emit(RuntimeEvent::SessionReady(SessionReadyEvent {
+                    session_id: session_id.to_string(),
+                    cwd: prompt.cwd.clone(),
+                }));
+                eprintln!("[session] {} ready (cwd: {})", session_id, prompt.cwd);
             }
+
+            if let Some(exec_id) = pending_exec {
+                let status = if was_interrupting {
+                    "interrupted"
+                } else if prompt.exit_code == 0 {
+                    "success"
+                } else {
+                    "failure"
+                };
+
+                sink.emit(RuntimeEvent::ExecutionFinished(ExecutionFinishedEvent {
+                    execution_id: exec_id,
+                    session_id: session_id.to_string(),
+                    exit_code: prompt.exit_code,
+                    finished_at: chrono::Utc::now().to_rfc3339(),
+                    status: status.to_string(),
+                }));
+
+                if let Ok(mut reg) = sessions.lock() {
+                    let _ = reg.set_pending_execution(session_id, None);
+                }
+            }
+
+            sink.emit(RuntimeEvent::SessionExecStateChanged(
+                SessionExecStateChangedEvent {
+                    session_id: session_id.to_string(),
+                    exec_state: SessionExecState::Ready.to_string(),
+                    changed_at: chrono::Utc::now().to_rfc3339(),
+                },
+            ));
         }
 
-        // Emit display text via sink
         if !display_text.is_empty() {
             sink.emit(RuntimeEvent::TerminalLine(TerminalLineEvent {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -283,6 +281,36 @@ impl SessionService {
                 timestamp: chrono::Utc::now().to_rfc3339(),
             }));
         }
+    }
+}
+
+struct ParsedPrompt {
+    cwd: String,
+    exit_code: i32,
+}
+
+/// Marker|cwd|exit, and only when the trimmed line starts with the marker.
+/// A missing or non-integer exit code is not a prompt.
+fn parse_prompt_line(line: &str) -> Option<ParsedPrompt> {
+    let trimmed = line.trim();
+    if !trimmed.starts_with(PROMPT_MARKER) {
+        return None;
+    }
+    let parts: Vec<&str> = trimmed.split('|').collect();
+    if parts.len() != 3 || parts[0] != PROMPT_MARKER {
+        return None;
+    }
+    let exit_code = parts[2].trim().parse::<i32>().ok()?;
+    Some(ParsedPrompt {
+        cwd: parts[1].to_string(),
+        exit_code,
+    })
+}
+
+fn drain_complete_lines(buffer: &mut String) -> String {
+    match buffer.rfind('\n') {
+        Some(idx) => buffer.drain(..=idx).collect(),
+        None => String::new(),
     }
 }
 
@@ -339,6 +367,7 @@ mod tests {
                 exec_state: SessionExecState::Booting,
                 boot_prompt_received: false,
                 command_sent_at: None,
+            read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -384,6 +413,7 @@ mod tests {
                 exec_state: SessionExecState::Running,
                 boot_prompt_received: true,
                 command_sent_at: Some("2026-01-01T00:00:00Z".to_string()),
+                read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -434,6 +464,7 @@ mod tests {
                 exec_state: SessionExecState::Running,
                 boot_prompt_received: true,
                 command_sent_at: Some("2026-01-01T00:00:00Z".to_string()),
+                read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -472,6 +503,7 @@ mod tests {
                 exec_state: SessionExecState::Interrupting,
                 boot_prompt_received: true,
                 command_sent_at: Some("2026-01-01T00:00:00Z".to_string()),
+                read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -509,6 +541,7 @@ mod tests {
                 exec_state: SessionExecState::Ready,
                 boot_prompt_received: true,
                 command_sent_at: None,
+            read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -533,7 +566,141 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_partial_prompt_is_carried_until_complete() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(&sessions, "s1", SessionExecState::Booting, false, None);
+
+        let marker = format!("{}|/home/user|0\n", PROMPT_MARKER);
+        let (head, tail) = marker.split_at(PROMPT_MARKER.len() + 2);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", head);
+
+        assert_eq!(sink.len(), 0);
+        {
+            let reg = sessions.lock().unwrap();
+            let record = reg.get("s1").unwrap();
+            assert!(!record.boot_prompt_received);
+            assert_eq!(record.exec_state, SessionExecState::Booting);
+            assert!(record.read_buffer.contains(PROMPT_MARKER));
+        }
+
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", tail);
+        let events = sink.events();
+        assert_eq!(events.len(), 3);
+        assert!(matches!(events[0], RuntimeEvent::SessionCwdChanged(_)));
+        assert!(matches!(events[1], RuntimeEvent::SessionReady(_)));
+        assert!(matches!(events[2], RuntimeEvent::SessionExecStateChanged(_)));
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert!(record.boot_prompt_received);
+        assert_eq!(record.cwd, "/home/user");
+        assert!(record.read_buffer.is_empty());
+    }
+
+    #[test]
+    fn test_bad_exit_code_does_not_finish_execution() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Running,
+            true,
+            Some("exec-1".to_string()),
+        );
+
+        let missing = format!("{}|/tmp\n", PROMPT_MARKER);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &missing);
+        let not_int = format!("{}|/tmp|nope\n", PROMPT_MARKER);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &not_int);
+
+        let events = sink.events();
+        assert!(events.iter().all(|e| !matches!(
+            e,
+            RuntimeEvent::ExecutionFinished(_)
+                | RuntimeEvent::SessionExecStateChanged(_)
+                | RuntimeEvent::SessionReady(_)
+        )));
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.pending_execution_id.as_deref(), Some("exec-1"));
+        assert_eq!(record.exec_state, SessionExecState::Running);
+    }
+
+    #[test]
+    fn test_embedded_marker_and_bootstrap_echo_are_ordinary_output() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Running,
+            true,
+            Some("exec-9".to_string()),
+        );
+
+        let embedded = format!("output {}|/tmp|0\n", PROMPT_MARKER);
+        let echoed = format!("export PS1='{}|\\w|$?\\n\\$ '\n", PROMPT_MARKER);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &embedded);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &echoed);
+
+        let events = sink.events();
+        assert_eq!(events.len(), 2);
+        assert!(events.iter().all(|e| matches!(e, RuntimeEvent::TerminalLine(_))));
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.pending_execution_id.as_deref(), Some("exec-9"));
+        assert_eq!(record.exec_state, SessionExecState::Running);
+        assert!(record.boot_prompt_received);
+        assert_eq!(record.cwd, "/tmp");
+    }
+
+    #[test]
+    fn test_marker_without_session_does_not_emit_ready() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let marker = format!("{}|/home/user|0\n", PROMPT_MARKER);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "missing", &marker);
+
+        let events = sink.events();
+        assert!(events.iter().all(|e| !matches!(
+            e,
+            RuntimeEvent::SessionReady(_) | RuntimeEvent::SessionExecStateChanged(_)
+        )));
+    }
+
     // --- Test helpers ---
+
+    fn insert_session(
+        sessions: &Arc<Mutex<SessionRegistry>>,
+        id: &str,
+        exec_state: SessionExecState,
+        booted: bool,
+        pending: Option<String>,
+    ) {
+        let mut reg = sessions.lock().unwrap();
+        reg.insert(SessionRecord {
+            id: id.to_string(),
+            label: "Test".to_string(),
+            cwd: "/tmp".to_string(),
+            shell: "bash".to_string(),
+            status: "active".to_string(),
+            pty_pair: make_dummy_pty_pair(),
+            writer: make_dummy_writer(),
+            pending_execution_id: pending,
+            exec_state,
+            boot_prompt_received: booted,
+            command_sent_at: None,
+            read_buffer: String::new(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            last_active_at: "2026-01-01T00:00:00Z".to_string(),
+        });
+    }
 
     fn make_dummy_pty_pair() -> portable_pty::PtyPair {
         let pty_system = portable_pty::native_pty_system();

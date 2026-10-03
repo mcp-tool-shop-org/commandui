@@ -37,6 +37,8 @@ pub struct SessionRecord {
     pub exec_state: SessionExecState,
     pub boot_prompt_received: bool,
     pub command_sent_at: Option<String>,
+    // Incomplete reader line. Only complete lines are parsed.
+    pub read_buffer: String,
     pub created_at: String,
     pub last_active_at: String,
 }

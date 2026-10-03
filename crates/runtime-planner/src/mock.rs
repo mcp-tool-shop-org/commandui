@@ -5,6 +5,9 @@
 
 use crate::types::{CommandProposal, PlanContext};
 
+/// Fixed shell command. User text is never interpolated into it.
+const MOCK_PLACEHOLDER_COMMAND: &str = "echo \"mock: placeholder\"";
+
 /// Generate a mock proposal based on intent keyword matching.
 pub fn generate(context: &PlanContext, user_intent: &str) -> CommandProposal {
     let intent_lower = user_intent.to_lowercase();
@@ -21,8 +24,8 @@ pub fn generate(context: &PlanContext, user_intent: &str) -> CommandProposal {
             )
         } else if intent_lower.contains("delete") || intent_lower.contains("remove") {
             (
-                format!("echo \"mock: {}\"", user_intent),
-                "Destructive intent detected — review carefully.".to_string(),
+                MOCK_PLACEHOLDER_COMMAND.to_string(),
+                format!("Destructive intent detected — review carefully: {user_intent}"),
                 "high".to_string(),
                 true,
             )
@@ -42,7 +45,7 @@ pub fn generate(context: &PlanContext, user_intent: &str) -> CommandProposal {
             )
         } else {
             (
-                format!("echo \"mock: {}\"", user_intent),
+                MOCK_PLACEHOLDER_COMMAND.to_string(),
                 format!("Mock response for: {user_intent}"),
                 "low".to_string(),
                 false,
@@ -95,6 +98,11 @@ mod tests {
     #[test]
     fn test_mock_destructive() {
         let p = generate(&test_context(), "delete old logs");
+        assert_eq!(p.command, "echo \"mock: placeholder\"");
+        assert!(!p.command.contains("delete"));
+        assert!(!p.command.contains("old logs"));
+        assert_eq!(p.user_intent, "delete old logs");
+        assert!(p.explanation.contains("delete old logs"));
         assert_eq!(p.risk, "high");
         assert!(p.destructive);
         assert!(p.requires_confirmation);
@@ -117,8 +125,31 @@ mod tests {
     #[test]
     fn test_mock_generic() {
         let p = generate(&test_context(), "something unknown");
-        assert!(p.command.contains("mock"));
+        assert_eq!(p.command, "echo \"mock: placeholder\"");
+        assert!(!p.command.contains("something unknown"));
+        assert_eq!(p.user_intent, "something unknown");
+        assert!(p.explanation.contains("something unknown"));
         assert_eq!(p.risk, "low");
+        assert!(!p.requires_confirmation);
+    }
+
+    #[test]
+    fn test_mock_does_not_interpolate_shell_metacharacters() {
+        let nasty = "x\"; whoami; echo \"$(touch /tmp/owned)\n`id`";
+        let generic = generate(&test_context(), nasty);
+        assert_eq!(generic.command, "echo \"mock: placeholder\"");
+        assert!(!generic.command.contains("whoami"));
+        assert!(!generic.command.contains('\n'));
+        assert_eq!(generic.risk, "low");
+        assert_eq!(generic.user_intent, nasty);
+
+        let destructive = generate(&test_context(), "remove $(whoami)");
+        assert_eq!(destructive.command, "echo \"mock: placeholder\"");
+        assert!(!destructive.command.contains("whoami"));
+        assert_eq!(destructive.risk, "high");
+        assert!(destructive.destructive);
+        assert!(destructive.requires_confirmation);
+        assert_eq!(destructive.user_intent, "remove $(whoami)");
     }
 
     #[test]
