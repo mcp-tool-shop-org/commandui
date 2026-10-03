@@ -51,6 +51,8 @@ booting → ready ⇄ running
 - **interrupting:** Ctrl+C sent, waiting for the process to exit
 - **desynced:** terminal state lost (e.g., after a long-running process that corrupts markers). A "Resync" button appears for manual recovery.
 
+When the shell process itself exits (`exit`, a crash, a killed process), the session's status becomes `exited` and its execution state `desynced`, but this is not recoverable: `execute` and `resync` refuse the session. The desktop shows a banner with a **New Session** button in place of Resync. Exit is detected both from the end of the PTY output and by polling the child process, since a Windows ConPTY may not end the output stream.
+
 ## xterm.js rendering
 
 The frontend uses xterm.js to render terminal output:

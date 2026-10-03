@@ -7,13 +7,14 @@ When you submit a request in Ask mode, the planner generates a `CommandPlan`. Th
 From top to bottom:
 
 1. **Mock planner notice** (if applicable) — "Mock planner — Ollama not connected"
-2. **Intent** — your original words, unmodified
-3. **Command** — the generated shell command in an editable textarea
-4. **Risk** — badge showing `low`, `medium`, or `high`
-5. **Explanation** — why the planner chose this command
-6. **Confirmation checkbox** (medium/high risk only) — "I understand the risks"
-7. **Action buttons** — Run Plan, Reject, Save Workflow
-8. **Context sources** — what information the planner used (cwd, workflows, memory)
+2. **Runs in** — the session the plan was made for, and its working directory. The plan always runs there, even if you have switched to another session since. If you have, the panel offers **Go to that session** and **Run in the current session instead**
+3. **Intent** — your original words, unmodified
+4. **Command** — the generated shell command in an editable textarea
+5. **Risk** — badge showing `low`, `medium`, or `high`
+6. **Explanation** — why the planner chose this command
+7. **Confirmation checkbox** (medium/high risk only) — "I understand the risks"
+8. **Action buttons** — Run Plan, Reject, Save Workflow
+9. **Context sources** — what information the planner used (cwd, workflows, memory)
 
 ## Actions
 
@@ -24,7 +25,9 @@ Executes the command shown in the command field. If you edited it, the edited ve
 - **Medium risk:** requires checking the confirmation box (if "Confirm medium-risk" is enabled in settings)
 - **High risk:** always requires checking the confirmation box
 
-Shortcut: `A` (when plan panel is focused) or `Ctrl+Enter` (global)
+Shortcut: `A` (when plan panel is focused) or `Ctrl+Enter` (anywhere except the terminal, where it belongs to the shell)
+
+Run is blocked when the command contains hidden characters: control characters, characters that reverse text direction, or invisible formatting characters. These can make the command on screen differ from the one the shell receives. The panel shows each one as a code such as `<U+202E>` and explains the block; remove them by editing the command. The runtime refuses such commands as well.
 
 ### Reject
 Dismisses the plan. Nothing executes. The plan is recorded in history with status `rejected`. Rejection is useful data — it tells the system this translation was wrong.
@@ -52,3 +55,5 @@ This lets you understand *why* the planner suggested what it did.
 ## Reopening a plan from history
 
 If you open the history drawer (`Ctrl+H`) and expand a semantic entry, you can click **View Plan** to reopen the plan panel with that plan's details. This lets you re-examine past plans, re-run them, or save them as workflows.
+
+A plan whose session is still open runs there. If that session has been closed, or it belongs to an earlier launch, the panel says so: you can run it in the current session instead, or keep it open read-only. Re-running a command or a workflow asks for confirmation when the session's working directory differs from the one it was planned for.

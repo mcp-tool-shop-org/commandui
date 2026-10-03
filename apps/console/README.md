@@ -4,7 +4,7 @@ A terminal shell with sidecar AI assistance. You play freely in a real PTY shell
 
 ## What it does
 
-- **Line-oriented shell play** — real PTY sessions in your shell of choice. Prompts and typed input appear as they arrive, before the line ends
+- **Line-oriented shell play** — real PTY sessions in your shell of choice. Prompts and typed input appear before the line ends, and line edits (backspace, cursor moves, erase-to-end) are followed
 - **Raw Play mode** — fullscreen mode for ncurses apps, terminal games and editors (vim, htop, lazygit). Console leaves its own screen and forwards keys, resizes, paste, mouse and focus events to the app
 - **Ask / Review / Approve** — describe what you want in natural language, review the generated command and its risk assessment, then approve or cancel
 - **Multi-session** — run multiple shell sessions, switch between them with a run selector, see state badges and unread markers
@@ -29,12 +29,14 @@ A terminal shell with sidecar AI assistance. You play freely in a real PTY shell
 | `^S` | Open run selector |
 | `^H` | Help overlay |
 | `^N` | New session |
-| `^W` | Close session |
+| `^W` | Close session (asks `y/n` if a command is running) |
 | `^]` / `^[` | Next / previous session (on Unix, a bare `Esc` is `^[` when more than one session is open) |
 | `^C` | Interrupt running command |
 | `^R` | Resync session |
-| `^Q` | Quit |
+| `^Q` | Quit (asks `y/n` if any session has a running command) |
 | `Shift+PgUp/PgDn` | Scroll terminal |
+
+At a `y/n` prompt only a plain `y` goes ahead; any other key cancels and is not sent to the shell.
 
 ### Ask mode
 
@@ -71,7 +73,7 @@ Approval is refused while the command is clipped, while confirmation is pending,
 | Key | Action |
 |-----|--------|
 | `^\` (Ctrl+Backslash) | Exit Raw Play, return to Console |
-| `^Q` | Exit Raw Play and quit |
+| `^Q` | Exit Raw Play, then quit (asking `y/n` first if a command is running) |
 | Everything else | Forwarded to the game/app |
 
 ## Modes
@@ -84,7 +86,7 @@ Approval is refused while the command is clipped, while confirmation is pending,
 
 **Runs** — Run selector overlay. See all sessions with state badges (IDLE, RUN, BOOT, STOP, DONE, ERR!), unread markers, and CWD. Switch, create, or close sessions.
 
-**Raw Play** — Fullscreen mode. Console leaves its alternate screen and the app draws to the host terminal directly. Keys, resizes, bracketed paste and focus events are forwarded in the encodings the app enabled. Mouse events reach apps that enable SGR mouse reporting (`?1006`), with drag and motion only when the app asks for them (`?1002` / `?1003`). Replies the host terminal sends to the app's own queries (cursor position, device attributes) are not forwarded yet. `^\` returns to Console and `^Q` returns and quits. If writing to the app fails, the session is marked as an error and Console comes back. The transcript keeps the text with control sequences stripped; cursor movement is not replayed, so full-screen output reads out of order.
+**Raw Play** — Fullscreen mode. Console leaves its alternate screen and the app draws to the host terminal directly. Keys, resizes, bracketed paste and focus events are forwarded in the encodings the app enabled. Mouse events reach apps that enable SGR mouse reporting (`?1006`), with drag and motion only when the app asks for them (`?1002` / `?1003`). Replies the host terminal sends to the app's own queries (cursor position, device attributes) are not forwarded yet. `^\` returns to Console and `^Q` returns and then quits. If writing to the app fails, the session is marked as an error and Console comes back. The transcript keeps the text with control sequences stripped; cursor movement is not replayed, so full-screen output reads out of order.
 
 ## Architecture
 
@@ -111,6 +113,7 @@ The integration seam is `RuntimeEventSink` — Console implements it via a tokio
 
 ## Limitations
 
+- **Shell mode is a line view, not a terminal** — it follows line edits on the current line, but not cursor addressing across lines or full-screen redraws. Use Raw Play for anything that draws the whole screen
 - **Transcript degraded in Raw Play** — control sequences are stripped and cursor movement is not replayed, so full-screen app output is kept as text, not as the screen you saw
 - **No UI during Raw Play** — no split-screen, no real-time AI overlay. Exit Raw Play first to use Console features
 - **Session switching blocked during Raw Play** — exit with `^\` first
