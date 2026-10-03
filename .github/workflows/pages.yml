@@ -1,5 +1,9 @@
 name: Deploy site to GitHub Pages
 
+# Per-run cost, measured from a real run (run 37153239748, 2026-10-03):
+# build 16s + deploy 11s on ubuntu-latest (2 billed minutes after per-job
+# rounding). PR runs build only (about 1 billed minute).
+
 on:
   push:
     branches: [main]
@@ -14,16 +18,16 @@ on:
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
-# One group for every ref, so a workflow_dispatch off main cannot publish
-# beside a main deploy. Production deploys are not cancelled mid-flight.
+# Main and workflow_dispatch deploys share one non-cancelling group, so they
+# serialise and a production deploy is never cancelled mid-flight. PR builds
+# get their own group per ref and cancel superseded runs, so they can never
+# queue behind or displace a pending main deploy.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
   build:
@@ -51,6 +55,9 @@ jobs:
     needs: build
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

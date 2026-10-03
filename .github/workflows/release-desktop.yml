@@ -1,5 +1,9 @@
 name: Release Desktop
 
+# Per-run cost, measured from a real run (run 23078003998, 2026-03-14):
+# one build-windows job on windows-latest, 7m05s wall (8 billed minutes at
+# the 2x Windows multiplier). Release-only; no push cost.
+
 on:
   release:
     types: [published]
@@ -7,7 +11,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # An in-flight publish must finish: cancelling leaves a release with partial assets.
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -17,6 +22,22 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check release tag matches built version
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          $tag = $env:TAG -replace '^v',''
+          $tauri = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $pkg = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          $msix = ([xml](Get-Content packaging/msix/AppxManifest.xml -Raw)).Package.Identity.Version -replace '\.0$',''
+          Write-Host "tag=$tag tauri.conf.json=$tauri package.json=$pkg AppxManifest=$msix"
+          if ($tag -ne $tauri -or $tag -ne $pkg -or $tag -ne $msix) {
+            Write-Error "Release tag $env:TAG does not match built versions; bump the sources before tagging."
+            exit 1
+          }
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
