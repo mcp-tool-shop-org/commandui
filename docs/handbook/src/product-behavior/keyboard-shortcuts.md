@@ -16,14 +16,19 @@ While the terminal has focus, plain `Ctrl+<letter>` belongs to the shell: `Ctrl+
 | Memory | `Ctrl+M` | `Ctrl+Shift+M` | Toggle memory drawer |
 | Close session | `Ctrl+W` | `Ctrl+Shift+X` | Close current session (Tauri only); asks first if a command is running |
 
-These have no shell meaning and work from anywhere, the terminal included:
+These work from anywhere, the terminal included:
 
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+Shift+W` | Toggle workflow drawer |
+| `Escape` | Close all open drawers/overlays. Outside the terminal, with a plan open and nothing else to close, it rejects the plan |
+
+These work outside the terminal only. In the terminal they go to the shell, so move focus first (`Ctrl+Shift+J` jumps to the composer):
+
+| Shortcut | Action |
+|----------|--------|
 | `Ctrl+,` | Toggle settings drawer |
 | `Ctrl+1` – `Ctrl+9` | Switch to session 1–9 |
-| `Escape` | Close all open drawers/overlays |
 | `Ctrl+Enter` | Approve and execute the current plan, on the session it was planned for |
 
 ## Plan panel shortcuts
@@ -59,7 +64,7 @@ The shortcut system is zone-aware. The app tracks which zone has focus:
 1. Zone-specific matches take priority over global matches
 2. Bare-key shortcuts (single letter, no modifier) are suppressed in text-input zones (terminal, composer) to avoid interfering with typing
 3. Special keys (`Escape`, `Enter`, `Tab`) work in text-input zones
-4. Modifier combos (`Ctrl+...`, `Shift+...`) work everywhere, except plain `Ctrl+<letter>` while the terminal has focus, which goes to the shell
+4. Modifier combos (`Ctrl+...`, `Shift+...`) work everywhere, except plain `Ctrl+<letter>`, `Ctrl+<digit>` and `Ctrl+,` while the terminal has focus, which go to the shell
 
 ### Conditional shortcuts
 

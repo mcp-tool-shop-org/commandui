@@ -256,13 +256,18 @@ describe("resolveShortcut", () => {
       expect(resolveShortcut(defs, event, "terminal")?.id).toBe("close-x");
     });
 
-    it("still resolves global ctrl+digit, ctrl+enter and escape in the terminal zone", () => {
-      const defs = [
-        makeDef("d1", "ctrl+1", ["global"]),
-        makeDef("ce", "ctrl+enter", ["global"]),
-        makeDef("esc", "escape", ["global"]),
-      ];
-      expect(resolveShortcut(defs, mockKeyEvent("1", { ctrlKey: true }), "terminal")?.id).toBe("d1");
+    // F-c3b3633e: plain Ctrl+digit and Ctrl+, are shell chords too. Ctrl+Enter
+    // and Escape still resolve here; AppShell's `when` guards keep them from
+    // approving or rejecting a plan while the terminal has focus.
+    it("keeps plain ctrl+digit and ctrl+comma with the shell in the terminal zone", () => {
+      const defs = [makeDef("d1", "ctrl+1", ["global"]), makeDef("set", "ctrl+,", ["global"])];
+      expect(resolveShortcut(defs, mockKeyEvent("1", { ctrlKey: true }), "terminal")).toBeNull();
+      expect(resolveShortcut(defs, mockKeyEvent(",", { ctrlKey: true }), "terminal")).toBeNull();
+      expect(resolveShortcut(defs, mockKeyEvent("1", { ctrlKey: true }), "composer")?.id).toBe("d1");
+    });
+
+    it("still resolves global ctrl+enter and escape in the terminal zone", () => {
+      const defs = [makeDef("ce", "ctrl+enter", ["global"]), makeDef("esc", "escape", ["global"])];
       expect(resolveShortcut(defs, mockKeyEvent("Enter", { ctrlKey: true }), "terminal")?.id).toBe("ce");
       expect(resolveShortcut(defs, mockKeyEvent("Escape"), "terminal")?.id).toBe("esc");
     });
@@ -284,8 +289,9 @@ describe("resolveShortcut", () => {
       ["k", { ctrlKey: true, altKey: true }, false],
       ["k", { metaKey: true }, false],
       ["k", { ctrlKey: true, metaKey: true }, false],
-      ["1", { ctrlKey: true }, false],
-      [",", { ctrlKey: true }, false],
+      ["1", { ctrlKey: true }, true],
+      [",", { ctrlKey: true }, true],
+      ["1", { ctrlKey: true, shiftKey: true }, false],
       ["Enter", { ctrlKey: true }, false],
       ["k", {}, false],
     ])("key %s with %j is %s", (key, opts, expected) => {
