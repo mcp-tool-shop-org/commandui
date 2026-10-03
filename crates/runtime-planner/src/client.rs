@@ -145,6 +145,9 @@ pub fn build_review(proposal: &CommandProposal, context: &PlanContext) -> PlanRe
     if proposal.escalates_privileges || floor.escalates_privileges {
         safety_flags.push("PRIVILEGE_ESCALATION".to_string());
     }
+    if floor.high_risk {
+        safety_flags.push("HIGH_RISK_COMMAND".to_string());
+    }
     if proposal.touches_network {
         safety_flags.push("NETWORK_ACCESS".to_string());
     }

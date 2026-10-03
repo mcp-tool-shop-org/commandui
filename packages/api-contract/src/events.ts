@@ -41,7 +41,8 @@ export type SessionExecState =
   | "ready"
   | "running"
   | "interrupting"
-  | "desynced";
+  | "desynced"
+  | "userRunning";
 
 export type SessionExecStateChangedEvent = {
   sessionId: string;

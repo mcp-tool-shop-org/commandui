@@ -11,6 +11,9 @@ pub enum SessionExecState {
     Running,
     Interrupting,
     Desynced,
+    /// A command the user typed by hand is running (ssh, vim, make): the
+    /// session is not at a prompt, so nothing may be typed into it for them.
+    UserRunning,
 }
 
 impl std::fmt::Display for SessionExecState {
@@ -21,6 +24,7 @@ impl std::fmt::Display for SessionExecState {
             Self::Running => write!(f, "running"),
             Self::Interrupting => write!(f, "interrupting"),
             Self::Desynced => write!(f, "desynced"),
+            Self::UserRunning => write!(f, "userRunning"),
         }
     }
 }

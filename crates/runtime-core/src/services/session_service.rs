@@ -13,7 +13,7 @@ use crate::events::{
 use crate::pty::{
     bootstrap_prompt, clone_reader, default_shell, new_marker_nonce, spawn_reader_with_exit,
     spawn_shell,
-    write_raw, PtyHandle, PROMPT_MARKER,
+    write_raw, PtyHandle, CMD_MARKER_VAR_ECHO, CMD_PLUMBING_ECHO, PROMPT_MARKER, PROMPT_ONLY_EXIT, PROMPT_ONLY_FIELD,
 };
 use crate::session::{SessionExecState, SessionRecord, SessionRegistry};
 use std::sync::{Arc, Mutex};
@@ -345,16 +345,39 @@ impl SessionService {
                 continue;
             };
             let Some(prompt) = parse_prompt_line(line, nonce) else {
-                display_text.push_str(shown_rest);
+                // A line that carries the marker text but is not this
+                // session's marker (the console's echo of a typed-ahead line, a
+                // stale marker) is plumbing, not output.
+                match shown_rest.find(PROMPT_MARKER) {
+                    None => display_text.push_str(shown_rest),
+                    Some(at) => {
+                        // Keep what came before the marker text on the row.
+                        display_text.push_str(&shown_rest[..at]);
+                        if shown_rest.ends_with('\n') {
+                            display_text.push('\n');
+                        }
+                    }
+                }
                 continue;
             };
 
             // A missing record must not be reported as Ready.
             let applied = if let Ok(mut reg) = sessions.lock() {
                 if let Some(record) = reg.get_mut(session_id) {
-                    record.cwd = prompt.cwd.clone();
                     let was_boot = !record.boot_prompt_received;
                     let was_int = record.exec_state == SessionExecState::Interrupting;
+                    // cmd's PROMPT marker only says a prompt was drawn. A
+                    // command that was run for the user finishes with its own
+                    // marker (which carries the exit code), so this one is
+                    // ignored while it is pending, unless it was interrupted:
+                    // Ctrl+C drops the rest of the line, marker included.
+                    if prompt.exit_code == PROMPT_ONLY_EXIT
+                        && record.pending_execution_id.is_some()
+                        && !was_int
+                    {
+                        continue;
+                    }
+                    record.cwd = prompt.cwd.clone();
                     // Same lock as Ready. take() drops only the id that just finished.
                     let pending = record.pending_execution_id.take();
                     record.marker_gen = record.marker_gen.wrapping_add(1);
@@ -423,6 +446,7 @@ impl SessionService {
         }
 
         display_text.push_str(&tail_display);
+        let display_text = sanitize_display(&display_text);
 
         if !display_text.is_empty() {
             sink.emit(RuntimeEvent::TerminalLine(TerminalLineEvent {
@@ -435,6 +459,35 @@ impl SessionService {
             }));
         }
     }
+}
+
+/// Take the session's own plumbing out of what the user is shown: the cmd
+/// marker echo that follows an executed command, and window-title escapes
+/// (cmd's one-shot child retitles the console on every command).
+fn sanitize_display(text: &str) -> String {
+    let mut text = text.replace(CMD_PLUMBING_ECHO, "").replace(CMD_MARKER_VAR_ECHO, "");
+    let mut from = 0;
+    while let Some(pos) = text[from..].find("\x1b]") {
+        let start = from + pos;
+        let body = &text[start + 2..];
+        let is_title = body.starts_with("0;") || body.starts_with("1;") || body.starts_with("2;");
+        if !is_title {
+            from = start + 2;
+            continue;
+        }
+        let end = match (body.find('\x07'), body.find("\x1b\\")) {
+            (Some(a), Some(b)) if a < b => Some(start + 2 + a + 1),
+            (Some(a), None) => Some(start + 2 + a + 1),
+            (_, Some(b)) => Some(start + 2 + b + 2),
+            (None, None) => None,
+        };
+        match end {
+            Some(end) => text.replace_range(start..end, ""),
+            None => break,
+        }
+        from = start;
+    }
+    text
 }
 
 struct ParsedPrompt {
@@ -460,7 +513,10 @@ fn last_visible_row(line: &str) -> String {
                     while i < bytes.len() && (0x20..=0x3f).contains(&bytes[i]) {
                         i += 1;
                     }
-                    if i < bytes.len() {
+                    // Only a real final byte belongs to the sequence; a
+                    // multibyte character after `ESC [` is text, and stepping
+                    // one byte into it would split it.
+                    if i < bytes.len() && (0x40..=0x7e).contains(&bytes[i]) {
                         i += 1;
                     }
                 }
@@ -478,8 +534,8 @@ fn last_visible_row(line: &str) -> String {
                         i += 1;
                     }
                 }
-                Some(_) => i += 1,
-                None => {}
+                Some(next) if (0x20..0x7f).contains(next) => i += 1,
+                _ => {}
             }
         } else if b == 0x0d {
             visible.clear();
@@ -547,7 +603,10 @@ fn parse_prompt_line(line: &str, nonce: &str) -> Option<ParsedPrompt> {
     if cwd.is_empty() || cwd == "~" || cwd.starts_with("~/") || cwd.starts_with("~\\") {
         return None;
     }
-    let exit_code = exit.trim().parse::<i32>().ok()?;
+    let exit_code = match exit.trim() {
+        PROMPT_ONLY_FIELD => PROMPT_ONLY_EXIT,
+        code => code.parse::<i32>().ok()?,
+    };
     Some(ParsedPrompt { cwd, exit_code })
 }
 
@@ -642,6 +701,182 @@ fn drain_complete_lines(buffer: &mut String) -> String {
 mod tests {
     use super::*;
     use crate::events::CollectingSink;
+
+    #[test]
+    fn last_visible_row_never_splits_a_character_after_an_escape() {
+        // ESC, or ESC [, followed by a multibyte character used to step one
+        // byte into it and panic on the next slice.
+        for line in [
+            "\x1b\u{e9}x",
+            "\x1b[\u{e9}x",
+            "\x1b[\u{FFFD}x",
+            "a\x1b\u{65e5}\u{672c}b",
+            "\x1b[1;\u{1F600}",
+            "\x1b]0;t\u{e9}\x07ok",
+            "\x1b",
+            "\x1b[",
+        ] {
+            let row = last_visible_row(line);
+            assert!(row.is_char_boundary(row.len()), "{line:?}");
+        }
+        assert_eq!(last_visible_row("\x1b\u{e9}x"), "\u{e9}x");
+        assert_eq!(last_visible_row("\x1b[31mred\x1b[0m"), "red");
+    }
+
+    #[test]
+    fn last_visible_row_survives_arbitrary_text() {
+        let mut seed = 0x9E3779B97F4A7C15u64;
+        let pool: Vec<char> = "\x1b[]\\;?0123456789HfmKhl\x07\r\n a\u{e9}\u{65e5}\u{1F600}\u{FFFD}|_".chars().collect();
+        for _ in 0..5000 {
+            let mut line = String::new();
+            for _ in 0..24 {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                line.push(pool[(seed % pool.len() as u64) as usize]);
+            }
+            let _ = last_visible_row(&line);
+            let _ = parse_prompt_line(&line, "n");
+        }
+    }
+
+    #[test]
+    fn sanitize_display_drops_cmd_plumbing_and_window_titles() {
+        assert_eq!(sanitize_display("C:\\w>echo hi & %__cui%\r\n"), "C:\\w>echo hi\r\n");
+        assert_eq!(sanitize_display("C:\\w>%__cui%\r\n"), "C:\\w>\r\n");
+        assert_eq!(sanitize_display("a\x1b]0;C:\\windows\\cmd.exe\x07b"), "ab");
+        assert_eq!(sanitize_display("a\x1b]2;t\x1b\\b\x1b]0;x\x07c"), "abc");
+        // Other OSC sequences (hyperlinks, 9001) and plain text are kept.
+        assert_eq!(sanitize_display("\x1b]8;;http://x\x07link"), "\x1b]8;;http://x\x07link");
+        // An unterminated title is left for the next chunk.
+        assert_eq!(sanitize_display("a\x1b]0;half"), "a\x1b]0;half");
+    }
+
+    #[test]
+    fn a_marker_echo_with_the_session_text_is_not_shown_but_the_text_before_it_is() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        {
+            let mut reg = sessions.lock().unwrap();
+            reg.insert(booted_record("s1", "test-nonce"));
+        }
+        let text = format!("output\u{20}glued{PROMPT_MARKER}^^^|stale-nonce|x\n");
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &text);
+        let shown: String = sink
+            .events()
+            .iter()
+            .filter_map(|e| match e {
+                RuntimeEvent::TerminalLine(l) => Some(l.text.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(shown.starts_with("output glued"), "{shown:?}");
+        assert!(!shown.contains(PROMPT_MARKER), "{shown:?}");
+    }
+
+    #[test]
+    fn a_prompt_only_marker_finishes_nothing_while_a_command_is_pending() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        {
+            let mut reg = sessions.lock().unwrap();
+            let mut record = booted_record("s1", "test-nonce");
+            record.pending_execution_id = Some("e1".to_string());
+            record.exec_state = SessionExecState::Running;
+            reg.insert(record);
+        }
+        let prompt_only = format!("{PROMPT_MARKER}|test-nonce|/tmp|P\n");
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &prompt_only);
+        assert!(sink.events().iter().all(|e| !matches!(e, RuntimeEvent::ExecutionFinished(_))));
+        {
+            let reg = sessions.lock().unwrap();
+            let record = reg.get("s1").unwrap();
+            assert_eq!(record.exec_state, SessionExecState::Running);
+            assert_eq!(record.pending_execution_id.as_deref(), Some("e1"));
+        }
+        // The marker that carries the exit code finishes it.
+        let real = format!("{PROMPT_MARKER}|test-nonce|/tmp|3\n");
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &real);
+        let finished: Vec<_> = sink
+            .events()
+            .into_iter()
+            .filter_map(|e| match e {
+                RuntimeEvent::ExecutionFinished(f) => Some((f.exit_code, f.status)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(finished, vec![(3, "failure".to_string())]);
+    }
+
+    #[test]
+    fn a_prompt_only_marker_after_ctrl_c_finishes_the_command_as_interrupted() {
+        // Ctrl+C drops the rest of a cmd line, the chained marker included.
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        {
+            let mut reg = sessions.lock().unwrap();
+            let mut record = booted_record("s1", "test-nonce");
+            record.pending_execution_id = Some("e1".to_string());
+            record.exec_state = SessionExecState::Interrupting;
+            reg.insert(record);
+        }
+        let prompt_only = format!("{PROMPT_MARKER}|test-nonce|/tmp|P\n");
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &prompt_only);
+        let statuses: Vec<_> = sink
+            .events()
+            .into_iter()
+            .filter_map(|e| match e {
+                RuntimeEvent::ExecutionFinished(f) => Some(f.status),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(statuses, vec!["interrupted".to_string()]);
+    }
+
+    #[test]
+    fn a_prompt_marker_returns_a_user_running_session_to_ready() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        {
+            let mut reg = sessions.lock().unwrap();
+            let mut record = booted_record("s1", "test-nonce");
+            record.exec_state = SessionExecState::UserRunning;
+            reg.insert(record);
+        }
+        let marker = format!("{PROMPT_MARKER}|test-nonce|/tmp|P\n");
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
+        assert_eq!(sessions.lock().unwrap().get("s1").unwrap().exec_state, SessionExecState::Ready);
+        assert!(sink.events().iter().any(
+            |e| matches!(e, RuntimeEvent::SessionExecStateChanged(s) if s.exec_state == "ready")
+        ));
+    }
+
+    fn booted_record(id: &str, nonce: &str) -> SessionRecord {
+        SessionRecord {
+            id: id.to_string(),
+            label: "Test".to_string(),
+            cwd: "/tmp".to_string(),
+            shell: "bash".to_string(),
+            status: "active".to_string(),
+            pty_pair: make_dummy_pty_pair(),
+            writer: make_dummy_writer(),
+            pending_execution_id: None,
+            exec_state: SessionExecState::Ready,
+            boot_prompt_received: true,
+            command_sent_at: None,
+            marker_nonce: nonce.to_string(),
+            read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            last_active_at: "2026-01-01T00:00:00Z".to_string(),
+        }
+    }
 
     /// Test the reader-loop chunk processor directly — no PTY, no Tauri.
     /// This proves the state machine works in isolation.

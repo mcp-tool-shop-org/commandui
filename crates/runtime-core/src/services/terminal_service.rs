@@ -22,22 +22,57 @@ pub struct ExecuteRequest {
     pub linked_plan_id: Option<String>,
 }
 
-/// Characters that must never reach the PTY inside a command line: every
-/// control character (C0, DEL, C1 including U+0085), the Unicode line and
-/// paragraph separators PowerShell treats as line ends, bidi controls that
-/// reorder displayed text, and invisible format characters that hide text.
+/// Characters that must never reach the PTY inside a command line, chosen by
+/// Unicode general category rather than a list of known offenders: Cc (every
+/// control character, C0, DEL and C1 including U+0085), Zl and Zp (the line and
+/// paragraph separators PowerShell treats as line ends), Cf (bidi controls that
+/// reorder displayed text, zero-width and joining characters, the Unicode tag
+/// block that spells invisible ASCII), Co (private use), the noncharacters,
+/// the default-ignorable code points that render as nothing (soft hyphen,
+/// combining grapheme joiner, Hangul fillers, Mongolian and Khmer vowel
+/// separators, variation selectors), and every space other than U+0020 (an
+/// NBSP or ideographic space looks like a space and is not one).
 pub(crate) fn is_forbidden_command_char(c: char) -> bool {
-    c.is_control()
-        || matches!(
-            c,
-            '\u{2028}' | '\u{2029}'
-                | '\u{200B}'..='\u{200F}'
-                | '\u{202A}'..='\u{202E}'
-                | '\u{2060}'..='\u{2064}'
-                | '\u{2066}'..='\u{2069}'
-                | '\u{FEFF}'
-        )
+    if c.is_control() || (c.is_whitespace() && c != ' ') {
+        return true;
+    }
+    let u = c as u32;
+    matches!(
+        u,
+        0x00AD
+            | 0x034F
+            | 0x0600..=0x0605
+            | 0x061C
+            | 0x06DD
+            | 0x070F
+            | 0x0890..=0x0891
+            | 0x08E2
+            | 0x115F..=0x1160
+            | 0x17B4..=0x17B5
+            | 0x180B..=0x180F
+            | 0x200B..=0x200F
+            | 0x2028..=0x202E
+            | 0x2060..=0x206F
+            | 0x3164
+            | 0xE000..=0xF8FF
+            | 0xFDD0..=0xFDEF
+            | 0xFE00..=0xFE0F
+            | 0xFEFF
+            | 0xFFA0
+            | 0xFFF0..=0xFFFB
+            | 0x110BD
+            | 0x110CD
+            | 0x13430..=0x1343F
+            | 0x1BCA0..=0x1BCA3
+            | 0x1D173..=0x1D17A
+            | 0xE0000..=0xE0FFF
+            | 0xF0000..=0x10FFFF
+    ) || (u & 0xFFFE) == 0xFFFE
 }
+
+/// Why `execute` refuses a session whose user typed a command by hand.
+pub const USER_RUNNING_ERROR: &str =
+    "A command you typed is still running in this session. Wait for the prompt or interrupt it.";
 
 pub struct TerminalService {
     sessions: Arc<Mutex<SessionRegistry>>,
@@ -93,6 +128,9 @@ impl TerminalService {
                 }
                 SessionExecState::Desynced => {
                     return Err("Session is desynced — resync first".to_string());
+                }
+                SessionExecState::UserRunning => {
+                    return Err(USER_RUNNING_ERROR.to_string());
                 }
                 SessionExecState::Ready => {}
             }
@@ -209,19 +247,23 @@ impl TerminalService {
                 .get_mut(session_id)
                 .ok_or_else(|| format!("Session not found: {session_id}"))?;
 
-            if record.exec_state != SessionExecState::Running {
+            let previous = record.exec_state.clone();
+            if !matches!(previous, SessionExecState::Running | SessionExecState::UserRunning) {
                 return Err("No command is currently running".to_string());
             }
 
             record.exec_state = SessionExecState::Interrupting;
-            record.writer.clone()
+            (record.writer.clone(), previous)
         };
+        let (writer, previous) = writer;
 
         // Ctrl+C after the lock is dropped. A blocked PTY write must not stall the reader.
         if let Err(e) = write_raw(&writer, "\x03") {
             let mut registry = self.sessions.lock().map_err(|err| err.to_string())?;
             if let Some(record) = registry.get_mut(session_id) {
-                record.exec_state = SessionExecState::Running;
+                if record.exec_state == SessionExecState::Interrupting {
+                    record.exec_state = previous;
+                }
             }
             return Err(e);
         }
@@ -288,18 +330,51 @@ impl TerminalService {
         Ok(())
     }
 
+    /// The user's own keystrokes. Enter at a prompt starts a command the
+    /// runtime did not run, so the session leaves Ready (UserRunning) until
+    /// the next prompt marker: `execute` must not type an approved command
+    /// into an ssh session or an editor. Ctrl+C during a command the runtime
+    /// ran is an interrupt.
     pub fn write(&self, session_id: &str, data: &str) -> Result<(), String> {
-        let writer = {
-            let registry = self.sessions.lock().map_err(|e| e.to_string())?;
+        let (writer, changed) = {
+            let mut registry = self.sessions.lock().map_err(|e| e.to_string())?;
 
             let record = registry
-                .get(session_id)
+                .get_mut(session_id)
                 .ok_or_else(|| format!("Session not found: {session_id}"))?;
 
-            record.writer.clone()
+            let mut changed = None;
+            if record.status != "exited" {
+                if record.exec_state == SessionExecState::Ready
+                    && (data.contains('\r') || data.contains('\n'))
+                {
+                    changed = Some((SessionExecState::Ready, SessionExecState::UserRunning));
+                } else if record.exec_state == SessionExecState::Running && data.contains('\x03') {
+                    changed = Some((SessionExecState::Running, SessionExecState::Interrupting));
+                }
+            }
+            // Before the write, and announced under the lock, so a prompt that
+            // comes back at once cannot be overtaken by this change.
+            if let Some((_, next)) = &changed {
+                record.exec_state = next.clone();
+                self.emit_exec_state(session_id, next);
+            }
+            (record.writer.clone(), changed)
         };
 
-        write_raw(&writer, data)
+        if let Err(e) = write_raw(&writer, data) {
+            if let Some((previous, next)) = changed {
+                let mut registry = self.sessions.lock().map_err(|err| err.to_string())?;
+                if let Some(record) = registry.get_mut(session_id) {
+                    if record.exec_state == next {
+                        record.exec_state = previous.clone();
+                        self.emit_exec_state(session_id, &previous);
+                    }
+                }
+            }
+            return Err(e);
+        }
+        Ok(())
     }
 
     pub fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String> {
@@ -417,6 +492,116 @@ mod tests {
         assert_eq!(sink.len(), 0);
     }
 
+    #[test]
+    fn forbidden_characters_follow_unicode_categories_not_a_list() {
+        // Cf, Zl, Zp, Co, tags, variation selectors, fillers, soft hyphen,
+        // non-ASCII spaces: all invisible or reordering, all refused.
+        for c in [
+            '\u{061C}', '\u{2065}', '\u{206A}', '\u{206F}', '\u{00AD}', '\u{180E}', '\u{034F}',
+            '\u{115F}', '\u{1160}', '\u{3164}', '\u{FFA0}', '\u{FE00}', '\u{FE0F}', '\u{E0100}',
+            '\u{E01EF}', '\u{E0000}', '\u{E0041}', '\u{E007F}', '\u{00A0}', '\u{2003}', '\u{3000}',
+            '\u{1680}', '\u{202F}', '\u{E000}', '\u{F8FF}', '\u{FDD0}', '\u{FFFE}', '\u{FFFF}',
+            '\u{1FFFF}', '\u{10FFFF}', '\u{0600}', '\u{17B4}', '\u{110BD}', '\u{1D173}',
+            '\u{2028}', '\u{2029}', '\u{85}', '\u{7f}', '\u{0}', '\u{1b}',
+        ] {
+            assert!(is_forbidden_command_char(c), "U+{:04X} must be refused", c as u32);
+        }
+        // Ordinary text, including non-ASCII letters, symbols and emoji, passes.
+        for c in ['a', 'Z', '0', ' ', '-', '/', '\\', '"', '\u{e9}', '\u{65e5}', '\u{1F600}', '\u{2603}', '\u{A9}'] {
+            assert!(!is_forbidden_command_char(c), "U+{:04X} must pass", c as u32);
+        }
+        // Every char in the planes around the invisible blocks is classified
+        // without panicking.
+        for u in 0..=0x10FFFFu32 {
+            if let Some(c) = char::from_u32(u) {
+                let _ = is_forbidden_command_char(c);
+            }
+        }
+    }
+
+    #[test]
+    fn typing_enter_at_a_prompt_makes_the_session_user_running_and_execute_refuses_it() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+        insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+
+        // Typing without Enter changes nothing.
+        svc.write("s1", "ssh host").unwrap();
+        assert_eq!(sessions.lock().unwrap().get("s1").unwrap().exec_state, SessionExecState::Ready);
+        assert_eq!(sink.len(), 0);
+
+        svc.write("s1", "\r").unwrap();
+        assert_eq!(sessions.lock().unwrap().get("s1").unwrap().exec_state, SessionExecState::UserRunning);
+        let events = sink.events();
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            RuntimeEvent::SessionExecStateChanged(e) => assert_eq!(e.exec_state, "userRunning"),
+            _ => panic!("expected an exec state change"),
+        }
+
+        let written = captured.lock().unwrap().len();
+        let err = svc.execute(exec_request("e1")).unwrap_err();
+        assert_eq!(err, USER_RUNNING_ERROR);
+        assert_eq!(
+            err,
+            "A command you typed is still running in this session. Wait for the prompt or interrupt it."
+        );
+        assert_eq!(captured.lock().unwrap().len(), written, "nothing was typed into the running program");
+
+        // More keystrokes into the running program leave the state alone.
+        svc.write("s1", "yes\r").unwrap();
+        assert_eq!(sink.len(), 1);
+    }
+
+    #[test]
+    fn a_user_running_session_can_be_interrupted() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+        insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+        svc.write("s1", "sleep 30\r").unwrap();
+        svc.interrupt("s1").unwrap();
+        assert_eq!(sessions.lock().unwrap().get("s1").unwrap().exec_state, SessionExecState::Interrupting);
+        assert!(captured.lock().unwrap().ends_with(b"\x03"));
+    }
+
+    #[test]
+    fn user_ctrl_c_during_an_executed_command_is_an_interrupt() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+        insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+        svc.execute(exec_request("e1")).unwrap();
+        svc.write("s1", "\x03").unwrap();
+        assert_eq!(sessions.lock().unwrap().get("s1").unwrap().exec_state, SessionExecState::Interrupting);
+    }
+
+    #[test]
+    fn a_failed_enter_write_does_not_leave_the_session_user_running() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let failing: PtyHandle = Arc::new(Mutex::new(Box::new(AlwaysFails) as Box<dyn std::io::Write + Send>));
+        insert_ready(&sessions, "s1", failing);
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+        assert!(svc.write("s1", "\r").is_err());
+        assert_eq!(sessions.lock().unwrap().get("s1").unwrap().exec_state, SessionExecState::Ready);
+    }
+
+    struct AlwaysFails;
+
+    impl std::io::Write for AlwaysFails {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("closed"))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
     fn capture_writer(buf: &Arc<Mutex<Vec<u8>>>, sessions: &Arc<Mutex<SessionRegistry>>) -> PtyHandle {
         Arc::new(Mutex::new(Box::new(CaptureWrite {
             buf: buf.clone(),
@@ -441,10 +626,10 @@ mod tests {
     #[test]
     fn execute_clears_pending_input_before_the_command_per_shell() {
         for (shell, clear) in [
-            ("bash", "\x05\x15"),
+            ("bash", "\x1d"),
             ("zsh", "\x05\x15"),
-            ("pwsh.exe", "\x1b[1;5F\x1b[1;5H"),
-            ("powershell.exe", "\x1b[1;5F\x1b[1;5H"),
+            ("pwsh.exe", "\x1d\x1b[1;5F\x1b[1;5H"),
+            ("powershell.exe", "\x1d\x1b[1;5F\x1b[1;5H"),
         ] {
             let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
             let sink = Arc::new(CollectingSink::new());
@@ -804,10 +989,8 @@ mod tests {
         .unwrap();
         let bytes = captured.lock().unwrap();
         let text = String::from_utf8_lossy(&bytes);
-        assert!(text.starts_with("\x1b[1;5F\x1b[1;5Hdir\rcall set __cui_ec=%^ERRORLEVEL% & "));
-        assert!(text.contains("!__cui_ec!"));
-        assert!(text.contains("test-nonce"));
-        assert!(!text.contains('~'));
+        // One line: the marker is chained after the command, not typed ahead.
+        assert_eq!(text, "\x1b[1;5F\x1b[1;5Hdir & %__cui%\r");
     }
 
     #[test]
