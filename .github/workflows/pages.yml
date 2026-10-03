@@ -6,6 +6,12 @@ on:
     paths:
       - 'site/**'
       - '.github/workflows/pages.yml'
+  # Build-only on pull requests (same paths) so a broken site fails before
+  # merge; the deploy job below stays main-only.
+  pull_request:
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 # One group for every ref, so a workflow_dispatch off main cannot publish
@@ -43,7 +49,7 @@ jobs:
 
   deploy:
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
