@@ -134,7 +134,7 @@ fn render_status_bar(frame: &mut Frame, area: Rect, model: &Model) {
 
     let exec_color = match active.map(|s| s.exec_state.as_str()) {
         Some("ready") => Color::Green,
-        Some("running") => Color::Cyan,
+        Some("running") | Some("userRunning") => Color::Cyan,
         Some("interrupting") | Some("booting") => Color::Yellow,
         _ => Color::Red,
     };
@@ -207,6 +207,7 @@ fn render_status_bar(frame: &mut Frame, area: Rect, model: &Model) {
         let exec_display = match active.map(|s| s.exec_state.as_str()) {
             Some("ready") => "idle",
             Some("interrupting") => "stopping",
+            Some("userRunning") => "program running",
             Some("booting") => "starting",
             Some(other) => other,
             None => "?",
@@ -439,7 +440,7 @@ fn render_shell_footer(frame: &mut Frame, area: Rect, model: &Model) {
 
     let is_running = model
         .active_session()
-        .map_or(false, |s| s.exec_state == "running" || s.exec_state == "interrupting");
+        .map_or(false, |s| s.has_running_command());
 
     if let Some(prompt) = model.confirm_prompt() {
         spans.push(Span::styled(
@@ -452,6 +453,11 @@ fn render_shell_footer(frame: &mut Frame, area: Rect, model: &Model) {
         } else {
             spans.push(Span::raw("  ^T Ask  ^G Raw Play  ^S Runs  ^H Help  ^Q Quit"));
         }
+    } else if model.active_session().is_some_and(|s| s.boot_is_slow()) {
+        spans.push(Span::styled(
+            "  Still starting. ^R retries, ^W closes, ^N New",
+            Style::default().fg(Color::Yellow),
+        ));
     } else {
         spans.push(Span::raw("  ^N New  ^Q Quit"));
     }
@@ -831,6 +837,21 @@ fn review_meta_lines(model: &Model, width: usize) -> Vec<Line<'static>> {
             Style::default(),
             label,
             Style::default().fg(Color::Yellow),
+            width,
+        ));
+    }
+    // A program in the foreground blocks the approve; say so before the user presses it.
+    if let Some(msg) = model
+        .proposal_session_id
+        .as_deref()
+        .and_then(|id| model.sessions.iter().find(|s| s.id == id))
+        .and_then(|s| s.busy_message())
+    {
+        lines.extend(wrapped_meta(
+            "Foreground: ",
+            red,
+            &format!("{msg} Approve is refused until the prompt returns."),
+            red,
             width,
         ));
     }

@@ -53,6 +53,10 @@ pub struct App {
     /// Modes each session's app enabled, learned from that session's output
     /// whether or not Raw Play is showing it. Re-applied on Raw Play re-entry.
     session_modes: std::collections::HashMap<String, ChildModes>,
+    /// The last size each session's PTY was resized to. On Windows every real
+    /// resize makes ConPTY repaint the screen into the transcript, so a resize
+    /// to the size the PTY already has is skipped.
+    pty_sizes: std::collections::HashMap<String, (u16, u16)>,
 }
 
 impl App {
@@ -74,6 +78,7 @@ impl App {
             in_raw_passthrough: false,
             child_modes: ChildModes::default(),
             session_modes: std::collections::HashMap::new(),
+            pty_sizes: std::collections::HashMap::new(),
         }
     }
 
@@ -161,6 +166,7 @@ impl App {
         }
         let session_id = session_id.to_string();
         self.session_modes.remove(&session_id);
+        self.pty_sizes.remove(&session_id);
 
         // If this session owns the current proposal, clear it
         if self.model.proposal_owner() == Some(session_id.as_str()) {
@@ -295,7 +301,11 @@ impl App {
                 // Every session's mode changes are learned, not only the active
                 // session's, so a background session's toggles are not missed.
                 self.observe_session_modes(&event);
-                if active_id.as_deref() == Some(line_event.session_id.as_str()) {
+                // Text the runtime injects (truncation and exit notices) is not the
+                // app's output; it must not print into the app's screen.
+                if active_id.as_deref() == Some(line_event.session_id.as_str())
+                    && line_event.kind != "notice"
+                {
                     let mut out = stdout();
                     let _ = out.write_all(line_event.text.as_bytes());
                     let _ = out.flush();
@@ -604,7 +614,13 @@ impl App {
     }
 
     fn resize_session(&mut self, session_id: &str, cols: u16, rows: u16) {
+        if self.pty_sizes.get(session_id) == Some(&(cols, rows)) {
+            return;
+        }
         let result = self.terminal_service.resize(session_id, cols, rows);
+        if result.is_ok() {
+            self.pty_sizes.insert(session_id.to_string(), (cols, rows));
+        }
         self.model.surface_session_result(result);
     }
 
@@ -618,9 +634,14 @@ impl App {
         self.model.pane_cols = cols;
         self.model.pane_rows = rows;
 
-        // Resize the ACTIVE session's PTY only
+        // Resize the ACTIVE session's PTY only, and not for Ask, Review or the
+        // run selector: those draw over the shell pane, so the PTY keeps the
+        // Shell size and ConPTY has nothing to repaint.
+        let (pty_cols, pty_rows) =
+            pty_size_for(self.model.input_mode.clone(), area.width, area.height)
+                .unwrap_or((cols, rows));
         if let Some(session_id) = self.model.active_session_id().map(|s| s.to_string()) {
-            self.resize_session(&session_id, cols, rows);
+            self.resize_session(&session_id, pty_cols, pty_rows);
         }
     }
 }
@@ -640,6 +661,15 @@ fn pane_size_for(mode: InputMode, width: u16, height: u16) -> Option<(u16, u16)>
         None
     } else {
         Some((cols, rows))
+    }
+}
+
+/// PTY size for `mode`. Raw Play gets the whole host; every Console mode keeps
+/// the Shell pane size so a mode change never resizes the PTY.
+fn pty_size_for(mode: InputMode, width: u16, height: u16) -> Option<(u16, u16)> {
+    match mode {
+        InputMode::RawPlay => pane_size_for(InputMode::RawPlay, width, height),
+        _ => pane_size_for(InputMode::Shell, width, height),
     }
 }
 
@@ -1058,6 +1088,11 @@ mod tests {
         assert_eq!(pane_size_for(InputMode::Review, 100, 40), Some((98, 26)));
         assert_eq!(pane_size_for(InputMode::RawPlay, 100, 40), Some((98, 40)));
         assert_eq!(pane_size_for(InputMode::Shell, 2, 40), None);
+        // Ask, Review and the selector keep the Shell PTY size: no resize, no repaint.
+        for mode in [InputMode::Ask, InputMode::Review, InputMode::Switcher] {
+            assert_eq!(pty_size_for(mode, 100, 40), Some((98, 36)));
+        }
+        assert_eq!(pty_size_for(InputMode::RawPlay, 100, 40), Some((98, 40)));
         assert_eq!(pane_size_for(InputMode::Review, 100, 14), None);
     }
 

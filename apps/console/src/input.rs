@@ -248,7 +248,12 @@ fn handle_shell_key(
         None => return InputAction::Ignored,
     };
 
-    if !model.can_accept_input() {
+    // A session still booting takes Ctrl+R (resync) and plain keys, so a
+    // bootstrap that never completes is not a dead pane.
+    let booting = model
+        .active_session()
+        .is_some_and(|s| s.session_state == SessionState::Booting);
+    if !model.can_accept_input() && !booting {
         return InputAction::Ignored;
     }
 
@@ -468,6 +473,19 @@ fn try_approve(model: &mut Model) -> InputAction {
     // A keypress buffered while the planner ran must not approve a command that
     // has not been on screen long enough to read.
     if !model.review_input_ready() {
+        return InputAction::Ignored;
+    }
+
+    // The runtime refuses `execute` while a command holds the foreground, and
+    // a command the user typed by hand (ssh, vim, make) holds it too. Say so
+    // here, in the runtime's words, instead of after the approve.
+    if let Some(msg) = model
+        .sessions
+        .iter()
+        .find(|s| s.id == session_id)
+        .and_then(|s| s.busy_message())
+    {
+        model.review_error = Some(msg.to_string());
         return InputAction::Ignored;
     }
 
@@ -1705,5 +1723,68 @@ mod tests {
         let action = handle_key(press(KeyCode::Char('5'), KeyModifiers::NONE), &mut model, &terminal);
         assert_eq!(action, InputAction::Ignored);
         assert_eq!(model.input_mode, InputMode::Switcher);
+    }
+
+    #[test]
+    fn a_hand_typed_command_gets_the_close_and_quit_confirms() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.sessions[0].exec_state = "userRunning".into();
+        assert_eq!(
+            handle_key(press(KeyCode::Char('w'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert_eq!(
+            model.pending_confirm,
+            Some(PendingConfirm::CloseSession("s1".into()))
+        );
+        model.pending_confirm = None;
+        assert_eq!(
+            handle_key(press(KeyCode::Char('q'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert_eq!(model.pending_confirm, Some(PendingConfirm::Quit));
+    }
+
+    #[test]
+    fn review_refuses_approval_while_a_program_holds_the_foreground() {
+        let terminal = service();
+        for (state, expected) in [
+            ("userRunning", crate::model::USER_RUNNING_MESSAGE),
+            ("running", crate::model::RUNNING_MESSAGE),
+        ] {
+            let mut model = two_sessions();
+            model.input_mode = InputMode::Review;
+            model.review_rows = 8;
+            model.review_cols = 80;
+            model.set_proposal(proposal("ls -la", false), "s1".into());
+            model.sessions[0].exec_state = state.into();
+            let action =
+                handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+            assert_eq!(action, InputAction::Ignored);
+            assert_eq!(model.review_error.as_deref(), Some(expected));
+            assert!(model.current_proposal.is_some());
+
+            model.sessions[0].exec_state = "ready".into();
+            let action =
+                handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+            assert!(matches!(action, InputAction::ApproveProposal(_, _, _)));
+        }
+    }
+
+    #[test]
+    fn a_booting_session_still_takes_resync_and_keys() {
+        let terminal = service();
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        assert_eq!(model.sessions[0].session_state, SessionState::Booting);
+        // The test service has no such session, so the write reaches the runtime
+        // and its refusal is surfaced; an ignored key would leave no status.
+        let action = handle_key(press(KeyCode::Char('r'), KeyModifiers::CONTROL), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+        assert!(model.status_line.as_deref().unwrap().contains("Session not found"));
+        model.status_line = None;
+        handle_key(press(KeyCode::Char('a'), KeyModifiers::NONE), &mut model, &terminal);
+        assert!(model.status_line.as_deref().unwrap().contains("Session not found"));
     }
 }

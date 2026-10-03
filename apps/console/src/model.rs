@@ -67,7 +67,21 @@ pub struct SessionModel {
     pub bytes_dropped: usize,
     /// Escape-sequence parser state, kept across chunks.
     esc_state: EscState,
+    /// When the session was added. A session still booting after
+    /// `BOOT_HINT_AFTER` shows a way out in the footer.
+    pub created_at: std::time::Instant,
 }
+
+/// A session that has not become ready after this long gets a footer hint.
+pub const BOOT_HINT_AFTER: std::time::Duration = std::time::Duration::from_secs(4);
+
+/// What the runtime says when it refuses to run a command while the user's own
+/// typed command holds the foreground.
+pub const USER_RUNNING_MESSAGE: &str =
+    "A command you typed is still running in this session. Wait for the prompt or interrupt it.";
+/// Same refusal for a command Console approved earlier that has not finished.
+pub const RUNNING_MESSAGE: &str =
+    "A command is still running in this session. Wait for it to finish or interrupt it.";
 
 /// Where the ingest parser is inside an ANSI escape sequence.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -104,6 +118,7 @@ impl SessionModel {
             csi_params: String::new(),
             bytes_dropped: 0,
             esc_state: EscState::Ground,
+            created_at: std::time::Instant::now(),
         }
     }
 
@@ -115,9 +130,30 @@ impl SessionModel {
             SessionState::Error(_) => "ERROR",
             SessionState::Active => match self.exec_state.as_str() {
                 "running" => "RUNNING",
+                "userRunning" => "FOREGROUND",
                 "interrupting" => "STOPPING",
                 _ => "IDLE",
             },
+        }
+    }
+
+    /// True while the session is starting and has taken longer than expected.
+    pub fn boot_is_slow(&self) -> bool {
+        self.session_state == SessionState::Booting && self.created_at.elapsed() >= BOOT_HINT_AFTER
+    }
+
+    /// A command the user typed by hand holds the foreground (ssh, vim, make).
+    /// The runtime reports this as `userRunning`.
+    pub fn has_user_command(&self) -> bool {
+        self.exec_state == "userRunning"
+    }
+
+    /// Why `execute` would refuse this session right now, in the runtime's words.
+    pub fn busy_message(&self) -> Option<&'static str> {
+        match self.exec_state.as_str() {
+            "userRunning" => Some(USER_RUNNING_MESSAGE),
+            "running" | "interrupting" => Some(RUNNING_MESSAGE),
+            _ => None,
         }
     }
 
@@ -125,9 +161,13 @@ impl SessionModel {
         matches!(self.session_state, SessionState::Active)
     }
 
-    /// A command is running (or being stopped) in this session.
+    /// A command is running (or being stopped) in this session, whether Console
+    /// approved it or the user typed it. Both need the Ctrl+W and Ctrl+Q confirm.
     pub fn has_running_command(&self) -> bool {
-        matches!(self.exec_state.as_str(), "running" | "interrupting")
+        matches!(
+            self.exec_state.as_str(),
+            "running" | "interrupting" | "userRunning"
+        )
     }
 
     pub fn can_accept_input(&self) -> bool {
@@ -356,7 +396,7 @@ impl SessionModel {
     /// move within a line matter here; colour and mode sequences draw nothing.
     fn dispatch_csi(&mut self, fin: char) {
         let params = std::mem::take(&mut self.csi_params);
-        if !matches!(fin, 'K' | 'D' | 'C' | 'G' | 'P' | '@') {
+        if !matches!(fin, 'K' | 'D' | 'C' | 'G' | 'P' | '@' | 'H' | 'f') {
             return;
         }
         if !params.chars().all(|c| c.is_ascii_digit() || c == ';') {
@@ -373,6 +413,19 @@ impl SessionModel {
         match fin {
             'D' => self.cursor_left(n),
             'C' => self.cursor_right(n),
+            // Cursor position. The runtime turns a row change into a line break
+            // before it gets here, so what arrives is a move on the open line:
+            // only the column matters.
+            'H' | 'f' => {
+                let col: usize = params
+                    .split(';')
+                    .nth(1)
+                    .and_then(|p| p.parse().ok())
+                    .unwrap_or(1)
+                    .clamp(1, 1000);
+                self.line_cursor = 0;
+                self.cursor_right(col - 1);
+            }
             'G' => {
                 self.line_cursor = 0;
                 self.cursor_right(first.unwrap_or(1).clamp(1, 1000) - 1);
@@ -419,6 +472,14 @@ impl SessionModel {
                 self.ingest_terminal_chunk(&e.text);
             }
             RuntimeEvent::SessionReady(e) => {
+                // Everything before the first ready is the shell banner and the
+                // echo of the runtime's own bootstrap line (about 400 characters
+                // of plumbing, with the session's marker nonce). Drop it so the
+                // first screen is the prompt.
+                if self.session_state == SessionState::Booting {
+                    self.terminal_lines.clear();
+                    self.scroll_offset = 0;
+                }
                 self.session_state = SessionState::Active;
                 self.cwd = Some(e.cwd.clone());
             }
@@ -1772,5 +1833,56 @@ mod tests {
             status: "failure".into(),
         }));
         assert_eq!(model.sessions[0].session_state, SessionState::Closed);
+    }
+
+    #[test]
+    fn a_same_row_cursor_position_redraw_overwrites_the_open_line() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        // PSReadLine prediction on Windows: each keystroke repaints the line
+        // behind a cursor-position escape, then moves the cursor back.
+        feed(
+            &mut model,
+            &[
+                "echo hix",
+                "\u{1b}[93m\u{1b}[8;1Hecho hixy\u{1b}[0m\u{1b}[8;10H",
+                "\u{1b}[8;1Hecho hixy",
+                "\u{1b}[8;6HZ\n",
+            ],
+        );
+        assert_eq!(model.sessions[0].terminal_lines, vec!["echo Zixy"]);
+        // Bare H and f go to column 1.
+        feed(&mut model, &["abc\u{1b}[HX\u{1b}[;3fY\n"]);
+        assert_eq!(model.sessions[0].terminal_lines.last().unwrap(), "XbY");
+    }
+
+    #[test]
+    fn the_first_ready_drops_the_banner_and_the_bootstrap_echo() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        feed(&mut model, &["banner\nPS C:\\> function prompt { __COMMANDUI_PROMPT__ }\n"]);
+        model.apply_event(make_ready_event("s1", "C:\\"));
+        assert!(model.sessions[0].terminal_lines.is_empty());
+        feed(&mut model, &["kept\n"]);
+        model.apply_event(make_ready_event("s1", "C:\\"));
+        assert_eq!(model.sessions[0].terminal_lines, vec!["kept"]);
+    }
+
+    #[test]
+    fn a_typed_foreground_command_counts_as_running() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        model.sessions[0].session_state = SessionState::Active;
+        model.apply_event(RuntimeEvent::SessionExecStateChanged(
+            SessionExecStateChangedEvent {
+                session_id: "s1".into(),
+                exec_state: "userRunning".into(),
+                changed_at: "t".into(),
+            },
+        ));
+        assert!(model.session_is_running("s1"));
+        assert!(model.any_session_running());
+        assert_eq!(model.sessions[0].state_badge(), "FOREGROUND");
+        assert_eq!(model.sessions[0].busy_message(), Some(USER_RUNNING_MESSAGE));
     }
 }
