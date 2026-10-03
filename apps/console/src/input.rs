@@ -8,33 +8,50 @@
 //!   - Ctrl+C       → interrupt active session (or ETX when idle)
 //!   - Ctrl+R       → resync active session
 //!   - Ctrl+T       → switch to ASK mode
+//!   - Ctrl+G       → enter Raw Play
+//!   - Ctrl+S       → open the run selector
+//!   - Ctrl+H       → help overlay (Esc or Ctrl+H closes it)
 //!   - Ctrl+N       → create new session
-//!   - Ctrl+W       → close active session
+//!   - Ctrl+W       → close active session (the last one too)
 //!   - Ctrl+] / Ctrl+5 → next session (Unix crossterm 0.28 reports Ctrl+] as Ctrl+5)
-//!   - Ctrl+[ / Esc → previous session when help is closed
-//!     (Unix crossterm 0.28 reports Ctrl+[ as Esc; Windows still reports Ctrl+[)
-//!   - Shift+PgUp   → scroll active session up
-//!   - Shift+PgDn   → scroll active session down
+//!   - Ctrl+[       → previous session (Windows reports the bracket)
+//!   - Esc          → previous session on Unix only, where Ctrl+[ arrives as Esc,
+//!     and only with more than one session; otherwise the shell receives ESC
+//!   - Shift+PgUp / Shift+PgDn → scroll active session
 //!   - All else     → forward to active session shell
 //!
 //! ASK mode:
 //!   - Ctrl+Q       → quit
-//!   - Escape/Ctrl+T → back to SHELL
+//!   - Escape/Ctrl+T → back to SHELL; while a proposal is generating, the same
+//!     keys abort the request and its result is dropped
 //!   - Enter         → submit intent (targets active session)
 //!   - Backspace/Left/Right/Ctrl+U → edit composer
 //!   - Printable    → insert into composer
 //!
-//! REVIEW mode:
+//! REVIEW mode (session switching is refused here and in Ask):
 //!   - Ctrl+Q       → quit
-//!   - Enter/y      → approve (execute on active session)
-//!   - Escape/n     → cancel
+//!   - Up/Down/PgUp/PgDn/Left/Right (j/k) → scroll the quoted command
+//!   - c            → confirm, when the proposal requires it
+//!   - Enter/y      → approve (executes on the proposal's session); refused while
+//!     the command is clipped or confirmation is pending
+//!   - Escape/n     → cancel and return to ASK
 //!
-//! Fullscreen child policy: NOT SUPPORTED YET.
+//! RUNS (run selector): Up/Down/j/k, Enter, 1-9 (rows in view), Ctrl+N, Ctrl+W,
+//! Esc or Ctrl+S to close.
+//!
+//! RAW PLAY: every key is forwarded to the PTY except Ctrl+\ (exit) and Ctrl+Q
+//! (exit and quit). Mouse, focus, and bracketed paste are forwarded in the
+//! sequences the child enabled.
 
 use crate::model::{InputMode, Model};
-use crate::ui::{command_is_clipped, review_window, visible_command_lines};
+use crate::ui::{
+    command_is_clipped, page_lines, review_window, visible_command_lines, widest_line,
+};
 use commandui_runtime_core::services::terminal_service::TerminalService;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+/// Whether a bare Esc is the Unix encoding of Ctrl+[ (previous session).
+const ESC_IS_PREV_SESSION: bool = cfg!(unix);
 
 #[derive(Debug, PartialEq)]
 pub enum InputAction {
@@ -105,14 +122,15 @@ fn handle_shell_key(
     if key.modifiers.contains(KeyModifiers::SHIFT) {
         match key.code {
             KeyCode::PageUp => {
-                let page = model.pane_rows.max(1) as usize;
+                // A page is the logical lines that fill pane_rows visual rows.
+                let page = scroll_page(model);
                 if let Some(s) = model.active_session_mut() {
                     s.scroll_up(page);
                 }
                 return InputAction::Scrolled;
             }
             KeyCode::PageDown => {
-                let page = model.pane_rows.max(1) as usize;
+                let page = scroll_page(model);
                 if let Some(s) = model.active_session_mut() {
                     s.scroll_down(page);
                 }
@@ -156,12 +174,13 @@ fn handle_shell_key(
             KeyCode::Char('n') => {
                 return InputAction::CreateSession;
             }
-            // Ctrl+W — close active session
+            // Ctrl+W — close active session. The last one can close; the
+            // empty welcome state is a supported state.
             KeyCode::Char('w') => {
-                if model.session_count() > 1 {
+                if model.session_count() > 0 {
                     return InputAction::CloseSession;
                 }
-                return InputAction::Ignored; // Don't close last session
+                return InputAction::Ignored;
             }
             // Ctrl+] — next session. Unix crossterm 0.28 emits this byte as Ctrl+5.
             KeyCode::Char(']') | KeyCode::Char('5') => {
@@ -183,13 +202,12 @@ fn handle_shell_key(
         }
     }
 
-    // Esc is Ctrl+[ on Unix crossterm 0.28. Help-open Esc is handled above.
-    if key.code == KeyCode::Esc {
-        if model.session_count() > 1 {
-            model.prev_session();
-            return InputAction::PrevSession;
-        }
-        return InputAction::Ignored;
+    // Esc is Ctrl+[ on Unix crossterm 0.28, so there it is previous-session.
+    // Where it is not (Windows reports Ctrl+[ itself), or with one session,
+    // Esc falls through and the shell receives ESC. Help-open Esc is handled above.
+    if ESC_IS_PREV_SESSION && key.code == KeyCode::Esc && model.session_count() > 1 {
+        model.prev_session();
+        return InputAction::PrevSession;
     }
 
     // Everything below requires an active session
@@ -257,8 +275,25 @@ fn handle_shell_key(
     InputAction::Ignored
 }
 
+fn scroll_page(model: &Model) -> usize {
+    let rows = usize::from(model.pane_rows.max(1));
+    let cols = usize::from(model.pane_cols.max(1));
+    model
+        .active_session()
+        .map_or(rows, |s| page_lines(s, cols, rows))
+}
+
 fn handle_ask_key(key: KeyEvent, model: &mut Model) -> InputAction {
     if model.planner_busy {
+        // Esc or Ctrl+T abort the in-flight request. Its result is dropped on arrival.
+        let cancel = key.code == KeyCode::Esc
+            || (key.modifiers.contains(KeyModifiers::CONTROL)
+                && key.code == KeyCode::Char('t'));
+        if cancel {
+            model.cancel_planner();
+            model.input_mode = InputMode::Shell;
+            return InputAction::ModeSwitched;
+        }
         return InputAction::Ignored;
     }
 
@@ -368,12 +403,7 @@ fn nudge_review(model: &mut Model, dy: isize, dx: isize) {
         .unwrap_or_default();
     let (rows, cols) = review_window(model);
     let max_y = lines.len().saturating_sub(rows);
-    let widest = lines
-        .iter()
-        .map(|line| line.chars().count())
-        .max()
-        .unwrap_or(0);
-    let max_x = widest.saturating_sub(cols);
+    let max_x = widest_line(&lines).saturating_sub(cols);
     model.review_scroll = move_scroll(model.review_scroll, dy, max_y);
     model.review_scroll_x = move_scroll(model.review_scroll_x, dx, max_x);
 }
@@ -400,12 +430,7 @@ fn try_approve(model: &mut Model) -> InputAction {
     let lines = visible_command_lines(&proposal.command);
     let (rows, cols) = review_window(model);
     let max_y = lines.len().saturating_sub(rows);
-    let widest = lines
-        .iter()
-        .map(|line| line.chars().count())
-        .max()
-        .unwrap_or(0);
-    let max_x = widest.saturating_sub(cols);
+    let max_x = widest_line(&lines).saturating_sub(cols);
     model.review_scroll = model.review_scroll.min(max_y);
     model.review_scroll_x = model.review_scroll_x.min(max_x);
     if command_is_clipped(
@@ -529,20 +554,24 @@ fn handle_switcher_key(key: KeyEvent, model: &mut Model) -> InputAction {
 
         // Close selected session
         _ if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('w') => {
-            if count > 1 {
-                // Close the session at switcher_cursor, not active
-                model.close_switcher();
-                // Switch to the cursor target first so close_active_session closes it
-                model.switch_to(model.switcher_cursor);
-                return InputAction::CloseSession;
-            }
-            InputAction::Ignored
+            // Close the session at switcher_cursor, not active
+            model.close_switcher();
+            // Switch to the cursor target first so close_active_session closes it
+            model.switch_to(model.switcher_cursor);
+            InputAction::CloseSession
         }
 
-        // Number keys 1-9 for direct jump
+        // Number keys 1-9 jump to the numbered row of the drawn window.
         KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
-            let idx = (c as usize) - ('1' as usize);
-            if idx < count {
+            let slot = (c as usize) - ('1' as usize);
+            // Before the first draw there is no window; the whole list is shown.
+            let (start, shown) = if model.switcher_rows == 0 {
+                (0, count)
+            } else {
+                (model.switcher_start, model.switcher_rows)
+            };
+            let idx = start + slot;
+            if slot < shown && idx < count {
                 model.switcher_cursor = idx;
                 model.confirm_switcher();
                 InputAction::NextSession
@@ -654,6 +683,8 @@ fn encode_special(code: KeyCode, mods: KeyModifiers) -> Option<String> {
         KeyCode::Enter => alt_prefix(mods, "\r"),
         KeyCode::Backspace => alt_prefix(mods, "\x7f"),
         KeyCode::Tab => alt_prefix(mods, "\t"),
+        // Shift+Tab: crossterm reports BackTab on Windows and Unix.
+        KeyCode::BackTab => alt_prefix(mods, "\x1b[Z"),
         KeyCode::Esc => alt_prefix(mods, "\x1b"),
         _ => return None,
     };
@@ -868,8 +899,17 @@ mod tests {
         let mut model = two_sessions();
         model.switch_to(1);
         let action = handle_key(press(KeyCode::Esc, KeyModifiers::NONE), &mut model, &terminal);
-        assert_eq!(action, InputAction::PrevSession);
-        assert_eq!(model.active_session_id(), Some("s1"));
+        if ESC_IS_PREV_SESSION {
+            // Unix crossterm reports Ctrl+[ as Esc.
+            assert_eq!(action, InputAction::PrevSession);
+            assert_eq!(model.active_session_id(), Some("s1"));
+        } else {
+            // Windows reports Ctrl+[ itself, so bare Esc is not a session switch:
+            // it goes to the shell as ESC (the write fails here, with no PTY).
+            assert_eq!(action, InputAction::Ignored);
+            assert_eq!(model.active_session_id(), Some("s2"));
+            assert!(model.status_line.as_deref().unwrap().contains("Session not found"));
+        }
 
         let mut model = two_sessions();
         model.switch_to(1);
@@ -990,8 +1030,13 @@ mod tests {
 
         let mut model = two_sessions();
         model.sessions.pop();
+        // The last session can close.
         assert_eq!(
             handle_key(press(KeyCode::Char('w'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::CloseSession
+        );
+        assert_eq!(
+            handle_key(press(KeyCode::Char('w'), KeyModifiers::CONTROL), &mut Model::new(), &terminal),
             InputAction::Ignored
         );
         assert_eq!(
@@ -1222,7 +1267,7 @@ mod tests {
         model.open_switcher();
         assert_eq!(
             handle_key(press(KeyCode::Char('w'), KeyModifiers::CONTROL), &mut model, &terminal),
-            InputAction::Ignored
+            InputAction::CloseSession
         );
         let mut model = two_sessions();
         model.open_switcher();
@@ -1306,5 +1351,119 @@ mod tests {
         assert_eq!(key_to_bytes(press(KeyCode::Char('x'), KeyModifiers::ALT | KeyModifiers::CONTROL)).chars().next(), Some('\u{1b}'));
         assert_eq!(key_to_bytes(press(KeyCode::Enter, KeyModifiers::ALT)), "\u{1b}\r");
         assert_eq!(key_to_bytes(press(KeyCode::Char('a'), KeyModifiers::NONE)), "a");
+    }
+
+    #[test]
+    fn shift_tab_is_the_backtab_sequence() {
+        assert_eq!(key_to_bytes(press(KeyCode::BackTab, KeyModifiers::SHIFT)), "\u{1b}[Z");
+        assert_eq!(key_to_bytes(press(KeyCode::BackTab, KeyModifiers::NONE)), "\u{1b}[Z");
+        assert_eq!(
+            key_to_bytes(press(KeyCode::BackTab, KeyModifiers::SHIFT | KeyModifiers::ALT)),
+            "\u{1b}\u{1b}[Z"
+        );
+        assert_eq!(key_to_bytes(press(KeyCode::Tab, KeyModifiers::NONE)), "\t");
+    }
+
+    #[test]
+    fn esc_or_ctrl_t_cancels_a_generating_proposal() {
+        let terminal = service();
+        for key in [
+            press(KeyCode::Esc, KeyModifiers::NONE),
+            press(KeyCode::Char('t'), KeyModifiers::CONTROL),
+        ] {
+            let mut model = two_sessions();
+            model.input_mode = InputMode::Ask;
+            model.planner_busy = true;
+            let before = model.planner_epoch;
+            let action = handle_key(key, &mut model, &terminal);
+            assert_eq!(action, InputAction::ModeSwitched);
+            assert_eq!(model.input_mode, InputMode::Shell);
+            assert!(!model.planner_busy);
+            // The epoch moved on, so the in-flight result will be dropped.
+            assert_ne!(model.planner_epoch, before);
+        }
+
+        // Other keys are still swallowed while busy.
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Ask;
+        model.planner_busy = true;
+        let action = handle_key(press(KeyCode::Char('x'), KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+        assert!(model.planner_busy);
+        assert!(model.composer_text.is_empty());
+    }
+
+    #[test]
+    fn esc_without_the_prev_session_binding_reaches_the_shell() {
+        let terminal = service();
+        // One session: Esc never switches, on any platform. The shell gets ESC
+        // (the write is attempted and fails here because there is no PTY).
+        let mut model = two_sessions();
+        model.sessions.pop();
+        let action = handle_key(press(KeyCode::Esc, KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+        assert!(model.status_line.as_deref().unwrap().contains("Session not found"));
+        assert_eq!(key_to_bytes(press(KeyCode::Esc, KeyModifiers::NONE)), "\u{1b}");
+    }
+
+    #[test]
+    fn approval_targets_the_proposal_owner_not_the_active_session() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.set_proposal(proposal("echo hi", false), "s2".into());
+        model.input_mode = InputMode::Review;
+        model.review_rows = 6;
+        model.review_cols = 80;
+        assert_eq!(model.active_session_id(), Some("s1"));
+        let action = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(
+            action,
+            InputAction::ApproveProposal("echo hi".into(), "s2".into(), "plan-9".into())
+        );
+    }
+
+    #[test]
+    fn fullwidth_command_is_blocked_by_display_width_not_char_count() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Review;
+        model.review_rows = 6;
+        // The quoted line is 14 chars but 24 cells wide, in a 20-column pane.
+        model.review_cols = 20;
+        let command = "\u{65e5}".repeat(10);
+        model.set_proposal(proposal(&command, false), "s1".into());
+        assert!(command.chars().count() + 4 < 20);
+        let blocked = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(blocked, InputAction::Ignored);
+        assert!(model.review_error.as_deref().unwrap().contains("clipped"));
+    }
+
+    #[test]
+    fn switcher_digit_keys_jump_to_rows_in_the_drawn_window() {
+        let terminal = service();
+        let mut model = Model::new();
+        for i in 0..12 {
+            model.add_session(format!("s{i}"), format!("S{i}"));
+        }
+        model.open_switcher();
+        // The overlay showed rows 5..9 (4 rows), so key 2 is session index 6.
+        model.switcher_start = 5;
+        model.switcher_rows = 4;
+        model.switcher_cursor = 8;
+        let action = handle_key(press(KeyCode::Char('2'), KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(action, InputAction::NextSession);
+        assert_eq!(model.active_index, 6);
+
+        // A key past the drawn rows does nothing.
+        let mut model = Model::new();
+        for i in 0..12 {
+            model.add_session(format!("s{i}"), format!("S{i}"));
+        }
+        model.open_switcher();
+        model.switcher_start = 0;
+        model.switcher_rows = 4;
+        let action = handle_key(press(KeyCode::Char('5'), KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+        assert_eq!(model.input_mode, InputMode::Switcher);
     }
 }

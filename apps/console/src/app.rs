@@ -9,7 +9,7 @@
 //! Resize law: host resize → chrome reflow → PTY resized for active session.
 
 use crate::input::{self, InputAction};
-use crate::model::{InputMode, Model, SessionState};
+use crate::model::{InputMode, Model};
 use crate::planner::{self, OllamaConfig};
 use crate::ui;
 use commandui_runtime_core::events::RuntimeEvent;
@@ -30,8 +30,9 @@ use tokio::sync::mpsc::UnboundedReceiver;
 #[allow(dead_code)]
 enum PlannerResult {
     /// (proposal, owning_session_id) — proposal is bound to the session that asked.
-    Success((commandui_runtime_planner::CommandProposal, String)),
-    Error(String),
+    /// The epoch is the model's `planner_epoch` when the request started.
+    Success((commandui_runtime_planner::CommandProposal, String), u64),
+    Error(String, u64),
 }
 
 pub struct App {
@@ -46,6 +47,8 @@ pub struct App {
     /// Whether the terminal is currently in raw play passthrough state.
     /// Used for idempotent enter/exit and safe cleanup.
     in_raw_passthrough: bool,
+    /// Terminal modes the Raw Play child enabled. Reset when Raw Play exits.
+    child_modes: ChildModes,
 }
 
 impl App {
@@ -65,6 +68,7 @@ impl App {
             model: Model::new(),
             session_counter: 0,
             in_raw_passthrough: false,
+            child_modes: ChildModes::default(),
         }
     }
 
@@ -87,6 +91,8 @@ impl App {
         // If we were in raw passthrough, restore alternate screen first
         if self.in_raw_passthrough {
             let _ = stdout().execute(EnterAlternateScreen);
+            apply_host_capture(self.child_modes, ChildModes::default());
+            self.child_modes = ChildModes::default();
             self.in_raw_passthrough = false;
         }
 
@@ -116,16 +122,14 @@ impl App {
             Ok(summary) => {
                 let idx = self.model.add_session(summary.id, label);
                 self.model.switch_to(idx);
+                self.model.create_error = None;
             }
             Err(e) => {
-                // Add a session in error state so the user sees something
-                let idx = self.model.add_session(
-                    format!("error-{}", self.session_counter),
-                    label,
-                );
-                self.model.sessions[idx].session_state =
-                    SessionState::Error(format!("Failed: {e}"));
-                self.model.switch_to(idx);
+                // The runtime registry has no such session, so the model gets no
+                // row for it. The reason shows in the pane and the footer.
+                let message = format!("Could not start {label}: {e}");
+                self.model.status_line = Some(message.clone());
+                self.model.create_error = Some(message);
             }
         }
     }
@@ -133,9 +137,10 @@ impl App {
     /// Close the active session and switch to an adjacent one.
     /// If the closed session owns a pending proposal, clear it.
     /// If in raw play mode for this session, exit raw play first.
+    /// The last session can close; the welcome state is a supported state.
     fn close_active_session(&mut self) {
-        if self.model.session_count() <= 1 {
-            return; // Never close the last session
+        if self.model.session_count() == 0 {
+            return;
         }
 
         let idx = self.model.active_index;
@@ -161,6 +166,8 @@ impl App {
         if self.model.active_index >= self.model.sessions.len() {
             self.model.active_index = self.model.sessions.len().saturating_sub(1);
         }
+        // The session now active is the one on screen, so it is not unread.
+        self.model.clear_active_unread();
     }
 
     async fn event_loop(
@@ -184,16 +191,23 @@ impl App {
 
                 // 2. Drain planner results — proposals are session-bound
                 while let Ok(result) = self.planner_rx.try_recv() {
+                    let epoch = match &result {
+                        PlannerResult::Success(_, epoch) | PlannerResult::Error(_, epoch) => *epoch,
+                    };
+                    // A cancelled request must not touch the current state.
+                    if epoch != self.model.planner_epoch {
+                        continue;
+                    }
                     self.model.planner_busy = false;
                     match result {
-                        PlannerResult::Success((proposal, session_id)) => {
+                        PlannerResult::Success((proposal, session_id), _) => {
                             if self.model.session_index(&session_id).is_some() {
                                 self.model.set_proposal(proposal, session_id);
                                 self.model.input_mode = InputMode::Review;
                                 self.sync_pane_size(terminal);
                             }
                         }
-                        PlannerResult::Error(msg) => {
+                        PlannerResult::Error(msg, _) => {
                             self.model.planner_error = Some(msg);
                         }
                     }
@@ -262,6 +276,10 @@ impl App {
                     let mut out = stdout();
                     let _ = out.write_all(line_event.text.as_bytes());
                     let _ = out.flush();
+                    // Learn which host events the child wants forwarded.
+                    let before = self.child_modes;
+                    self.child_modes.observe(&line_event.text);
+                    apply_host_capture(before, self.child_modes);
                 }
                 // Non-active session output is NOT written to stdout (targeting truth)
             }
@@ -293,15 +311,33 @@ impl App {
                     }
                 }
                 Event::Paste(text) => {
-                    // Crossterm already decoded the paste. Forward that text only.
+                    // Crossterm stripped the paste markers. Put them back when the
+                    // child enabled bracketed paste.
                     if !text.is_empty() {
                         if let Some(ref session_id) = active_id {
-                            let result = self.terminal_service.write(session_id, &text);
+                            let data = self.child_modes.encode_paste(&text);
+                            let result = self.terminal_service.write(session_id, &data);
                             self.model.surface_session_result(result);
                         }
                     }
                 }
-                _ => {}
+                Event::Mouse(mouse) => {
+                    if let (Some(session_id), Some(data)) =
+                        (active_id.as_ref(), self.child_modes.encode_mouse(&mouse))
+                    {
+                        let result = self.terminal_service.write(session_id, &data);
+                        self.model.surface_session_result(result);
+                    }
+                }
+                focus @ (Event::FocusGained | Event::FocusLost) => {
+                    let gained = focus == Event::FocusGained;
+                    if let (Some(session_id), Some(data)) =
+                        (active_id.as_ref(), self.child_modes.encode_focus(gained))
+                    {
+                        let result = self.terminal_service.write(session_id, &data);
+                        self.model.surface_session_result(result);
+                    }
+                }
             }
         }
 
@@ -417,6 +453,9 @@ impl App {
         // size already matches.
         self.sync_pane_size(terminal);
 
+        // Give the host its own mouse, focus and paste handling back.
+        apply_host_capture(self.child_modes, ChildModes::default());
+        self.child_modes = ChildModes::default();
         self.in_raw_passthrough = false;
     }
 
@@ -426,6 +465,7 @@ impl App {
 
         // Capture the session ID at Ask time — this is the proposal owner
         let session_id = self.model.active_session_id().unwrap_or("").to_string();
+        let epoch = self.model.planner_epoch;
 
         let context = planner::build_context(
             &session_id,
@@ -434,7 +474,7 @@ impl App {
 
         tokio::spawn(async move {
             let proposal = planner::generate_proposal(&config, &context, &intent).await;
-            let _ = tx.send(PlannerResult::Success((proposal, session_id)));
+            let _ = tx.send(PlannerResult::Success((proposal, session_id), epoch));
         });
     }
 
@@ -459,20 +499,10 @@ impl App {
 
     fn sync_pane_size(&mut self, terminal: &Terminal<CrosstermBackend<std::io::Stdout>>) {
         let area = terminal.size().unwrap_or_default();
-
-        let chrome_overhead = match self.model.input_mode {
-            InputMode::Shell | InputMode::Switcher => 4,
-            InputMode::Ask => 6,
-            InputMode::Review => 14,
-            InputMode::RawPlay => 0, // No chrome in raw mode
-        };
-
-        let cols = area.width.saturating_sub(2);
-        let rows = area.height.saturating_sub(chrome_overhead);
-
-        if cols == 0 || rows == 0 {
+        let Some((cols, rows)) = pane_size_for(self.model.input_mode.clone(), area.width, area.height)
+        else {
             return;
-        }
+        };
 
         self.model.pane_cols = cols;
         self.model.pane_rows = rows;
@@ -481,6 +511,163 @@ impl App {
         if let Some(session_id) = self.model.active_session_id().map(|s| s.to_string()) {
             self.resize_session(&session_id, cols, rows);
         }
+    }
+}
+
+/// PTY size for the chrome pane in `mode` on a `width` x `height` host.
+/// `None` when nothing fits. Raw Play has no chrome, so the whole host is the pane.
+fn pane_size_for(mode: InputMode, width: u16, height: u16) -> Option<(u16, u16)> {
+    let chrome_overhead = match mode {
+        InputMode::Shell | InputMode::Switcher => 4,
+        InputMode::Ask => 6,
+        InputMode::Review => 14,
+        InputMode::RawPlay => 0,
+    };
+    let cols = width.saturating_sub(2);
+    let rows = height.saturating_sub(chrome_overhead);
+    if cols == 0 || rows == 0 {
+        None
+    } else {
+        Some((cols, rows))
+    }
+}
+
+/// Modes the child enabled by writing DEC private mode sequences to its output.
+/// Raw Play forwards host events only in the forms the child asked for.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+struct ChildModes {
+    /// `?2004`: wrap pastes in `ESC[200~` .. `ESC[201~`.
+    bracketed_paste: bool,
+    /// `?1000`, `?1002` or `?1003`: report mouse buttons.
+    mouse: bool,
+    /// `?1003`: report motion with no button held.
+    mouse_motion: bool,
+    /// `?1006`: SGR mouse encoding, the only one forwarded (the PTY write is text).
+    mouse_sgr: bool,
+    /// `?1004`: report focus in and out.
+    focus: bool,
+}
+
+/// Turn the host terminal's mouse, focus and bracketed-paste reporting on or
+/// off to match what the child enabled. Only changes are written.
+fn apply_host_capture(before: ChildModes, after: ChildModes) {
+    use crossterm::event::{
+        DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+        EnableFocusChange, EnableMouseCapture,
+    };
+    let mut out = stdout();
+    if before.mouse != after.mouse {
+        let _ = if after.mouse {
+            out.execute(EnableMouseCapture).map(|_| ())
+        } else {
+            out.execute(DisableMouseCapture).map(|_| ())
+        };
+    }
+    if before.focus != after.focus {
+        let _ = if after.focus {
+            out.execute(EnableFocusChange).map(|_| ())
+        } else {
+            out.execute(DisableFocusChange).map(|_| ())
+        };
+    }
+    if before.bracketed_paste != after.bracketed_paste {
+        let _ = if after.bracketed_paste {
+            out.execute(EnableBracketedPaste).map(|_| ())
+        } else {
+            out.execute(DisableBracketedPaste).map(|_| ())
+        };
+    }
+}
+
+impl ChildModes {
+    /// Scan child output for `ESC [ ? <n>;<n> h|l`. A sequence split across two
+    /// chunks is missed; the next toggle corrects it.
+    fn observe(&mut self, text: &str) {
+        let mut rest = text;
+        while let Some(pos) = rest.find("\u{1b}[?") {
+            let after = &rest[pos + 3..];
+            let Some(end) = after.find(|c: char| !(c.is_ascii_digit() || c == ';')) else {
+                break;
+            };
+            let on = match after[end..].chars().next() {
+                Some('h') => Some(true),
+                Some('l') => Some(false),
+                _ => None,
+            };
+            if let Some(on) = on {
+                for param in after[..end].split(';') {
+                    match param {
+                        "2004" => self.bracketed_paste = on,
+                        "1000" | "1002" => self.mouse = on,
+                        "1003" => {
+                            self.mouse = on;
+                            self.mouse_motion = on;
+                        }
+                        "1006" => self.mouse_sgr = on,
+                        "1004" => self.focus = on,
+                        _ => {}
+                    }
+                }
+            }
+            rest = &after[end..];
+        }
+    }
+
+    /// Paste text as the child expects it: bracketed only when it asked.
+    fn encode_paste(&self, text: &str) -> String {
+        if self.bracketed_paste {
+            format!("\u{1b}[200~{text}\u{1b}[201~")
+        } else {
+            text.to_string()
+        }
+    }
+
+    fn encode_focus(&self, gained: bool) -> Option<String> {
+        self.focus
+            .then(|| if gained { "\u{1b}[I" } else { "\u{1b}[O" }.to_string())
+    }
+
+    /// SGR mouse report, or `None` when the child did not enable it.
+    fn encode_mouse(&self, event: &ct_event::MouseEvent) -> Option<String> {
+        use ct_event::{KeyModifiers, MouseButton, MouseEventKind};
+        if !self.mouse || !self.mouse_sgr {
+            return None;
+        }
+        let button = |b: &MouseButton| match b {
+            MouseButton::Left => 0u16,
+            MouseButton::Middle => 1,
+            MouseButton::Right => 2,
+        };
+        let (mut code, release) = match &event.kind {
+            MouseEventKind::Down(b) => (button(b), false),
+            MouseEventKind::Up(b) => (button(b), true),
+            MouseEventKind::Drag(b) => (button(b) + 32, false),
+            MouseEventKind::Moved => {
+                if !self.mouse_motion {
+                    return None;
+                }
+                (35, false)
+            }
+            MouseEventKind::ScrollUp => (64, false),
+            MouseEventKind::ScrollDown => (65, false),
+            MouseEventKind::ScrollLeft => (66, false),
+            MouseEventKind::ScrollRight => (67, false),
+        };
+        if event.modifiers.contains(KeyModifiers::SHIFT) {
+            code += 4;
+        }
+        if event.modifiers.contains(KeyModifiers::ALT) {
+            code += 8;
+        }
+        if event.modifiers.contains(KeyModifiers::CONTROL) {
+            code += 16;
+        }
+        let last = if release { 'm' } else { 'M' };
+        Some(format!(
+            "\u{1b}[<{code};{};{}{last}",
+            event.column.saturating_add(1),
+            event.row.saturating_add(1)
+        ))
     }
 }
 
@@ -618,12 +805,9 @@ mod tests {
     }
 
     #[test]
-    fn closing_the_proposal_owner_clears_review_and_the_last_session_stays() {
+    fn closing_the_proposal_owner_clears_review_and_the_last_session_can_close() {
         let mut app = test_app();
-        app.model.add_session("only".into(), "Only".into());
-        app.close_active_session();
-        assert_eq!(app.model.session_count(), 1);
-
+        app.model.add_session("s1".into(), "A".into());
         app.model.add_session("s2".into(), "B".into());
         app.model.switch_to(1);
         app.model.set_proposal(proposal("echo hi"), "s2".into());
@@ -633,17 +817,114 @@ mod tests {
         assert_eq!(app.model.input_mode, InputMode::Shell);
         assert_eq!(app.model.session_count(), 1);
         assert_eq!(app.model.active_index, 0);
+
+        // The last session closes too, back to the empty welcome state.
+        app.close_active_session();
+        assert_eq!(app.model.session_count(), 0);
+        assert_eq!(app.model.active_index, 0);
+        app.close_active_session();
+        assert_eq!(app.model.session_count(), 0);
     }
 
     #[test]
-    fn create_session_records_a_row_and_spawn_planner_returns_a_mock() {
+    fn closing_the_active_session_clears_unread_on_the_one_it_lands_on() {
+        let mut app = test_app();
+        app.model.add_session("s1".into(), "A".into());
+        app.model.add_session("s2".into(), "B".into());
+        app.model.add_session("s3".into(), "C".into());
+        app.model.switch_to(1);
+        app.model.sessions[2].has_unread = true;
+        app.close_active_session();
+        // s3 slid into index 1 and is now the session on screen.
+        assert_eq!(app.model.active_session_id(), Some("s3"));
+        assert!(!app.model.sessions[1].has_unread);
+    }
+
+    #[test]
+    fn pane_size_is_the_chrome_pane_and_raw_play_is_the_whole_host() {
+        assert_eq!(pane_size_for(InputMode::Shell, 100, 40), Some((98, 36)));
+        assert_eq!(pane_size_for(InputMode::Ask, 100, 40), Some((98, 34)));
+        assert_eq!(pane_size_for(InputMode::Review, 100, 40), Some((98, 26)));
+        assert_eq!(pane_size_for(InputMode::RawPlay, 100, 40), Some((98, 40)));
+        assert_eq!(pane_size_for(InputMode::Shell, 2, 40), None);
+        assert_eq!(pane_size_for(InputMode::Review, 100, 14), None);
+    }
+
+    #[test]
+    fn child_modes_follow_the_sequences_the_child_wrote() {
+        let mut modes = ChildModes::default();
+        modes.observe("hello \u{1b}[?1000;1006h and \u{1b}[?2004h");
+        assert!(modes.mouse && modes.mouse_sgr && modes.bracketed_paste);
+        assert!(!modes.focus && !modes.mouse_motion);
+        modes.observe("\u{1b}[?1004h\u{1b}[?1003h");
+        assert!(modes.focus && modes.mouse_motion);
+        modes.observe("\u{1b}[?1000l\u{1b}[?2004l");
+        assert!(!modes.mouse && !modes.bracketed_paste);
+    }
+
+    #[test]
+    fn raw_play_forwards_paste_mouse_and_focus_in_the_child_encoding() {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+        let mut modes = ChildModes::default();
+        let click = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 4,
+            row: 9,
+            modifiers: KeyModifiers::NONE,
+        };
+        // Nothing enabled: paste is plain text, mouse and focus are not sent.
+        assert_eq!(modes.encode_paste("ls"), "ls");
+        assert_eq!(modes.encode_mouse(&click), None);
+        assert_eq!(modes.encode_focus(true), None);
+
+        modes.observe("\u{1b}[?2004h\u{1b}[?1000h\u{1b}[?1006h\u{1b}[?1004h");
+        assert_eq!(modes.encode_paste("ls"), "\u{1b}[200~ls\u{1b}[201~");
+        assert_eq!(modes.encode_mouse(&click).as_deref(), Some("\u{1b}[<0;5;10M"));
+        let release = MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Right),
+            modifiers: KeyModifiers::CONTROL,
+            ..click
+        };
+        assert_eq!(modes.encode_mouse(&release).as_deref(), Some("\u{1b}[<18;5;10m"));
+        let moved = MouseEvent {
+            kind: MouseEventKind::Moved,
+            ..click
+        };
+        assert_eq!(modes.encode_mouse(&moved), None);
+        assert_eq!(modes.encode_focus(true).as_deref(), Some("\u{1b}[I"));
+        assert_eq!(modes.encode_focus(false).as_deref(), Some("\u{1b}[O"));
+    }
+
+    #[test]
+    fn a_cancelled_planner_result_is_dropped_by_epoch() {
+        let mut app = test_app();
+        app.model.add_session("s1".into(), "A".into());
+        app.model.planner_busy = true;
+        let started = app.model.planner_epoch;
+        app.model.cancel_planner();
+        assert!(!app.model.planner_busy);
+        assert_ne!(app.model.planner_epoch, started);
+    }
+
+    #[test]
+    fn create_session_failure_adds_no_model_row_and_says_why() {
         let mut app = test_app();
         app.create_session();
-        assert_eq!(app.model.session_count(), 1);
-        let id = app.model.sessions[0].id.clone();
-        if !id.starts_with("error-") {
-            app.session_service.close(&id).expect("close spawned session");
+        let id = app.model.sessions.first().map(|s| s.id.clone());
+        match id {
+            Some(id) => app.session_service.close(&id).expect("close spawned session"),
+            None => {
+                assert_eq!(app.model.session_count(), 0);
+                let why = app.model.create_error.as_deref().unwrap();
+                assert!(why.contains("Session 1"), "{why}");
+                assert_eq!(app.model.status_line.as_deref(), Some(why));
+            }
         }
+        assert!(app.model.sessions.iter().all(|s| !s.id.starts_with("error-")));
+    }
+
+    #[test]
+    fn spawn_planner_returns_a_mock_bound_to_the_asking_session() {
 
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -667,11 +948,11 @@ mod tests {
             .expect("planner timed out")
             .expect("planner channel closed");
             match result {
-                PlannerResult::Success((proposal, session_id)) => {
+                PlannerResult::Success((proposal, session_id), _) => {
                     assert_eq!(session_id, "s1");
                     assert!(!proposal.command.is_empty());
                 }
-                PlannerResult::Error(err) => panic!("planner error: {err}"),
+                PlannerResult::Error(err, _) => panic!("planner error: {err}"),
             }
         });
     }

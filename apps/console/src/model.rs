@@ -11,6 +11,10 @@ pub use commandui_runtime_planner::CommandProposal;
 /// Maximum lines retained per session scrollback buffer.
 const MAX_LINES: usize = 10_000;
 
+/// Maximum bytes kept for one line, finished or still open. A newline-free
+/// stream (progress bar, binary dump) cannot grow memory past this.
+const MAX_LINE_BYTES: usize = 16 * 1024;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum InputMode {
     Shell,
@@ -52,6 +56,26 @@ pub struct SessionModel {
     /// A CR arrived. The next appended character replaces the current logical line.
     /// CR followed by LF is a line break and does not erase the line.
     pub line_cr_pending: bool,
+    /// Bytes discarded because one line grew past `MAX_LINE_BYTES` with no newline.
+    pub bytes_dropped: usize,
+    /// Escape-sequence parser state, kept across chunks.
+    esc_state: EscState,
+}
+
+/// Where the ingest parser is inside an ANSI escape sequence.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum EscState {
+    Ground,
+    /// Saw ESC.
+    Esc,
+    /// ESC followed by a charset or similar intermediate; one more byte to swallow.
+    EscSkip,
+    /// Inside CSI (`ESC [`), waiting for the final byte.
+    Csi,
+    /// Inside OSC (`ESC ]`), waiting for BEL or ST.
+    Osc,
+    /// Saw ESC inside OSC; `\` ends it.
+    OscEsc,
 }
 
 impl SessionModel {
@@ -68,6 +92,8 @@ impl SessionModel {
             has_unread: false,
             line_remainder: String::new(),
             line_cr_pending: false,
+            bytes_dropped: 0,
+            esc_state: EscState::Ground,
         }
     }
 
@@ -112,31 +138,110 @@ impl SessionModel {
     /// chunk appends to it. Empty lines are kept. `\r` clears the current
     /// logical line only when a later character is appended, so `\r\n` stays
     /// one line break.
+    ///
+    /// Backspace and DEL delete the previous character, so a readline `\b \b`
+    /// erase leaves the line the shell ran. CSI, OSC and charset escape
+    /// sequences are removed before the line is stored. While the user is
+    /// scrolled up, `scroll_offset` grows with each new line so the viewport
+    /// stays on the same lines.
     fn ingest_terminal_chunk(&mut self, text: &str) {
         for ch in text.chars() {
-            match ch {
-                '\n' => {
-                    self.line_cr_pending = false;
-                    let line = std::mem::take(&mut self.line_remainder);
-                    self.terminal_lines.push(line);
-                }
-                '\r' => {
-                    self.line_cr_pending = true;
-                }
-                other => {
-                    if self.line_cr_pending {
-                        self.line_remainder.clear();
-                        self.line_cr_pending = false;
-                    }
-                    self.line_remainder.push(other);
-                }
-            }
+            self.ingest_char(ch);
         }
         if self.terminal_lines.len() > MAX_LINES {
             let excess = self.terminal_lines.len() - MAX_LINES;
             self.terminal_lines.drain(..excess);
             self.lines_dropped += excess;
-            self.scroll_offset = self.scroll_offset.saturating_sub(excess);
+        }
+        // The offset counts from the tail, so a front trim does not move the
+        // lines it points at. It only has to stay inside the buffer.
+        self.scroll_offset = self
+            .scroll_offset
+            .min(self.terminal_lines.len().saturating_sub(1));
+    }
+
+    fn ingest_char(&mut self, ch: char) {
+        match self.esc_state {
+            EscState::Ground => {}
+            EscState::Esc => {
+                self.esc_state = match ch {
+                    '[' => EscState::Csi,
+                    ']' => EscState::Osc,
+                    '(' | ')' | '*' | '+' | '#' | '%' => EscState::EscSkip,
+                    _ => EscState::Ground,
+                };
+                return;
+            }
+            EscState::EscSkip => {
+                self.esc_state = EscState::Ground;
+                return;
+            }
+            EscState::Csi => {
+                match ch {
+                    '\u{40}'..='\u{7e}' => {
+                        self.esc_state = EscState::Ground;
+                        return;
+                    }
+                    '\u{20}'..='\u{3f}' => return,
+                    // Anything else cancels the sequence and is handled as text.
+                    _ => self.esc_state = EscState::Ground,
+                }
+            }
+            EscState::Osc => {
+                match ch {
+                    '\u{7}' => {
+                        self.esc_state = EscState::Ground;
+                        return;
+                    }
+                    '\u{1b}' => {
+                        self.esc_state = EscState::OscEsc;
+                        return;
+                    }
+                    // A newline ends a runaway OSC so output is not swallowed.
+                    '\n' => self.esc_state = EscState::Ground,
+                    _ => return,
+                }
+            }
+            EscState::OscEsc => {
+                if ch == '\\' {
+                    self.esc_state = EscState::Ground;
+                    return;
+                }
+                self.esc_state = EscState::Esc;
+                self.ingest_char(ch);
+                return;
+            }
+        }
+
+        match ch {
+            '\u{1b}' => self.esc_state = EscState::Esc,
+            '\n' => {
+                self.line_cr_pending = false;
+                let line = std::mem::take(&mut self.line_remainder);
+                self.terminal_lines.push(line);
+                if self.scroll_offset > 0 {
+                    self.scroll_offset += 1;
+                }
+            }
+            '\r' => {
+                self.line_cr_pending = true;
+            }
+            '\u{8}' | '\u{7f}' => {
+                self.line_remainder.pop();
+            }
+            // Bell and other C0 controls draw nothing; tab is kept.
+            c if c.is_control() && c != '\t' => {}
+            other => {
+                if self.line_cr_pending {
+                    self.line_remainder.clear();
+                    self.line_cr_pending = false;
+                }
+                if self.line_remainder.len() + other.len_utf8() > MAX_LINE_BYTES {
+                    self.bytes_dropped += other.len_utf8();
+                } else {
+                    self.line_remainder.push(other);
+                }
+            }
         }
     }
 
@@ -185,6 +290,9 @@ pub struct Model {
     pub composer_cursor: usize,
     pub planner_busy: bool,
     pub planner_error: Option<String>,
+    /// Bumped when an in-flight planner request is cancelled. A result carrying
+    /// an older epoch is dropped when it arrives.
+    pub planner_epoch: u64,
 
     // --- Proposal ownership (session-bound) ---
     /// The current proposal under review, if any.
@@ -209,6 +317,13 @@ pub struct Model {
 
     /// Cursor position in the run selector overlay.
     pub switcher_cursor: usize,
+    /// First session row drawn by the last overlay render.
+    pub switcher_start: usize,
+    /// Session rows the last overlay render could show. 0 means not yet drawn.
+    pub switcher_rows: usize,
+
+    /// Why the last session create failed. Shown in the empty pane and the footer.
+    pub create_error: Option<String>,
 
     /// Whether the help overlay is visible.
     pub show_help: bool,
@@ -227,6 +342,7 @@ impl Model {
             composer_cursor: 0,
             planner_busy: false,
             planner_error: None,
+            planner_epoch: 0,
             current_proposal: None,
             proposal_session_id: None,
             review_scroll: 0,
@@ -237,6 +353,9 @@ impl Model {
             review_error: None,
             status_line: None,
             switcher_cursor: 0,
+            switcher_start: 0,
+            switcher_rows: 0,
+            create_error: None,
             show_help: false,
         }
     }
@@ -302,9 +421,27 @@ impl Model {
         }
     }
 
+    /// Clear the unread dot on the session `active_index` names. The user is
+    /// looking at it, so it is not unread.
+    pub fn clear_active_unread(&mut self) {
+        if let Some(s) = self.sessions.get_mut(self.active_index) {
+            s.has_unread = false;
+        }
+    }
+
+    /// Abort the in-flight planner request. Its result is dropped on arrival.
+    pub fn cancel_planner(&mut self) {
+        self.planner_epoch = self.planner_epoch.wrapping_add(1);
+        self.planner_busy = false;
+        self.planner_error = None;
+    }
+
     /// Open the run selector overlay.
     pub fn open_switcher(&mut self) {
+        self.clear_active_unread();
         self.switcher_cursor = self.active_index;
+        self.switcher_start = 0;
+        self.switcher_rows = 0;
         self.input_mode = InputMode::Switcher;
     }
 
@@ -1027,6 +1164,146 @@ mod tests {
         // CR LF is a newline, not an erased line.
         model.apply_event(make_line_event("s1", "hello\r\n"));
         assert_eq!(model.sessions[0].terminal_lines, vec!["XY", "hello"]);
+    }
+
+    fn feed(model: &mut Model, chunks: &[&str]) {
+        for chunk in chunks {
+            model.apply_event(make_line_event("s1", chunk));
+        }
+    }
+
+    #[test]
+    fn backspace_and_del_erase_the_previous_character() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        // Readline erase of the 'c' in "abc", then "d".
+        feed(&mut model, &["abc\u{8} \u{8}d\n"]);
+        assert_eq!(model.sessions[0].terminal_lines, vec!["abd"]);
+        feed(&mut model, &["xyz\u{7f}\u{7f}Q\n"]);
+        assert_eq!(model.sessions[0].terminal_lines, vec!["abd", "xQ"]);
+        // Erase on an empty line is a no-op, and CR LF still ends the line.
+        feed(&mut model, &["\u{8}\u{7f}ok\r\n"]);
+        assert_eq!(model.sessions[0].terminal_lines.last().unwrap(), "ok");
+        assert!(model.sessions[0]
+            .terminal_lines
+            .iter()
+            .all(|l| !l.chars().any(|c| c.is_control())));
+    }
+
+    #[test]
+    fn ansi_sequences_are_stripped_before_the_line_is_stored() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        feed(
+            &mut model,
+            &[
+                "\u{1b}[01;34mdir\u{1b}[0m  \u{1b}[1;31;4mfile\u{1b}[m\n",
+                "\u{1b}]0;window title\u{7}after-bel\n",
+                "\u{1b}]8;;http://x\u{1b}\\link\u{1b}]8;;\u{1b}\\\n",
+                "\u{1b}(Bplain\u{1b}[?25l\u{1b}[2K!\n",
+            ],
+        );
+        assert_eq!(
+            model.sessions[0].terminal_lines,
+            vec!["dir  file", "after-bel", "link", "plain!"]
+        );
+    }
+
+    #[test]
+    fn an_escape_sequence_split_across_chunks_is_still_stripped() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        feed(&mut model, &["a\u{1b}", "[01;3", "4mb\u{1b}]0;ti", "tle\u{7}c\n"]);
+        assert_eq!(model.sessions[0].terminal_lines, vec!["abc"]);
+        assert_eq!(model.sessions[0].line_remainder, "");
+    }
+
+    #[test]
+    fn a_runaway_osc_does_not_swallow_following_lines() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        feed(&mut model, &["\u{1b}]0;never ended\nnext\n"]);
+        assert_eq!(model.sessions[0].terminal_lines.last().unwrap(), "next");
+    }
+
+    #[test]
+    fn a_newline_free_stream_is_capped_by_bytes_and_counted() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        let chunk = "x".repeat(10_000);
+        for _ in 0..10 {
+            feed(&mut model, &[&chunk]);
+        }
+        let s = &model.sessions[0];
+        assert!(s.line_remainder.len() <= MAX_LINE_BYTES);
+        assert_eq!(s.line_remainder.len() + s.bytes_dropped, 100_000);
+        feed(&mut model, &["\n"]);
+        assert!(model.sessions[0].terminal_lines[0].len() <= MAX_LINE_BYTES);
+        // A multibyte character is never split at the cap.
+        feed(&mut model, &[&"\u{65e5}".repeat(10_000)]);
+        assert!(model.sessions[0].line_remainder.len() <= MAX_LINE_BYTES);
+        assert!(model.sessions[0].line_remainder.chars().all(|c| c == '\u{65e5}'));
+    }
+
+    #[test]
+    fn a_scrolled_up_viewport_stays_on_the_same_lines_while_output_arrives() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        for i in 0..50 {
+            feed(&mut model, &[&format!("line {i}\n")]);
+        }
+        model.sessions[0].scroll_up(10);
+        assert_eq!(model.sessions[0].scroll_offset, 10);
+        let anchored = |m: &Model| {
+            let s = &m.sessions[0];
+            s.terminal_lines[s.terminal_lines.len() - s.scroll_offset - 1].clone()
+        };
+        let before = anchored(&model);
+        feed(&mut model, &["a\nb\nc\n"]);
+        assert_eq!(model.sessions[0].scroll_offset, 13);
+        assert_eq!(anchored(&model), before);
+
+        // At the live end the offset stays 0 and follows the output.
+        model.sessions[0].scroll_to_bottom();
+        feed(&mut model, &["d\n"]);
+        assert_eq!(model.sessions[0].scroll_offset, 0);
+    }
+
+    #[test]
+    fn a_front_trim_keeps_the_same_lines_and_counts_the_drop() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        for i in 0..MAX_LINES {
+            model.sessions[0].terminal_lines.push(format!("line {i}"));
+        }
+        model.sessions[0].scroll_offset = 100;
+        let target = model.sessions[0].terminal_lines[MAX_LINES - 101].clone();
+        feed(&mut model, &["one\ntwo\n"]);
+        let s = &model.sessions[0];
+        assert_eq!(s.terminal_lines.len(), MAX_LINES);
+        assert_eq!(s.lines_dropped, 2);
+        // Two lines arrived while scrolled up: +2, then the trim leaves it alone.
+        assert_eq!(s.scroll_offset, 102);
+        assert_eq!(s.terminal_lines[MAX_LINES - s.scroll_offset - 1], target);
+
+        // An offset deeper than what is left is clamped, not moved to the live end.
+        model.sessions[0].scroll_offset = MAX_LINES + 50;
+        feed(&mut model, &["x\n"]);
+        assert_eq!(model.sessions[0].scroll_offset, MAX_LINES - 1);
+    }
+
+    #[test]
+    fn unread_is_cleared_on_the_session_the_active_index_names() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        model.add_session("s2".into(), "B".into());
+        model.sessions[1].has_unread = true;
+        model.active_index = 1;
+        model.clear_active_unread();
+        assert!(!model.sessions[1].has_unread);
+        model.sessions[0].has_unread = true;
+        model.open_switcher();
+        assert!(model.sessions[0].has_unread, "only the active row is cleared");
     }
 
     #[test]

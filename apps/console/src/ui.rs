@@ -6,7 +6,7 @@ use crate::model::{CommandProposal, InputMode, Model, SessionState};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 /// Restores the host terminal when dropped, including after a render panic.
@@ -93,7 +93,7 @@ fn render_review_layout(frame: &mut Frame, model: &mut Model) {
     render_review_footer(frame, chunks[3], model);
 }
 
-fn render_switcher_layout(frame: &mut Frame, model: &Model) {
+fn render_switcher_layout(frame: &mut Frame, model: &mut Model) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -153,11 +153,11 @@ fn render_status_bar(frame: &mut Frame, area: Rect, model: &Model) {
         .unwrap_or("...");
 
     // Session indicator: [1/3] or [1/1]
-    let session_indicator = format!(
-        "[{}/{}]",
-        model.active_index + 1,
-        model.session_count()
-    );
+    let session_indicator = if model.session_count() == 0 {
+        "[0/0]".to_string()
+    } else {
+        format!("[{}/{}]", model.active_index + 1, model.session_count())
+    };
 
     let session_label = active.map(|s| s.label.as_str()).unwrap_or("—");
 
@@ -243,39 +243,44 @@ fn render_terminal_pane(frame: &mut Frame, area: Rect, model: &Model) {
         .border_style(Style::default().fg(border_color))
         .title(title);
 
-    let inner_height = block.inner(area).height as usize;
+    let inner = block.inner(area);
+    let inner_height = inner.height as usize;
+    let inner_width = inner.width as usize;
 
     let visible_lines: Vec<Line> = if let Some(session) = active {
-        let total = session.terminal_lines.len();
-        let open_line = session.scroll_offset == 0 && !session.line_remainder.is_empty();
-        if total == 0 && session.line_remainder.is_empty() && !is_ready {
+        if let SessionState::Error(msg) = &session.session_state {
+            wrap_rows(msg, inner_width)
+                .into_iter()
+                .take(inner_height)
+                .map(|row| Line::from(Span::styled(row, Style::default().fg(Color::Red))))
+                .collect()
+        } else if session.terminal_lines.is_empty()
+            && session.line_remainder.is_empty()
+            && !is_ready
+        {
             vec![Line::from(Span::styled(
                 "Starting shell...",
                 Style::default().fg(Color::DarkGray),
             ))]
         } else {
-            let room = if open_line {
-                inner_height.saturating_sub(1)
-            } else {
-                inner_height
-            };
-            let visible_end = if session.scroll_offset > 0 {
-                total.saturating_sub(session.scroll_offset)
-            } else {
-                total
-            };
-            let visible_start = visible_end.saturating_sub(room);
-            let mut lines: Vec<Line> = session.terminal_lines[visible_start..visible_end]
-                .iter()
-                .map(|s| Line::from(s.as_str()))
-                .collect();
-            if open_line {
-                lines.push(Line::from(session.line_remainder.as_str()));
+            let mut lines: Vec<Line> = Vec::new();
+            let marker = dropped_marker(session);
+            if let Some(text) = marker {
+                lines.push(Line::from(Span::styled(
+                    text,
+                    Style::default().fg(Color::DarkGray),
+                )));
             }
+            let room = inner_height.saturating_sub(lines.len());
+            lines.extend(
+                terminal_window_rows(session, inner_width, room)
+                    .into_iter()
+                    .map(Line::from),
+            );
             lines
         }
     } else {
-        vec![
+        let mut welcome = vec![
             Line::from(""),
             Line::from(Span::styled(
                 "  CommandUI Console — terminal shell with sidecar AI",
@@ -290,13 +295,127 @@ fn render_terminal_pane(frame: &mut Frame, area: Rect, model: &Model) {
                 "  Press ^N to start a session.",
                 Style::default().fg(Color::DarkGray),
             )),
-        ]
+        ];
+        if let Some(err) = model.create_error.as_deref() {
+            welcome.push(Line::from(""));
+            welcome.push(Line::from(Span::styled(
+                format!("  {err}"),
+                Style::default().fg(Color::Red),
+            )));
+        }
+        welcome
     };
 
-    let paragraph = Paragraph::new(visible_lines)
-        .block(block)
-        .wrap(Wrap { trim: false });
+    // Wrapping is done above, so the newest rows are the ones kept.
+    let paragraph = Paragraph::new(visible_lines).block(block);
     frame.render_widget(paragraph, area);
+}
+
+/// One-line scrollback-loss indicator, when anything was discarded.
+fn dropped_marker(session: &crate::model::SessionModel) -> Option<String> {
+    match (session.lines_dropped, session.bytes_dropped) {
+        (0, 0) => None,
+        (lines, 0) => Some(format!("[{lines} lines dropped]")),
+        (0, bytes) => Some(format!("[{bytes} bytes dropped]")),
+        (lines, bytes) => Some(format!("[{lines} lines, {bytes} bytes dropped]")),
+    }
+}
+
+/// Display width of a string in terminal cells.
+pub(crate) fn display_width(text: &str) -> usize {
+    Span::raw(text).width()
+}
+
+fn cell_width(c: char) -> usize {
+    Span::raw(c.to_string()).width()
+}
+
+/// Break one logical line into rows no wider than `cols` cells. Tabs expand to
+/// 8-column stops and other controls are dropped. An empty line is one empty row.
+pub(crate) fn wrap_rows(line: &str, cols: usize) -> Vec<String> {
+    if cols == 0 {
+        return Vec::new();
+    }
+    let mut rows = Vec::new();
+    let mut cur = String::new();
+    let mut used = 0usize;
+    for c in line.chars() {
+        if c != '\t' && c.is_control() {
+            continue;
+        }
+        let (ch, reps) = if c == '\t' { (' ', 8 - used % 8) } else { (c, 1) };
+        for _ in 0..reps {
+            let w = cell_width(ch);
+            if w == 0 {
+                if !cur.is_empty() {
+                    cur.push(ch);
+                }
+                continue;
+            }
+            if w > cols {
+                continue;
+            }
+            if used + w > cols {
+                rows.push(std::mem::take(&mut cur));
+                used = 0;
+            }
+            cur.push(ch);
+            used += w;
+        }
+    }
+    rows.push(cur);
+    rows
+}
+
+/// The newest `room` rows of the session, ending at the anchored line.
+/// `scroll_offset` counts logical lines from the tail; the open line (the
+/// text after the last newline) shows only at the live end.
+fn terminal_window_rows(
+    session: &crate::model::SessionModel,
+    cols: usize,
+    room: usize,
+) -> Vec<String> {
+    if room == 0 || cols == 0 {
+        return Vec::new();
+    }
+    let total = session.terminal_lines.len();
+    let end = total.saturating_sub(session.scroll_offset);
+    let mut reversed: Vec<String> = Vec::new();
+    if session.scroll_offset == 0 && !session.line_remainder.is_empty() {
+        reversed.extend(wrap_rows(&session.line_remainder, cols).into_iter().rev());
+    }
+    for line in session.terminal_lines[..end].iter().rev() {
+        if reversed.len() >= room {
+            break;
+        }
+        reversed.extend(wrap_rows(line, cols).into_iter().rev());
+    }
+    reversed.truncate(room);
+    reversed.reverse();
+    reversed
+}
+
+/// How many logical lines a page of `page_rows` visual rows covers, counted
+/// back from the current window end. At least one.
+pub(crate) fn page_lines(
+    session: &crate::model::SessionModel,
+    cols: usize,
+    page_rows: usize,
+) -> usize {
+    let end = session
+        .terminal_lines
+        .len()
+        .saturating_sub(session.scroll_offset);
+    let mut rows = 0usize;
+    let mut count = 0usize;
+    for line in session.terminal_lines[..end].iter().rev() {
+        if rows >= page_rows.max(1) {
+            break;
+        }
+        rows += wrap_rows(line, cols.max(1)).len();
+        count += 1;
+    }
+    count.max(1)
 }
 
 // ---- Shell footer ----
@@ -329,7 +448,7 @@ fn render_shell_footer(frame: &mut Frame, area: Rect, model: &Model) {
     if let Some(s) = model.active_session() {
         if s.scroll_offset > 0 {
             spans.push(Span::styled(
-                format!("  [{} above]", s.scroll_offset),
+                format!("  [{} below]", s.scroll_offset),
                 Style::default().fg(Color::Yellow),
             ));
         }
@@ -439,11 +558,7 @@ fn render_review_panel(frame: &mut Frame, area: Rect, model: &mut Model) {
         .split(inner);
 
     let max_y = command_lines.len().saturating_sub(command_rows);
-    let widest = command_lines
-        .iter()
-        .map(|line| line.chars().count())
-        .max()
-        .unwrap_or(0);
+    let widest = widest_line(&command_lines);
     let max_x = widest.saturating_sub(inner.width as usize);
     let scroll_y = model.review_scroll.min(max_y);
     let scroll_x = model.review_scroll_x.min(max_x);
@@ -476,6 +591,16 @@ fn review_title(model: &Model, clipped: bool) -> String {
         format!(" Review Proposal → {owner_label}")
     } else {
         " Review Proposal".to_string()
+    };
+    // The shared planner returns a mock command only when the model call failed.
+    let owner = if model
+        .current_proposal
+        .as_ref()
+        .is_some_and(|p| p.source == "mock")
+    {
+        format!("{owner} (mock: model call failed)")
+    } else {
+        owner
     };
     if clipped {
         format!("{owner} (clipped) ")
@@ -669,10 +794,18 @@ pub(crate) fn command_is_clipped(
     if rows == 0 || cols == 0 {
         return true;
     }
+    // The widget applies a u16 offset. A model scroll past that is not what is drawn.
+    if scroll_y > usize::from(u16::MAX) || scroll_x > usize::from(u16::MAX) {
+        return true;
+    }
     let tail_hidden = scroll_y.saturating_add(rows) < lines.len();
-    let widest = lines.iter().map(|line| line.chars().count()).max().unwrap_or(0);
-    let right_hidden = scroll_x.saturating_add(cols) < widest;
+    let right_hidden = scroll_x.saturating_add(cols) < widest_line(lines);
     tail_hidden || right_hidden
+}
+
+/// Widest line in terminal cells, the unit the Paragraph scrolls and clips by.
+pub(crate) fn widest_line(lines: &[String]) -> usize {
+    lines.iter().map(|line| display_width(line)).max().unwrap_or(0)
 }
 
 fn scroll_u16(value: usize) -> u16 {
@@ -681,13 +814,24 @@ fn scroll_u16(value: usize) -> u16 {
 
 // ---- Run selector overlay ----
 
-fn render_run_selector_overlay(frame: &mut Frame, area: Rect, model: &Model) {
+fn render_run_selector_overlay(frame: &mut Frame, area: Rect, model: &mut Model) {
     // Center the overlay in the terminal pane area. Never wider or taller than the frame.
-    let want_h = (model.session_count() as u16).saturating_add(2); // +2 for border
+    let want_h = u16::try_from(model.session_count())
+        .unwrap_or(u16::MAX)
+        .saturating_add(2); // +2 for border
     let overlay_area = clamped_overlay(frame.area(), area, 60, want_h);
     if overlay_area.width == 0 || overlay_area.height == 0 {
+        model.switcher_start = 0;
+        model.switcher_rows = 0;
         return;
     }
+
+    // Window the rows around the cursor so the cursor row is always drawn.
+    let inner_rows = usize::from(overlay_area.height.saturating_sub(2));
+    let (start, shown) =
+        switcher_window(model.session_count(), model.switcher_cursor, inner_rows);
+    model.switcher_start = start;
+    model.switcher_rows = shown;
 
     // Build the list
     let block = Block::default()
@@ -697,7 +841,13 @@ fn render_run_selector_overlay(frame: &mut Frame, area: Rect, model: &Model) {
 
     let mut lines: Vec<Line> = Vec::new();
 
-    for (idx, session) in model.sessions.iter().enumerate() {
+    for (idx, session) in model
+        .sessions
+        .iter()
+        .enumerate()
+        .skip(start)
+        .take(shown)
+    {
         let is_cursor = idx == model.switcher_cursor;
         let is_active = idx == model.active_index;
 
@@ -718,9 +868,9 @@ fn render_run_selector_overlay(frame: &mut Frame, area: Rect, model: &Model) {
         // Active marker
         let active_mark = if is_active { "►" } else { " " };
 
-        // Number hint (1-9)
-        let num = if idx < 9 {
-            format!("{}", idx + 1)
+        // Number hint (1-9): position in the drawn window, which is what the key jumps to.
+        let num = if idx - start < 9 {
+            format!("{}", idx - start + 1)
         } else {
             " ".to_string()
         };
@@ -762,6 +912,17 @@ fn render_run_selector_overlay(frame: &mut Frame, area: Rect, model: &Model) {
 
     let paragraph = Paragraph::new(lines).block(block);
     frame.render_widget(paragraph, overlay_area);
+}
+
+/// First row and row count to draw so `cursor` is inside the window.
+pub(crate) fn switcher_window(count: usize, cursor: usize, rows: usize) -> (usize, usize) {
+    let shown = rows.min(count);
+    if shown == 0 {
+        return (0, 0);
+    }
+    let cursor = cursor.min(count - 1);
+    let start = if cursor < shown { 0 } else { cursor + 1 - shown };
+    (start.min(count - shown), shown)
 }
 
 fn render_switcher_footer(frame: &mut Frame, area: Rect) {
@@ -809,7 +970,7 @@ fn render_help_overlay(frame: &mut Frame, area: Rect) {
         Line::from(" ^N  New session"),
         Line::from(" ^W  Close session      Review"),
         Line::from(vec![
-            Span::raw(" ^]/[  Prev/next        "),
+            Span::raw(" ^] next  ^[ prev       "),
             Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
             Span::raw("  Approve"),
         ]),
@@ -1146,6 +1307,189 @@ mod tests {
         tiny.input_mode = InputMode::Switcher;
         let shown = draw_sized(&mut tiny, 4, 3);
         assert!(!shown.is_empty());
+    }
+
+    fn active_model(lines: Vec<String>) -> Model {
+        let mut model = Model::new();
+        mark(&mut model, SessionState::Active, "ready");
+        model.sessions[0].terminal_lines = lines;
+        model
+    }
+
+    #[test]
+    fn long_lines_do_not_push_the_prompt_out_of_the_pane() {
+        // 24 rows: status, pane (22 incl. borders), footer. Inner width is 78.
+        let mut lines: Vec<String> = (0..30).map(|i| format!("old-{i}")).collect();
+        // Four long lines, each wrapping to several rows, then the prompt.
+        for i in 0..4 {
+            lines.push(format!("{i}{}", "w".repeat(300)));
+        }
+        let mut model = active_model(lines);
+        model.sessions[0].line_remainder = "PROMPT> ".into();
+        let shown = draw_text(&mut model);
+        assert!(shown.contains("PROMPT> "), "newest row must stay in view:\n{shown}");
+        // Wrapped rows of the last long line are on screen too.
+        assert!(shown.contains(&"w".repeat(78)), "{shown}");
+        assert!(!shown.contains("old-0"), "{shown}");
+    }
+
+    #[test]
+    fn scrolled_up_view_ends_on_the_anchored_line_and_the_footer_counts_below() {
+        let lines: Vec<String> = (0..100).map(|i| format!("row-{i:03}")).collect();
+        let mut model = active_model(lines);
+        model.sessions[0].line_remainder = "open-line".into();
+        model.sessions[0].scroll_offset = 40;
+        let shown = draw_text(&mut model);
+        assert!(shown.contains("row-059"), "{shown}");
+        assert!(!shown.contains("row-060"), "{shown}");
+        assert!(!shown.contains("open-line"), "{shown}");
+        assert!(shown.contains("[40 below]"), "{shown}");
+        assert!(!shown.contains("above"), "{shown}");
+    }
+
+    #[test]
+    fn dropped_scrollback_is_marked_at_the_top_of_the_pane() {
+        let mut model = active_model(vec!["kept".into()]);
+        let none = draw_text(&mut model);
+        assert!(!none.contains("dropped"), "{none}");
+        model.sessions[0].lines_dropped = 1234;
+        model.sessions[0].bytes_dropped = 99;
+        let shown = draw_text(&mut model);
+        assert!(shown.contains("[1234 lines, 99 bytes dropped]"), "{shown}");
+        assert!(shown.contains("kept"), "{shown}");
+        model.sessions[0].bytes_dropped = 0;
+        assert!(draw_text(&mut model).contains("[1234 lines dropped]"));
+    }
+
+    #[test]
+    fn rendered_lines_hold_no_erase_residue_or_color_parameters() {
+        let mut model = active_model(vec![]);
+        model.apply_event(commandui_runtime_core::events::RuntimeEvent::TerminalLine(
+            commandui_runtime_core::events::TerminalLineEvent {
+                id: "l".into(),
+                session_id: "s1".into(),
+                execution_id: None,
+                kind: "stdout".into(),
+                text: "ls\u{8} \u{8}s\n\u{1b}[01;34mdir\u{1b}[0m\n".into(),
+                timestamp: "t".into(),
+            },
+        ));
+        let shown = draw_text(&mut model);
+        assert!(shown.contains("ls "), "{shown}");
+        assert!(!shown.contains("ls s"), "erase pair must not leave residue:
+{shown}");
+        assert!(shown.contains("dir"), "{shown}");
+        assert!(!shown.contains("[01;34m"), "{shown}");
+        assert!(!shown.contains("[0m"), "{shown}");
+    }
+
+    #[test]
+    fn wrap_rows_breaks_by_display_width_and_expands_tabs() {
+        assert_eq!(wrap_rows("", 5), vec![String::new()]);
+        assert_eq!(wrap_rows("abcdefg", 3), vec!["abc", "def", "g"]);
+        // Fullwidth characters are two cells and never split across rows.
+        assert_eq!(wrap_rows("\u{65e5}\u{65e5}\u{65e5}", 5), vec!["\u{65e5}\u{65e5}", "\u{65e5}"]);
+        assert_eq!(wrap_rows("a\tb", 20), vec!["a       b"]);
+        assert_eq!(wrap_rows("a\u{7}b", 20), vec!["ab"]);
+        assert!(wrap_rows("abc", 0).is_empty());
+    }
+
+    #[test]
+    fn page_lines_follow_visual_rows() {
+        let mut s = crate::model::SessionModel::new("s".into(), "A".into());
+        s.terminal_lines = (0..20).map(|_| "x".repeat(30)).collect();
+        // 10-wide pane: each line is 3 rows, so 9 rows cover 3 lines.
+        assert_eq!(page_lines(&s, 10, 9), 3);
+        assert_eq!(page_lines(&s, 100, 9), 9);
+        assert_eq!(page_lines(&s, 10, 0), 1);
+    }
+
+    #[test]
+    fn a_fullwidth_command_is_clipped_by_cells_and_a_huge_scroll_keeps_the_gate_closed() {
+        // 3 + 20 + 1 cells wide, 14 chars.
+        let line = vec![format!("$ '{}'", "\u{65e5}".repeat(10))];
+        assert_eq!(widest_line(&line), 24);
+        assert!(line[0].chars().count() < 20);
+        assert!(command_is_clipped(&line, 0, 0, 4, 20));
+        assert!(!command_is_clipped(&line, 0, 4, 4, 20));
+        assert!(command_is_clipped(&line, 70_000, 0, 4, 20));
+        assert!(command_is_clipped(&line, 0, 70_000, 4, 80));
+    }
+
+    #[test]
+    fn help_row_matches_the_keys_handle_shell_key_implements() {
+        let mut model = active_model(vec![]);
+        model.show_help = true;
+        let shown = draw_text(&mut model);
+        assert!(shown.contains("^] next"), "{shown}");
+        assert!(shown.contains("^[ prev"), "{shown}");
+        assert!(!shown.contains("Prev/next"), "{shown}");
+    }
+
+    #[test]
+    fn status_bar_shows_zero_of_zero_with_no_sessions() {
+        let mut model = Model::new();
+        let shown = draw_text(&mut model);
+        assert!(shown.contains("[0/0]"), "{shown}");
+        assert!(!shown.contains("[1/0]"), "{shown}");
+    }
+
+    #[test]
+    fn the_session_error_and_the_create_failure_are_readable() {
+        let mut model = Model::new();
+        mark(&mut model, SessionState::Error("pty open failed: no tty".into()), "ready");
+        let shown = draw_text(&mut model);
+        assert!(shown.contains("pty open failed: no tty"), "{shown}");
+
+        let mut empty = Model::new();
+        empty.create_error = Some("Could not start Session 1: spawn failed".into());
+        let shown = draw_text(&mut empty);
+        assert!(shown.contains("Press ^N"), "{shown}");
+        assert!(shown.contains("Could not start Session 1: spawn failed"), "{shown}");
+    }
+
+    #[test]
+    fn the_run_list_windows_around_the_cursor() {
+        let mut model = Model::new();
+        for i in 0..30 {
+            let idx = model.add_session(format!("s{i}"), format!("Run-{i:02}"));
+            model.sessions[idx].session_state = SessionState::Active;
+            model.sessions[idx].exec_state = "ready".into();
+        }
+        model.input_mode = InputMode::Switcher;
+        model.switcher_cursor = 0;
+        let top = draw_text(&mut model);
+        assert!(top.contains("Run-00"), "{top}");
+        assert_eq!(model.switcher_start, 0);
+        assert!(model.switcher_rows > 0 && model.switcher_rows < 30);
+
+        model.switcher_cursor = 29;
+        let bottom = draw_text(&mut model);
+        assert!(bottom.contains("Run-29"), "cursor row must be drawn:\n{bottom}");
+        assert!(!bottom.contains("Run-05"), "{bottom}");
+        assert_eq!(model.switcher_start + model.switcher_rows, 30);
+
+        assert_eq!(switcher_window(5, 4, 3), (2, 3));
+        assert_eq!(switcher_window(5, 0, 3), (0, 3));
+        assert_eq!(switcher_window(2, 1, 9), (0, 2));
+        assert_eq!(switcher_window(5, 2, 0), (0, 0));
+    }
+
+    #[test]
+    fn a_mock_proposal_says_the_model_call_failed() {
+        let mut model = Model::new();
+        mark(&mut model, SessionState::Active, "ready");
+        model.set_proposal(sample_proposal("echo hi", false), "s1".into());
+        model.input_mode = InputMode::Review;
+        let shown = draw_text(&mut model);
+        assert!(shown.contains("mock: model call failed"), "{shown}");
+        let mut real = Model::new();
+        mark(&mut real, SessionState::Active, "ready");
+        let mut proposal = sample_proposal("echo hi", false);
+        proposal.source = "ollama".into();
+        real.set_proposal(proposal, "s1".into());
+        real.input_mode = InputMode::Review;
+        assert!(!draw_text(&mut real).contains("model call failed"));
     }
 
     #[test]
