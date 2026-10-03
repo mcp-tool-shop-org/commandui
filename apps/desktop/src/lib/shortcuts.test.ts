@@ -114,25 +114,30 @@ describe("resolveShortcut", () => {
     expect(match?.id).toBe("plan-esc");
   });
 
+  // Plan-only would stay null in a text zone even with the bare-key guard deleted.
+  const bareKeyDefs = [makeDef("bare-a", "a", ["terminal", "composer", "plan"])];
+
   it("suppresses bare keys in terminal zone", () => {
-    const defs = [makeDef("plan-a", "a", ["plan"])];
-    const event = mockKeyEvent("a");
-    const match = resolveShortcut(defs, event, "terminal");
+    const match = resolveShortcut(bareKeyDefs, mockKeyEvent("a"), "terminal");
     expect(match).toBeNull();
   });
 
   it("suppresses bare keys in composer zone", () => {
-    const defs = [makeDef("plan-a", "a", ["plan"])];
-    const event = mockKeyEvent("a");
-    const match = resolveShortcut(defs, event, "composer");
+    const match = resolveShortcut(bareKeyDefs, mockKeyEvent("a"), "composer");
     expect(match).toBeNull();
   });
 
   it("allows escape in text zones", () => {
-    const defs = [makeDef("esc", "escape", ["global"])];
+    const defs = [makeDef("esc", "escape", ["terminal", "composer"])];
     const event = mockKeyEvent("Escape");
-    const match = resolveShortcut(defs, event, "composer");
-    expect(match?.id).toBe("esc");
+    expect(resolveShortcut(defs, event, "terminal")?.id).toBe("esc");
+    expect(resolveShortcut(defs, event, "composer")?.id).toBe("esc");
+  });
+
+  it("allows a ctrl-modified combo in the terminal zone", () => {
+    const defs = [makeDef("term-ctrl-k", "ctrl+k", ["terminal"])];
+    const event = mockKeyEvent("k", { ctrlKey: true });
+    expect(resolveShortcut(defs, event, "terminal")?.id).toBe("term-ctrl-k");
   });
 
   it("respects when guard", () => {
@@ -156,9 +161,7 @@ describe("resolveShortcut", () => {
   });
 
   it("allows bare keys in plan zone", () => {
-    const defs = [makeDef("plan-a", "a", ["plan"])];
-    const event = mockKeyEvent("a");
-    const match = resolveShortcut(defs, event, "plan");
-    expect(match?.id).toBe("plan-a");
+    const match = resolveShortcut(bareKeyDefs, mockKeyEvent("a"), "plan");
+    expect(match?.id).toBe("bare-a");
   });
 });
