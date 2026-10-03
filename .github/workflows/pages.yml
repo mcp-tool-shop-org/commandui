@@ -8,9 +8,11 @@ on:
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
+# One group for every ref, so a workflow_dispatch off main cannot publish
+# beside a main deploy. Production deploys are not cancelled mid-flight.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: pages
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -41,6 +43,7 @@ jobs:
 
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

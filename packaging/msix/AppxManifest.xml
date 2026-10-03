@@ -43,7 +43,7 @@
         <uap:DefaultTile
           Wide310x150Logo="Assets\Wide310x150Logo.scale-200.png"
           Square310x310Logo="Assets\Square310x310Logo.scale-200.png"
-          Square71x71Logo="Assets\Square44x44Logo.scale-200.png"
+          Square71x71Logo="Assets\Square71x71Logo.scale-200.png"
           ShortName="CommandUI">
           <uap:ShowNameOnTiles>
             <uap:ShowOn Tile="square150x150Logo" />
