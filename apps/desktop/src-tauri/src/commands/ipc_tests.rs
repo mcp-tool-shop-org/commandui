@@ -532,6 +532,11 @@ fn session_and_terminal_commands_cover_lifecycle() {
         .find(|s| s["id"] == session_id)
         .expect("created session is listed");
     assert_eq!(found["cwd"], cwd.path_str());
+    // The list carries the live exec state so a reloaded webview can seed itself.
+    assert!(
+        found["execState"].is_string(),
+        "session_list must report execState, got {found}"
+    );
 
     assert_ok(
         &ipc(

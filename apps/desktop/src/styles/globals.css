@@ -153,6 +153,11 @@ select {
   overflow: hidden;
 }
 
+.session-tab.exited .session-tab-label {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
 .session-tab.active {
   border-color: var(--accent);
 }
@@ -1204,4 +1209,59 @@ select {
   border-radius: var(--radius-sm);
   text-align: center;
   margin-bottom: 8px;
+}
+
+/* === Plan safety (hidden characters, target session, flags) === */
+.plan-hidden-warning {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #2e1a1a;
+  border: 1px solid var(--failure);
+  border-radius: var(--radius-sm);
+  color: var(--failure);
+  font-size: 13px;
+}
+
+.plan-hidden-preview {
+  margin: 6px 0;
+  padding: 6px 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary, inherit);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+  unicode-bidi: plaintext;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.plan-blocked,
+.plan-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.plan-blocked {
+  border-color: var(--failure);
+}
+
+.risk-flag {
+  margin-left: 6px;
+  background: #2e1a1a;
+  color: var(--failure);
+}
+
+.exit-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--failure);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
 }

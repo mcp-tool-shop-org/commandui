@@ -35,6 +35,14 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
 
     const setFocusZone = useFocusStore((s) => s.setFocusZone);
 
+    // The handlers change identity with the active session. Reading them through refs
+    // keeps one xterm instance alive across tab switches instead of disposing and
+    // rebuilding it (and re-parsing the whole replay) every time.
+    const onDataRef = useRef(onData);
+    const onResizeRef = useRef(onResize);
+    onDataRef.current = onData;
+    onResizeRef.current = onResize;
+
     // Expose imperative write/clear/focus to parent
     useImperativeHandle(
       ref,
@@ -81,7 +89,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
 
       const resizeObserver = new ResizeObserver(() => {
         fit.fit();
-        onResize?.(term.cols, term.rows);
+        onResizeRef.current?.(term.cols, term.rows);
       });
 
       resizeObserver.observe(containerRef.current);
@@ -104,7 +112,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
       });
 
       const disposable = term.onData((data) => {
-        onData?.(data);
+        onDataRef.current?.(data);
       });
 
       // Track focus zone for shortcut context
@@ -124,7 +132,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
         terminalRef.current = null;
         fitRef.current = null;
       };
-    }, [onData, onResize, setFocusZone]);
+    }, [setFocusZone]);
 
     // Clear and reset on session change
     useEffect(() => {
@@ -147,8 +155,8 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
       const fit = fitRef.current;
       if (!term || !fit) return;
       fit.fit();
-      onResize?.(term.cols, term.rows);
-    }, [sessionId, onResize]);
+      onResizeRef.current?.(term.cols, term.rows);
+    }, [sessionId]);
 
     // Auto-focus
     useEffect(() => {

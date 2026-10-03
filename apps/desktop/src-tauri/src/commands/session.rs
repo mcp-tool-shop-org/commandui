@@ -22,6 +22,9 @@ pub struct SessionSummaryPayload {
     pub status: String,
     pub created_at: String,
     pub last_active_at: String,
+    /// Current exec state (booting/ready/running/interrupting/desynced), so a
+    /// reloaded webview can seed its state instead of guessing. None if unknown.
+    pub exec_state: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -61,7 +64,13 @@ pub struct SessionCwdUpdateResponse {
     pub ok: bool,
 }
 
-fn to_payload(s: SessionSummary) -> SessionSummaryPayload {
+fn to_payload(s: SessionSummary, state: &AppState) -> SessionSummaryPayload {
+    let exec_state = state
+        .sessions
+        .lock()
+        .ok()
+        .and_then(|reg| reg.exec_state(&s.id))
+        .map(|e| e.to_string());
     SessionSummaryPayload {
         id: s.id,
         label: s.label,
@@ -70,6 +79,7 @@ fn to_payload(s: SessionSummary) -> SessionSummaryPayload {
         status: s.status,
         created_at: s.created_at,
         last_active_at: s.last_active_at,
+        exec_state,
     }
 }
 
@@ -88,7 +98,7 @@ pub fn session_create(
         .map_err(ApiError::execution)?;
 
     Ok(SessionCreateResponse {
-        session: to_payload(summary),
+        session: to_payload(summary, &state),
     })
 }
 
@@ -100,7 +110,7 @@ pub fn session_list(state: State<'_, AppState>) -> Result<SessionListResponse, A
         .map_err(ApiError::execution)?;
 
     Ok(SessionListResponse {
-        sessions: summaries.into_iter().map(to_payload).collect(),
+        sessions: summaries.into_iter().map(|s| to_payload(s, &state)).collect(),
     })
 }
 

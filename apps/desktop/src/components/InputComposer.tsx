@@ -8,11 +8,17 @@ export type InputComposerHandle = {
 type Props = {
   mode: "command" | "ask";
   onModeChange: (mode: "command" | "ask") => void;
-  onSubmit: (value: string) => void;
+  /**
+   * Return false (or a promise of false) when the submit was rejected, so the
+   * composer keeps what the user typed instead of discarding it.
+   */
+  onSubmit: (value: string) => void | boolean | Promise<boolean | void>;
   busy?: boolean;
   isRunning?: boolean;
   onInterrupt?: () => void;
   disabled?: boolean;
+  /** Why the composer is disabled, shown as its placeholder. */
+  disabledReason?: string;
 };
 
 export const InputComposer = forwardRef<InputComposerHandle, Props>(
@@ -25,6 +31,7 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
       isRunning = false,
       onInterrupt,
       disabled = false,
+      disabledReason,
     },
     ref,
   ) {
@@ -55,8 +62,22 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
     function handleSubmit() {
       const trimmed = value.trim();
       if (!trimmed || cantSubmit) return;
-      onSubmit(trimmed);
+      const result = onSubmit(trimmed);
+      if (result === false) {
+        // Rejected synchronously: keep the text.
+        textareaRef.current?.focus();
+        return;
+      }
       setValue("");
+      if (result && typeof (result as Promise<unknown>).then === "function") {
+        // Rejected after an await: put the text back unless the user already typed something new.
+        void (result as Promise<boolean | void>).then(
+          (ok) => {
+            if (ok === false) setValue((current) => (current === "" ? trimmed : current));
+          },
+          () => setValue((current) => (current === "" ? trimmed : current)),
+        );
+      }
       textareaRef.current?.focus();
     }
 
@@ -99,7 +120,9 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
           placeholder={
             isRunning
               ? "Command running…"
-              : mode === "command"
+              : disabled && disabledReason
+                ? disabledReason
+                : mode === "command"
                 ? "Submit a command explicitly…"
                 : "Describe what you want to do…"
           }

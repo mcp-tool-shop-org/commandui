@@ -85,14 +85,14 @@ function isBareKey(parsed: ParsedCombo): boolean {
   return !hasModifier(parsed);
 }
 
-/** Plain Ctrl+<letter> (no Shift/Alt): a control character the shell reads. */
+/** Plain Ctrl+<letter|digit|comma> (no Shift/Alt): a control sequence the shell reads. */
 export function isShellChord(event: KeyboardEvent): boolean {
   return (
     event.ctrlKey &&
     !event.shiftKey &&
     !event.altKey &&
     !event.metaKey &&
-    /^[a-z]$/i.test(event.key)
+    /^[a-z0-9,]$/i.test(event.key)
   );
 }
 
