@@ -382,7 +382,6 @@ impl SessionService {
             if prev_line_fresh {
                 drop_trailing_blank_line(&mut display_text);
             }
-
             sink.emit(RuntimeEvent::SessionCwdChanged(SessionCwdChangedEvent {
                 session_id: session_id.to_string(),
                 cwd: prompt.cwd.clone(),
@@ -443,6 +442,59 @@ struct ParsedPrompt {
     exit_code: i32,
 }
 
+/// What a terminal would show on the row where `line` ends: escape sequences
+/// (colour, cursor visibility, window title) are dropped and a carriage return
+/// throws away the text it overwrites. A Windows ConPTY wraps the marker row in
+/// such sequences.
+fn last_visible_row(line: &str) -> String {
+    let bytes = line.as_bytes();
+    let mut visible = String::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b == 0x1b {
+            i += 1;
+            match bytes.get(i) {
+                Some(b'[') => {
+                    i += 1;
+                    while i < bytes.len() && (0x20..=0x3f).contains(&bytes[i]) {
+                        i += 1;
+                    }
+                    if i < bytes.len() {
+                        i += 1;
+                    }
+                }
+                Some(b']') => {
+                    i += 1;
+                    while i < bytes.len() {
+                        if bytes[i] == 0x07 {
+                            i += 1;
+                            break;
+                        }
+                        if bytes[i] == 0x1b && bytes.get(i + 1) == Some(&b'\\') {
+                            i += 2;
+                            break;
+                        }
+                        i += 1;
+                    }
+                }
+                Some(_) => i += 1,
+                None => {}
+            }
+        } else if b == 0x0d {
+            visible.clear();
+            i += 1;
+        } else if b == 0x07 {
+            i += 1;
+        } else {
+            let ch_len = line[i..].chars().next().map(char::len_utf8).unwrap_or(1);
+            visible.push_str(&line[i..i + ch_len]);
+            i += ch_len;
+        }
+    }
+    visible
+}
+
 fn persist_bootstrap(
     sessions: &Arc<Mutex<SessionRegistry>>,
     session_id: &str,
@@ -480,8 +532,8 @@ fn persist_bootstrap(
 /// This does not authenticate the sender: any command running in the session
 /// can read the nonce from shell state and print a matching line.
 fn parse_prompt_line(line: &str, nonce: &str) -> Option<ParsedPrompt> {
-    let trimmed = line.trim();
-    let visible = trimmed.rsplit('\r').next().unwrap_or(trimmed).trim_start();
+    let row = last_visible_row(line.trim_end());
+    let visible = row.trim();
     if !visible.starts_with(PROMPT_MARKER) {
         return None;
     }
@@ -559,7 +611,8 @@ fn drop_trailing_blank_line(text: &mut String) {
 /// Could this unterminated tail be (the start of) a prompt-marker line? Such a
 /// tail is held back so a marker is never shown, even when it arrives split.
 fn tail_could_be_marker(tail: &str) -> bool {
-    let visible = tail.rsplit('\r').next().unwrap_or(tail).trim_start();
+    let row = last_visible_row(tail);
+    let visible = row.trim_start();
     !visible.is_empty()
         && (PROMPT_MARKER.starts_with(visible) || visible.starts_with(PROMPT_MARKER))
 }
@@ -1578,5 +1631,50 @@ next");
 
     fn make_dummy_writer() -> crate::pty::PtyHandle {
         Arc::new(Mutex::new(Box::new(std::io::sink()) as Box<dyn std::io::Write + Send>))
+    }
+
+    #[test]
+    fn marker_row_wrapped_in_escape_sequences_is_still_a_marker() {
+        // ConPTY wraps the row in colour, cursor-visibility and title escapes.
+        let line = "\x1b[?25l\x1b[93m\x1b]0;title\x07__COMMANDUI_PROMPT__|test-nonce|C:\\work|0\x1b[?25h\r\n";
+        let parsed = parse_prompt_line(line, "test-nonce").expect("marker parses");
+        assert_eq!(parsed.cwd, "C:\\work");
+        assert_eq!(parsed.exit_code, 0);
+        // Text before the marker on the same row is still not a marker.
+        let embedded = "output __COMMANDUI_PROMPT__|test-nonce|C:\\work|0\r\n";
+        assert!(parse_prompt_line(embedded, "test-nonce").is_none());
+        // A held-back tail is recognised through the same escapes.
+        assert!(tail_could_be_marker("\x1b[?25l__COMMANDUI_PRO"));
+        assert!(!tail_could_be_marker("\x1b[?25lC:\\work>"));
+    }
+
+    #[test]
+    fn conpty_stream_without_line_breaks_still_finishes_the_command() {
+        // The shape a ConPTY produced live: the output of `echo probe-ok` and
+        // the marker row are separated by cursor positioning, not CR LF.
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(&sessions, "s1", SessionExecState::Running, true, Some("e1".to_string()));
+        let mut rows = crate::pty::RowNormalizer::default();
+        let raw = "\x1b[?25h\x1b[mprobe-ok\x1b[?25l\x1b[15;1H__COMMANDUI_PROMPT__|test-nonce|C:\\work|0\x1b[16;1HC:\\work>";
+        // Delivered in two reads cut in the middle of an escape.
+        let cut = raw.find("\x1b[15").unwrap() + 3;
+        for part in [&raw[..cut], &raw[cut..]] {
+            let text = rows.push(part);
+            SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &text);
+        }
+        let events = sink.events();
+        assert!(events.iter().any(|e| matches!(e, RuntimeEvent::ExecutionFinished(f) if f.execution_id == "e1" && f.exit_code == 0)));
+        let shown: String = events
+            .iter()
+            .filter_map(|e| match e {
+                RuntimeEvent::TerminalLine(l) => Some(l.text.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(shown.contains("probe-ok"), "{shown:?}");
+        assert!(!shown.contains("__COMMANDUI_PROMPT__"), "{shown:?}");
+        assert_eq!(sessions.lock().unwrap().get("s1").unwrap().cwd, "C:\\work");
     }
 }

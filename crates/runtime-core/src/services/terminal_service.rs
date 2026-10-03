@@ -435,7 +435,7 @@ mod tests {
         req.command = "echo h\u{e9}llo \u{65e5}\u{672c}".to_string();
         svc.execute(req).expect("plain command must pass the guard");
         let bytes = captured.lock().unwrap().clone();
-        assert!(String::from_utf8(bytes).unwrap().ends_with("echo h\u{e9}llo \u{65e5}\u{672c}\n"));
+        assert!(String::from_utf8(bytes).unwrap().ends_with("echo h\u{e9}llo \u{65e5}\u{672c}\r"));
     }
 
     #[test]
@@ -443,8 +443,8 @@ mod tests {
         for (shell, clear) in [
             ("bash", "\x05\x15"),
             ("zsh", "\x05\x15"),
-            ("pwsh.exe", "\x1b"),
-            ("powershell.exe", "\x1b"),
+            ("pwsh.exe", "\x1b[1;5F\x1b[1;5H"),
+            ("powershell.exe", "\x1b[1;5F\x1b[1;5H"),
         ] {
             let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
             let sink = Arc::new(CollectingSink::new());
@@ -454,7 +454,7 @@ mod tests {
             let svc = TerminalService::new(sessions, sink as Arc<dyn RuntimeEventSink>);
             svc.execute(exec_request("e1")).unwrap();
             let bytes = captured.lock().unwrap().clone();
-            assert_eq!(String::from_utf8(bytes).unwrap(), format!("{clear}ls\n"), "{shell}");
+            assert_eq!(String::from_utf8(bytes).unwrap(), format!("{clear}ls\r"), "{shell}");
         }
     }
 
@@ -804,7 +804,7 @@ mod tests {
         .unwrap();
         let bytes = captured.lock().unwrap();
         let text = String::from_utf8_lossy(&bytes);
-        assert!(text.starts_with("\x1bdir\ncall set __cui_ec=%^ERRORLEVEL% & "));
+        assert!(text.starts_with("\x1b[1;5F\x1b[1;5Hdir\rcall set __cui_ec=%^ERRORLEVEL% & "));
         assert!(text.contains("!__cui_ec!"));
         assert!(text.contains("test-nonce"));
         assert!(!text.contains('~'));

@@ -4,6 +4,12 @@ use std::sync::{Arc, Mutex};
 
 pub const PROMPT_MARKER: &str = "__COMMANDUI_PROMPT__";
 
+/// The key that submits a line to a PTY. A Windows ConPTY submits on CR
+/// (Enter); LF is Ctrl+J there and never runs the line. Unix ptys translate
+/// CR to LF (ICRNL) and readline/zle accept it. Every line runtime-core builds
+/// itself ends in this; `write_raw` (the user's own keystrokes) never adds it.
+pub(crate) const ENTER: &str = "\r";
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ShellFamily {
     PowerShell,
@@ -48,6 +54,11 @@ pub fn default_shell() -> String {
         if std::path::Path::new(&pwsh7).exists() {
             return pwsh7;
         }
+        // A Store, winget or scoop install of PowerShell 7 is not under
+        // Program Files; it is only on PATH. 7 beats the bundled 5.1.
+        if let Some(found) = find_on_path("pwsh.exe", std::env::var_os("PATH").as_deref()) {
+            return found.to_string_lossy().to_string();
+        }
         "powershell.exe".to_string()
     }
     #[cfg(not(target_os = "windows"))]
@@ -61,6 +72,17 @@ pub fn default_shell() -> String {
             Err(_) => "/bin/bash".to_string(),
         }
     }
+}
+
+/// First `dir/exe` that exists, for the directories listed in `path_var`.
+/// (An App Execution Alias such as the Store `pwsh.exe` is a reparse point
+/// that `metadata` follows, so it counts.)
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn find_on_path(exe: &str, path_var: Option<&std::ffi::OsStr>) -> Option<std::path::PathBuf> {
+    let path_var = path_var?;
+    std::env::split_paths(path_var)
+        .map(|dir| dir.join(exe))
+        .find(|candidate| std::fs::metadata(candidate).map(|m| m.is_file()).unwrap_or(false))
 }
 
 /// The shell's child process handle. Kept so the shell can be killed and reaped.
@@ -100,7 +122,7 @@ pub fn spawn_shell(
 pub fn write_command(handle: &PtyHandle, command: &str) -> Result<(), String> {
     let mut writer = handle.lock().map_err(|e| format!("Lock error: {e}"))?;
     writer
-        .write_all(format!("{command}\n").as_bytes())
+        .write_all(format!("{command}{ENTER}").as_bytes())
         .map_err(|e| format!("Write error: {e}"))?;
     writer.flush().map_err(|e| format!("Flush error: {e}"))?;
     Ok(())
@@ -150,14 +172,14 @@ fn cmd_marker_echo(nonce: &str, exit_expr: &str) -> String {
 pub fn bootstrap_prompt(shell: &str, nonce: &str) -> Option<String> {
     match shell_family(shell) {
         ShellFamily::PowerShell => Some(format!(
-            "function prompt {{ $__cui_ok = $?; $__cui_code = $global:LASTEXITCODE; if ($__cui_ok) {{ $__cui_code = 0 }} elseif (-not ($__cui_code -is [int]) -or $__cui_code -eq 0) {{ $__cui_code = 1 }}; $__cui_cwd = (Get-Location).Path.Replace('%','%25').Replace([string][char]13,'%0D').Replace([string][char]10,'%0A'); $__cui_line = ([string][char]10) + '{PROMPT_MARKER}|{nonce}|' + $__cui_cwd + '|' + $__cui_code; \"$__cui_line`n> \" }}\n"
+            "function prompt {{ $__cui_ok = $?; $__cui_code = $global:LASTEXITCODE; if ($__cui_ok) {{ $__cui_code = 0 }} elseif (-not ($__cui_code -is [int]) -or $__cui_code -eq 0) {{ $__cui_code = 1 }}; $__cui_cwd = (Get-Location).Path.Replace('%','%25').Replace([string][char]13,'%0D').Replace([string][char]10,'%0A'); $__cui_line = ([string][char]10) + '{PROMPT_MARKER}|{nonce}|' + $__cui_cwd + '|' + $__cui_code; \"$__cui_line`n> \" }}{ENTER}"
         )),
-        ShellFamily::Cmd => Some(format!("{}\n", cmd_marker_echo(nonce, "%ERRORLEVEL%"))),
+        ShellFamily::Cmd => Some(format!("{}{ENTER}", cmd_marker_echo(nonce, "%ERRORLEVEL%"))),
         ShellFamily::Bash => Some(format!(
-            "__cui_nl=$'\\n'; __cui_cr=$'\\r'; PROMPT_COMMAND='__cui_ec=$?; __cui_cwd=${{PWD//\\%/%25}}; __cui_cwd=${{__cui_cwd//$__cui_nl/%0A}}; __cui_cwd=${{__cui_cwd//$__cui_cr/%0D}}; printf \"\\n{PROMPT_MARKER}|{nonce}|%s|%s\\n\" \"$__cui_cwd\" \"$__cui_ec\"'\n"
+            "__cui_nl=$'\\n'; __cui_cr=$'\\r'; PROMPT_COMMAND='__cui_ec=$?; __cui_cwd=${{PWD//\\%/%25}}; __cui_cwd=${{__cui_cwd//$__cui_nl/%0A}}; __cui_cwd=${{__cui_cwd//$__cui_cr/%0D}}; printf \"\\n{PROMPT_MARKER}|{nonce}|%s|%s\\n\" \"$__cui_cwd\" \"$__cui_ec\"'{ENTER}"
         )),
         ShellFamily::Zsh => Some(format!(
-            "precmd() {{ local __cui_ec=$? __cui_cwd=\"${{PWD}}\"; __cui_cwd=${{__cui_cwd//\\%/%25}}; __cui_cwd=${{__cui_cwd//$'\\n'/%0A}}; __cui_cwd=${{__cui_cwd//$'\\r'/%0D}}; print -r -- \"\"; print -r -- \"{PROMPT_MARKER}|{nonce}|${{__cui_cwd}}|${{__cui_ec}}\" }}\n"
+            "precmd() {{ local __cui_ec=$? __cui_cwd=\"${{PWD}}\"; __cui_cwd=${{__cui_cwd//\\%/%25}}; __cui_cwd=${{__cui_cwd//$'\\n'/%0A}}; __cui_cwd=${{__cui_cwd//$'\\r'/%0D}}; print -r -- \"\"; print -r -- \"{PROMPT_MARKER}|{nonce}|${{__cui_cwd}}|${{__cui_ec}}\" }}{ENTER}"
         )),
         ShellFamily::Unsupported => None,
     }
@@ -174,32 +196,138 @@ pub(crate) fn command_line_for_shell(shell: &str, nonce: &str, command: &str) ->
         // The exit code is captured into a variable first (`call` expands
         // `%^ERRORLEVEL%` after the command ran), then the child prints it.
         format!(
-            "{clear}{command}\ncall set __cui_ec=%^ERRORLEVEL% & {}\n",
+            "{clear}{command}{ENTER}call set __cui_ec=%^ERRORLEVEL% & {}{ENTER}",
             cmd_marker_echo(nonce, "!__cui_ec!")
         )
     } else {
-        format!("{clear}{command}\n")
+        format!("{clear}{command}{ENTER}")
     }
 }
 
 /// Bytes that discard whatever the user already typed at the prompt, written
-/// before an approved command so it cannot be appended to a half-typed line
-/// (`rm -rf ` + approved `ls` must not run `rm -rf ls`).
+/// in the same write as an approved command so it cannot be appended to a
+/// half-typed line (`rm -rf ` + approved `ls` must not run `rm -rf ls`).
+///
 /// bash/zsh (readline/zle): Ctrl+E (end of line) then Ctrl+U (kill to start).
-/// PowerShell (PSReadLine) and cmd: Escape (RevertLine / clear the line).
+///
+/// PowerShell (PSReadLine) and cmd: Ctrl+End then Ctrl+Home, as the VT input
+/// sequences `CSI 1;5 F` and `CSI 1;5 H`. PSReadLine binds them to
+/// ForwardDeleteLine / BackwardDeleteLine and the console line editor of cmd
+/// deletes to the end / start of the line, so the whole line goes whatever
+/// the cursor position. Escape (RevertLine) is NOT usable: a ConPTY reads
+/// ESC followed by more bytes in the same write as Alt+<key>, so the first
+/// letter of the command was swallowed (`xyz` + ESC + `echo ok` ran
+/// `xyzecho ok`). The CSI forms are unambiguous in a single write.
 pub(crate) fn clear_input_line(shell: &str) -> &'static str {
     match shell_family(shell) {
-        ShellFamily::Bash | ShellFamily::Zsh => "\x05\x15",
-        ShellFamily::PowerShell | ShellFamily::Cmd => "\x1b",
+        ShellFamily::Bash | ShellFamily::Zsh => "",
+        ShellFamily::PowerShell | ShellFamily::Cmd => "[1;5F[1;5H",
         ShellFamily::Unsupported => "",
     }
 }
 
 pub(crate) fn resync_input(shell: &str, nonce: &str) -> String {
     if shell_family(shell) == ShellFamily::Cmd {
-        format!("{}\n", cmd_marker_echo(nonce, "%ERRORLEVEL%"))
+        format!("{}{ENTER}", cmd_marker_echo(nonce, "%ERRORLEVEL%"))
     } else {
-        "\n".to_string()
+        ENTER.to_string()
+    }
+}
+
+/// A Windows ConPTY repaints by position: instead of `\r\n` it moves to the
+/// start of the next row with a cursor-position escape (`CSI row;col H`), so a
+/// finished line (the output of a command, the prompt marker) can arrive with
+/// no line break at all. The runtime reads output by line, so this turns such
+/// a cursor-position escape into a line break when the row it leaves has text
+/// on it, and drops it otherwise. Every other escape passes through untouched.
+/// An escape sequence cut in half by a read is held for the next one.
+#[derive(Default)]
+pub(crate) struct RowNormalizer {
+    carry: String,
+    row_has_text: bool,
+}
+
+const MAX_ESCAPE_CARRY: usize = 256;
+
+impl RowNormalizer {
+    pub(crate) fn push(&mut self, text: &str) -> String {
+        let mut input = std::mem::take(&mut self.carry);
+        input.push_str(text);
+        let bytes = input.as_bytes();
+        let mut out = String::with_capacity(input.len());
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] != 0x1b {
+                let ch = input[i..].chars().next().unwrap();
+                if ch == '\n' {
+                    self.row_has_text = false;
+                } else if !ch.is_whitespace() && !ch.is_control() {
+                    self.row_has_text = true;
+                }
+                out.push(ch);
+                i += ch.len_utf8();
+                continue;
+            }
+            // An escape sequence starts here; find where it ends.
+            let end = match bytes.get(i + 1) {
+                None => None,
+                Some(b'[') => {
+                    let mut j = i + 2;
+                    while j < bytes.len() && (0x20..=0x3f).contains(&bytes[j]) {
+                        j += 1;
+                    }
+                    if j < bytes.len() { Some(j + 1) } else { None }
+                }
+                Some(b']') => {
+                    let mut j = i + 2;
+                    let mut found = None;
+                    while j < bytes.len() {
+                        if bytes[j] == 0x07 {
+                            found = Some(j + 1);
+                            break;
+                        }
+                        if bytes[j] == 0x1b && bytes.get(j + 1) == Some(&b'\\') {
+                            found = Some(j + 2);
+                            break;
+                        }
+                        j += 1;
+                    }
+                    found
+                }
+                Some(_) => Some(i + 2),
+            };
+            match end {
+                Some(end) if end <= bytes.len() => {
+                    let seq = &input[i..end];
+                    let is_cup = seq.starts_with("\x1b[") && (seq.ends_with('H') || seq.ends_with('f'));
+                    if is_cup {
+                        if self.row_has_text {
+                            out.push('\n');
+                            self.row_has_text = false;
+                        }
+                    } else {
+                        out.push_str(seq);
+                    }
+                    i = end;
+                }
+                _ => {
+                    // Incomplete: keep it for the next read, unless it has
+                    // grown too long to be an escape sequence at all.
+                    if bytes.len() - i <= MAX_ESCAPE_CARRY {
+                        self.carry = input[i..].to_string();
+                    } else {
+                        out.push_str(&input[i..]);
+                    }
+                    break;
+                }
+            }
+        }
+        out
+    }
+
+    /// Whatever is still held when the stream ends.
+    pub(crate) fn finish(&mut self) -> String {
+        std::mem::take(&mut self.carry)
     }
 }
 
@@ -229,19 +357,31 @@ where
         let mut buf = [0u8; 4096];
         // Bytes of a multibyte character that a read cut in half.
         let mut pending: Vec<u8> = Vec::new();
+        let mut rows = RowNormalizer::default();
         loop {
             match reader.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
-                    let text = decode_utf8_stream(&mut pending, &buf[..n]);
+                    let mut text = decode_utf8_stream(&mut pending, &buf[..n]);
+                    if cfg!(windows) {
+                        text = rows.push(&text);
+                    }
                     if !text.is_empty() {
                         on_chunk(text);
                     }
                 }
             }
         }
+        let mut rest = String::new();
         if !pending.is_empty() {
-            on_chunk(String::from_utf8_lossy(&pending).to_string());
+            rest.push_str(&String::from_utf8_lossy(&pending));
+            if cfg!(windows) {
+                rest = rows.push(&rest);
+            }
+        }
+        rest.push_str(&rows.finish());
+        if !rest.is_empty() {
+            on_chunk(rest);
         }
         on_exit();
     });
@@ -362,27 +502,28 @@ mod tests {
     fn cmd_command_line_appends_marker_without_using_user_text_as_format() {
         let nasty = "echo %CD% & del /q *";
         let line = command_line_for_shell("cmd.exe", NONCE, nasty);
-        assert!(line.starts_with(&format!("\x1b{nasty}\ncall set ")));
-        assert_eq!(line.matches('\n').count(), 2);
+        assert!(line.starts_with(&format!("\x1b[1;5F\x1b[1;5H{nasty}\rcall set ")));
+        assert_eq!(line.matches('\r').count(), 2);
+        assert!(!line.contains('\n'), "a Windows ConPTY submits on CR; LF is Ctrl+J");
         assert!(line.contains(&format!("{PROMPT_MARKER}^^^|{NONCE}^^^|!CD!^^^|!__cui_ec!")));
-        assert_eq!(command_line_for_shell("bash", NONCE, "ls"), "\x05\x15ls\n");
-        assert_eq!(resync_input("bash", NONCE), "\n");
+        assert_eq!(command_line_for_shell("bash", NONCE, "ls"), "\x05\x15ls\r");
+        assert_eq!(resync_input("bash", NONCE), "\r");
         assert!(resync_input("cmd.exe", NONCE).contains("%ERRORLEVEL%"));
     }
 
     #[test]
     fn command_line_clears_pending_input_per_shell_family() {
-        assert_eq!(command_line_for_shell("zsh", NONCE, "ls"), "\x05\x15ls\n");
-        assert_eq!(command_line_for_shell("pwsh.exe", NONCE, "ls"), "\x1bls\n");
-        assert_eq!(command_line_for_shell("powershell.exe", NONCE, "ls"), "\x1bls\n");
-        assert!(command_line_for_shell("cmd.exe", NONCE, "dir").starts_with("\x1bdir\ncall set "));
+        assert_eq!(command_line_for_shell("zsh", NONCE, "ls"), "\x05\x15ls\r");
+        assert_eq!(command_line_for_shell("pwsh.exe", NONCE, "ls"), "\x1b[1;5F\x1b[1;5Hls\r");
+        assert_eq!(command_line_for_shell("powershell.exe", NONCE, "ls"), "\x1b[1;5F\x1b[1;5Hls\r");
+        assert!(command_line_for_shell("cmd.exe", NONCE, "dir").starts_with("\x1b[1;5F\x1b[1;5Hdir\rcall set "));
     }
 
     #[test]
     fn cmd_commands_with_bangs_are_written_through_unchanged() {
         for command in ["echo hello!", "git commit -m \"done!\"", "cd hello!world"] {
             let line = command_line_for_shell("cmd.exe", NONCE, command);
-            assert!(line.starts_with(&format!("\x1b{command}\ncall set ")), "{line}");
+            assert!(line.starts_with(&format!("\x1b[1;5F\x1b[1;5H{command}\rcall set ")), "{line}");
             // Only the marker child expands `!`; the session itself never does.
             assert!(line.contains("\"%ComSpec%\" /v:on /c"), "{line}");
         }
@@ -623,5 +764,108 @@ mod tests {
                 Err(err) => Err(err),
             }
         }
+    }
+
+    #[test]
+    fn every_line_runtime_core_builds_is_submitted_with_cr_not_lf() {
+        // A Windows ConPTY runs a line on CR (Enter); LF is Ctrl+J there and
+        // the bootstrap was typed and never run.
+        for shell in ["powershell.exe", "pwsh", "cmd.exe", "/bin/bash", "/bin/zsh"] {
+            let boot = bootstrap_prompt(shell, NONCE).unwrap();
+            assert!(boot.ends_with('\r'), "{shell}: {boot:?}");
+            assert!(!boot.contains('\n'), "{shell}: {boot:?}");
+            let line = command_line_for_shell(shell, NONCE, "ls");
+            assert!(line.ends_with('\r'), "{shell}: {line:?}");
+            assert!(!line.contains('\n'), "{shell}: {line:?}");
+            let resync = resync_input(shell, NONCE);
+            assert!(resync.ends_with('\r'), "{shell}: {resync:?}");
+            assert!(!resync.contains('\n'), "{shell}: {resync:?}");
+        }
+    }
+
+    #[test]
+    fn write_command_submits_with_cr_and_write_raw_adds_nothing() {
+        #[derive(Clone)]
+        struct Capture(Arc<Mutex<Vec<u8>>>);
+        impl Write for Capture {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let bytes = Arc::new(Mutex::new(Vec::new()));
+        let handle: PtyHandle = Arc::new(Mutex::new(Box::new(Capture(bytes.clone())) as Box<dyn Write + Send>));
+        write_command(&handle, "echo hi").unwrap();
+        assert_eq!(bytes.lock().unwrap().as_slice(), b"echo hi\r");
+        bytes.lock().unwrap().clear();
+        // The user's keystrokes (already encoded by xterm) pass through untouched.
+        write_raw(&handle, "ab\n\r\x1b[A").unwrap();
+        assert_eq!(bytes.lock().unwrap().as_slice(), b"ab\n\r\x1b[A");
+    }
+
+    #[test]
+    fn clear_line_is_a_csi_pair_never_a_lone_escape_on_windows_shells() {
+        // ESC followed by more bytes in one write is Alt+<key> to a ConPTY:
+        // `xyz` + ESC + `echo ok` ran `xyzecho ok`. Ctrl+End / Ctrl+Home as
+        // CSI sequences are unambiguous.
+        for shell in ["powershell.exe", "pwsh.exe", "cmd.exe"] {
+            assert_eq!(clear_input_line(shell), "\x1b[1;5F\x1b[1;5H", "{shell}");
+        }
+        for shell in ["/bin/bash", "zsh"] {
+            assert_eq!(clear_input_line(shell), "\x05\x15", "{shell}");
+        }
+        assert_eq!(clear_input_line("fish"), "");
+    }
+
+    #[test]
+    fn row_normalizer_turns_cursor_positioning_into_line_breaks() {
+        let mut rows = RowNormalizer::default();
+        // ConPTY: output, then the marker on the next row with no CR LF.
+        assert_eq!(
+            rows.push("probe-ok\x1b[?25l\x1b[15;1H__COMMANDUI_PROMPT__|n|C:\\w|0\x1b[16;1HC:\\w>"),
+            "probe-ok\x1b[?25l\n__COMMANDUI_PROMPT__|n|C:\\w|0\nC:\\w>"
+        );
+        // A move on an empty row, or the screen clear at start-up, is not a break.
+        let mut rows = RowNormalizer::default();
+        assert_eq!(rows.push("\x1b[2J\x1b[m\x1b[Hhello\r\n\x1b[4;1H"), "\x1b[2J\x1b[mhello\r\n");
+        // Other escapes pass through byte for byte.
+        let mut rows = RowNormalizer::default();
+        let text = "\x1b[93mred\x1b[0m \x1b]0;title\x07done";
+        assert_eq!(rows.push(text), text);
+    }
+
+    #[test]
+    fn row_normalizer_holds_an_escape_cut_by_a_read() {
+        let full = "ab\x1b[12;1Hcd";
+        for split in 1..full.len() {
+            let mut rows = RowNormalizer::default();
+            let mut out = rows.push(&full[..split]);
+            out.push_str(&rows.push(&full[split..]));
+            out.push_str(&rows.finish());
+            assert_eq!(out, "ab\ncd", "split at {split}");
+        }
+        // A sequence that never ends is released at the end of the stream.
+        let mut rows = RowNormalizer::default();
+        assert_eq!(rows.push("x\x1b[1"), "x");
+        assert_eq!(rows.finish(), "\x1b[1");
+    }
+
+    #[test]
+    fn find_on_path_returns_the_first_existing_file() {
+        let root = std::env::temp_dir().join(format!("commandui-findpath-{}", std::process::id()));
+        let (a, b) = (root.join("a"), root.join("b"));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        std::fs::write(b.join("tool.exe"), b"").unwrap();
+        std::fs::create_dir_all(a.join("dir.exe")).unwrap();
+        let path = std::env::join_paths([&a, &b]).unwrap();
+        assert_eq!(find_on_path("tool.exe", Some(&path)), Some(b.join("tool.exe")));
+        assert_eq!(find_on_path("dir.exe", Some(&path)), None, "a directory is not a program");
+        assert_eq!(find_on_path("missing.exe", Some(&path)), None);
+        assert_eq!(find_on_path("tool.exe", None), None);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
