@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2026-10-03
+
+### Added
+- Unsigned x64 MSIX for the existing Partner Center product. Package name `mcp-tool-shop.CommandUI`, package version `1.0.2.0`. `packaging/pack-msix.ps1` packs `commandui-desktop.exe` and refuses a name, publisher, architecture, executable, or version that would not update that product. The file is unsigned. Partner Center signs it.
+
+### Changed
+- Desktop version is 1.0.2. The public GitHub release is still the v1.0.0 MSI until the Store upload is published.
+- README, landing page, and the beginner handbook page describe the MSIX as the Store package and the MSI as the current direct download.
+- Known limitations describe the real planner: local Ollama, then a mock fallback.
+
 ## [1.0.0] - 2026-03-13
 
 ### Added

@@ -6,5 +6,7 @@ target
 *.log
 site/.astro/
 *.msi
+*.msix
 *.nsis
+release/
 .polyglot-cache.json

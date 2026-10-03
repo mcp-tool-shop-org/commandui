@@ -16,10 +16,10 @@
 - Shell processes don't survive app restart
 - Session metadata restored, but PTY must be respawned
 
-## Planner Context
-- v0 uses a mock planner (no real AI integration yet)
-- Memory items fed to planner but not used by stub
-- Limited context assembly (cwd, recent commands, memory)
+## Planner
+- Calls a local Ollama model first. The prompt includes the working directory, recent commands, known preferences, and known workflows.
+- If Ollama is not running, the planner falls back to a mock. The mock recognizes a few intents and otherwise echoes the intent. The plan panel says when the source is the mock.
+- Context is the current session, not a long transcript.
 
 ## Semantic Review
 - Edit-and-run works, but original plan metadata not fully preserved on reopen

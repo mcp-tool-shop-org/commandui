@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+         xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+         IgnorableNamespaces="uap uap3 rescap desktop">
+
+  <Identity Name="mcp-tool-shop.CommandUI"
+            Publisher="CN=5305D976-6952-4F00-9C21-3A5DB090359F"
+            Version="1.0.2.0"
+            ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>CommandUI</DisplayName>
+    <PublisherDisplayName>mcp-tool-shop</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.scale-200.png</Logo>
+    <Description>AI-native shell environment with semantic command review.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+    <PackageDependency Name="Microsoft.VCLibs.140.00.UWPDesktop" MinVersion="14.0.30704.0" Publisher="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+    <Resource uap:Scale="100" />
+    <Resource uap:Scale="125" />
+    <Resource uap:Scale="150" />
+    <Resource uap:Scale="200" />
+    <Resource uap:Scale="400" />
+  </Resources>
+
+  <Applications>
+    <Application Id="CommandUI" Executable="commandui-desktop.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="CommandUI"
+        Description="AI-native shell — describe what you want, review the command, then run it."
+        BackgroundColor="#4AA59D"
+        Square150x150Logo="Assets\Square150x150Logo.scale-200.png"
+        Square44x44Logo="Assets\Square44x44Logo.scale-200.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Wide310x150Logo.scale-200.png"
+          Square310x310Logo="Assets\Square310x310Logo.scale-200.png"
+          Square71x71Logo="Assets\Square44x44Logo.scale-200.png"
+          ShortName="CommandUI">
+          <uap:ShowNameOnTiles>
+            <uap:ShowOn Tile="square150x150Logo" />
+            <uap:ShowOn Tile="wide310x150Logo" />
+            <uap:ShowOn Tile="square310x310Logo" />
+          </uap:ShowNameOnTiles>
+        </uap:DefaultTile>
+        <uap:SplashScreen Image="Assets\SplashScreen.scale-200.png" BackgroundColor="#4AA59D" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <Capability Name="internetClient" />
+  </Capabilities>
+</Package>
+

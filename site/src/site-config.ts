@@ -6,7 +6,7 @@ export const config: SiteConfig = {
   logoBadge: 'C',
   brandName: 'CommandUI',
   repoUrl: 'https://github.com/mcp-tool-shop-org/commandui',
-  footerText: 'MIT Licensed — built by <a href="https://github.com/mcp-tool-shop-org" style="color:var(--color-muted);text-decoration:underline">mcp-tool-shop-org</a>',
+  footerText: 'MIT Licensed — built by <a href="https://mcp-tool-shop.github.io/" style="color:var(--color-muted);text-decoration:underline">MCP Tool Shop</a>',
 
   hero: {
     badge: 'Desktop app',
@@ -29,16 +29,16 @@ export const config: SiteConfig = {
       title: 'Install',
       cards: [
         {
-          title: 'Windows (MSI)',
-          code: '# Download from GitHub Releases\nhttps://github.com/mcp-tool-shop-org/commandui/releases/latest',
+          title: 'Store package',
+          code: 'mcp-tool-shop.CommandUI\nx64 MSIX. Partner Center signs the upload.\nThe unsigned file is not a double-click installer.',
+        },
+        {
+          title: 'Install today',
+          code: 'winget install mcp-tool-shop.CommandUI\n\n# The public release is still the MSI.',
         },
         {
           title: 'Scoop',
           code: 'scoop bucket add mcp-tool-shop https://github.com/mcp-tool-shop-org/scoop-bucket\nscoop install commandui',
-        },
-        {
-          title: 'winget',
-          code: 'winget install mcp-tool-shop.CommandUI',
         },
       ],
     },
@@ -105,7 +105,7 @@ export const config: SiteConfig = {
       features: [
         {
           title: 'Tauri v2 + React 19',
-          desc: 'Rust backend for PTY management, SQLite persistence, and Ollama LLM integration. React frontend with Zustand state management and xterm.js terminal.',
+          desc: 'The Store executable is a Rust process. PTY, SQLite, and the planner live in shared crates. The React window is the desktop front end. A Rust console in this repo uses the same crates and is not in the Store package.',
         },
         {
           title: 'Monorepo Packages',

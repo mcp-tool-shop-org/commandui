@@ -80,7 +80,7 @@ import { WorkflowRunBanner } from "../components/WorkflowRunBanner";
 import { isTauriRuntime } from "../lib/tauriInvoke";
 import { onMockEvent } from "../lib/mockBridge";
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.2";
 
 function simplifyText(text: string): string {
   const first = text.split(/[.!?]\s/)[0];

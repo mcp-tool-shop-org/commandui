@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "commandui-console"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "commandui-desktop"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "chrono",
  "commandui-runtime-core",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "commandui-runtime-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "portable-pty",
@@ -405,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "commandui-runtime-persistence"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "rusqlite",
@@ -416,7 +416,7 @@ dependencies = [
 
 [[package]]
 name = "commandui-runtime-planner"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "reqwest 0.12.28",

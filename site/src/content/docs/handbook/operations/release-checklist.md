@@ -61,6 +61,7 @@ sidebar:
 - [ ] Classic and Guided modes behave differently
 
 ### Platform builds
+- [ ] Windows: `packaging/pack-msix.ps1` prints `RESULT PASS` for an unsigned x64 MSIX above `1.0.1.0`
 - [ ] Windows: MSI/NSIS builds successfully
 - [ ] macOS: DMG/app builds successfully
 - [ ] Linux: deb builds successfully

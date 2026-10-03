@@ -39,12 +39,14 @@ You do NOT need:
 
 ### 1. Install CommandUI
 
-Download the MSI installer from [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest) or use Scoop:
+The Store package is an MSIX named `mcp-tool-shop.CommandUI`. Until that upload is published, install the MSI from [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest), or use Scoop:
 
 ```powershell
 scoop bucket add mcp-tool-shop https://github.com/mcp-tool-shop-org/scoop-bucket
 scoop install commandui
 ```
+
+`winget install mcp-tool-shop.CommandUI` installs that same public MSI.
 
 ### 2. Launch and run a raw command
 

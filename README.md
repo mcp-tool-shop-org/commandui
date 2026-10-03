@@ -20,16 +20,27 @@ AI-native shell environment with semantic command review.
 
 ## Install
 
-**Windows (MSI installer)** — download from [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest)
+The Microsoft Store product is an MSIX. The package name is `mcp-tool-shop.CommandUI`, x64 only. Partner Center signs the upload. The file this repo packs is unsigned, so it is the upload, not a double-click installer.
+
+Until that upload is published, the installable build is still the MSI on [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest).
 
 ```powershell
 # Scoop
 scoop bucket add mcp-tool-shop https://github.com/mcp-tool-shop-org/scoop-bucket
 scoop install commandui
 
-# winget (after approval)
+# winget
 winget install mcp-tool-shop.CommandUI
 ```
+
+Pack the Store upload from a release build of the desktop app:
+
+```powershell
+pnpm --filter @commandui/desktop exec tauri build --no-bundle
+./packaging/pack-msix.ps1
+```
+
+`packaging/pack-msix.ps1` writes `release/CommandUI_<version>_x64.msix`. It keeps the package name, publisher, and executable already on the Store product, and it refuses a version that is not above `1.0.1.0`.
 
 ## What it does
 
@@ -48,7 +59,7 @@ winget install mcp-tool-shop.CommandUI
 
 - Not a chatbot or autonomous agent
 - Not a terminal emulator replacement
-- Not production-hardened yet
+- Not the console. `apps/console` is a second front end in this repo. The Store package is the desktop executable only.
 
 ## Security
 
@@ -58,11 +69,16 @@ See [SECURITY.md](SECURITY.md) for the threat model and vulnerability reporting.
 
 ```
 commandui/
-  apps/desktop/         — Tauri v2 + React 19 desktop app
-  packages/domain/      — Pure domain types
-  packages/api-contract/ — Request/response contracts
-  packages/state/       — Zustand stores
-  packages/ui/          — Shared UI primitives (future)
+  apps/desktop/                 — Tauri v2 + React 19. This is the Store executable.
+  apps/console/                 — Rust terminal front end on the same runtime. Not in the Store package.
+  crates/runtime-core/          — PTY, sessions, events
+  crates/runtime-persistence/   — SQLite
+  crates/runtime-planner/       — Local Ollama planner, mock fallback
+  packages/domain/              — Domain types
+  packages/api-contract/        — Request and response contracts
+  packages/state/               — Zustand stores
+  packages/ui/                  — Shared UI primitives
+  packaging/msix/               — Store manifest and logos
 ```
 
 ## Quick start
@@ -87,4 +103,6 @@ cargo test
 
 ## Current status
 
-v1.0.0 — real shell spine with PTY sessions, semantic review loop, persistence, memory, workflows, accessibility settings, multi-session tabs, xterm.js terminal, and prompt-marker completion detection.
+v1.0.2 — desktop app on the shared Rust runtime. The planner calls a local Ollama model and falls back to a mock when Ollama is not running. The Store upload is the unsigned x64 MSIX of `commandui-desktop.exe`. The public GitHub release is still the v1.0.0 MSI.
+
+Built by [MCP Tool Shop](https://mcp-tool-shop.github.io/).

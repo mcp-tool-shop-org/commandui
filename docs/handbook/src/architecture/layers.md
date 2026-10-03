@@ -15,7 +15,7 @@ The Rust backend. Manages:
 **Key files:**
 - `apps/desktop/src-tauri/src/main.rs` — app entry point, command registration
 - `apps/desktop/src-tauri/src/commands/` — Tauri command handlers (session, terminal, planner, history, etc.)
-- `apps/desktop/src-tauri/src/ollama.rs` — Ollama API client and prompt builder
+- `crates/runtime-planner/` — Ollama client, prompt, and mock fallback. `apps/desktop/src-tauri/src/commands/planner.rs` calls it.
 - `apps/desktop/src-tauri/src/state.rs` — shared app state
 
 ## Layer 2: Frontend (React 19)
