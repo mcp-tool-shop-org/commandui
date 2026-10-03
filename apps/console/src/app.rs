@@ -822,16 +822,18 @@ mod tests {
         let mut app = test_app();
         app.model.add_session("s1".into(), "A".into());
         app.model
-            .set_proposal(proposal("echo hi\nwhoami"), "s1".into());
+            .set_proposal(proposal("echo hi"), "s1".into());
         app.model.input_mode = InputMode::Review;
         app.model.composer_text = "keep".into();
 
-        app.execute_on_session("echo hi\nwhoami", "s1", "plan-9");
+        // Single line: runtime-core now rejects a multi-line command before
+        // the session lookup this test exercises.
+        app.execute_on_session("echo hi", "s1", "plan-9");
 
         assert_eq!(app.model.input_mode, InputMode::Review);
         assert_eq!(
             app.model.current_proposal.as_ref().unwrap().command,
-            "echo hi\nwhoami"
+            "echo hi"
         );
         assert_eq!(app.model.proposal_session_id.as_deref(), Some("s1"));
         assert_eq!(app.model.composer_text, "keep");

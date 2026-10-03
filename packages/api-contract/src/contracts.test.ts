@@ -5,8 +5,8 @@ import type {
   TerminalExecuteRequest,
 } from "./index";
 
-// These are compile-time checks. vitest erases expectTypeOf and
-// @ts-expect-error at runtime, so `vitest run` cannot fail on contract drift.
+// These are compile-time checks. vitest erases expectTypeOf calls and the
+// expect-error directives at runtime, so `vitest run` cannot fail on contract drift.
 // The enforcement is the `tsc --noEmit` typecheck step (pnpm typecheck).
 
 describe("API Contract shapes", () => {
