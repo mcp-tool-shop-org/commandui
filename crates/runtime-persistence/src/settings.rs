@@ -80,7 +80,11 @@ pub fn get(conn: &Connection) -> Result<SettingsSnapshot, String> {
 }
 
 pub fn update(conn: &Connection, patch: &SettingsSnapshot) -> Result<(), String> {
-    let current = get(conn)?;
+    // Read, merge and write under one write lock, or two concurrent partial
+    // updates would each merge into the same stale snapshot.
+    let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)
+        .map_err(|e| format!("settings update: {e}"))?;
+    let current = get(&tx)?;
     let current_value =
         serde_json::to_value(&current).map_err(|e| format!("settings update: {e}"))?;
     let patch_value =
@@ -92,11 +96,12 @@ pub fn update(conn: &Connection, patch: &SettingsSnapshot) -> Result<(), String>
     let merged_str =
         serde_json::to_string(&filled).map_err(|e| format!("settings update: {e}"))?;
 
-    conn.execute(
+    tx.execute(
         "INSERT OR REPLACE INTO settings (key, value_json) VALUES ('app', ?1)",
         rusqlite::params![merged_str],
     )
     .map_err(|e| format!("settings update: {e}"))?;
+    tx.commit().map_err(|e| format!("settings update: {e}"))?;
 
     Ok(())
 }

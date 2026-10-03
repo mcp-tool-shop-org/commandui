@@ -61,6 +61,58 @@ pub(crate) fn validate_llm_response(plan: &LlmPlanResponse) -> Result<(), String
 pub(crate) struct CommandFloor {
     pub destructive: bool,
     pub escalates_privileges: bool,
+    /// Output redirection (`>`, not `>>`) that truncates a file.
+    pub truncates_file: bool,
+}
+
+/// True when the command redirects output into a file with a single `>`
+/// (which truncates), ignoring quoted text, `>>`, fd duplication (`2>&1`)
+/// and the null devices.
+fn has_truncating_redirect(command: &str) -> bool {
+    let chars: Vec<char> = command.chars().collect();
+    let mut quote: Option<char> = None;
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        match quote {
+            Some(q) => {
+                if c == q {
+                    quote = None;
+                }
+            }
+            None => {
+                if c == '"' || c == '\'' {
+                    quote = Some(c);
+                } else if c == '>' {
+                    if chars.get(i + 1) == Some(&'>') {
+                        i += 2;
+                        continue;
+                    }
+                    let mut j = i + 1;
+                    if chars.get(j) == Some(&'&') {
+                        i = j + 1;
+                        continue;
+                    }
+                    if chars.get(j) == Some(&'|') {
+                        j += 1;
+                    }
+                    while chars.get(j).is_some_and(|ch| ch.is_whitespace()) {
+                        j += 1;
+                    }
+                    let target: String = chars[j..]
+                        .iter()
+                        .take_while(|ch| !ch.is_whitespace() && !matches!(ch, ';' | '|' | '&' | ')'))
+                        .collect();
+                    let target = target.trim_matches(|ch: char| matches!(ch, '"' | '\'')).to_ascii_lowercase();
+                    if !target.is_empty() && !matches!(target.as_str(), "/dev/null" | "nul" | "$null") {
+                        return true;
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+    false
 }
 
 fn command_tokens(command: &str) -> Vec<String> {
@@ -69,7 +121,7 @@ fn command_tokens(command: &str) -> Vec<String> {
             c.is_whitespace()
                 || matches!(
                     c,
-                    ';' | '|' | '&' | '(' | ')' | '`' | '<' | '>' | '\n' | '\r'
+                    ';' | '|' | '&' | '(' | ')' | '`' | '<' | '>' | '\n' | '\r' | '{' | '}' | '$'
                 )
         })
         .filter_map(|raw| {
@@ -92,6 +144,7 @@ pub(crate) fn command_floor(command: &str) -> CommandFloor {
     let mut floor = CommandFloor {
         destructive: false,
         escalates_privileges: false,
+        truncates_file: has_truncating_redirect(command),
     };
     let tokens = command_tokens(command);
     let has_after = |start: usize, wanted: &str| tokens[start + 1..].iter().any(|t| t == wanted);
@@ -111,7 +164,39 @@ pub(crate) fn command_floor(command: &str) -> CommandFloor {
                 | "shred"
                 | "rmdir"
                 | "rd"
+                | "ri"
+                | "unlink"
+                | "truncate"
+                | "wipefs"
+                | "fdisk"
+                | "parted"
+                | "sfdisk"
+                | "sgdisk"
+                | "shutdown"
+                | "reboot"
+                | "poweroff"
+                | "halt"
+                | "stop-computer"
+                | "restart-computer"
         ) || base.starts_with("mkfs.")
+        {
+            floor.destructive = true;
+        }
+        if matches!(base, "chmod" | "chown" | "chgrp")
+            && tokens[i + 1..].iter().any(|t| {
+                t == "--recursive" || (t.starts_with('-') && !t.starts_with("--") && t.contains('r'))
+            })
+        {
+            floor.destructive = true;
+        }
+        if base == "git"
+            && tokens[i + 1..].iter().any(|t| {
+                t == "--force"
+                    || t == "-f"
+                    || t.starts_with("--force-with-lease")
+                    || t.starts_with("--force-if-includes")
+            })
+            && has_after(i, "push")
         {
             floor.destructive = true;
         }
@@ -122,7 +207,7 @@ pub(crate) fn command_floor(command: &str) -> CommandFloor {
         {
             floor.destructive = true;
         }
-        if matches!(base, "sudo" | "doas" | "pkexec" | "gsudo" | "runas") {
+        if matches!(base, "sudo" | "doas" | "pkexec" | "gsudo" | "runas" | "su") {
             floor.escalates_privileges = true;
         }
     }
@@ -141,6 +226,12 @@ pub(crate) fn apply_command_safety_floor(plan: &mut LlmPlanResponse) {
     }
     if floor.destructive || floor.escalates_privileges {
         plan.risk = "high".to_string();
+        plan.requires_approval = true;
+    } else if floor.truncates_file {
+        // Additive: never lowers a risk the model already set higher.
+        if plan.risk == "low" {
+            plan.risk = "medium".to_string();
+        }
         plan.requires_approval = true;
     }
 }
@@ -374,5 +465,63 @@ format E:",
         accept_llm_plan(&mut delta).unwrap();
         assert!(!delta.destructive);
         assert!(!delta.requires_approval);
+    }
+
+    #[test]
+    fn floor_covers_aliases_system_commands_and_force_push() {
+        for cmd in [
+            "ri old",
+            "unlink f",
+            "truncate -s 0 f",
+            "wipefs -a /dev/sda",
+            "fdisk /dev/sda",
+            "parted /dev/sda",
+            "shutdown now",
+            "reboot",
+            "poweroff",
+            "halt",
+            "Stop-Computer",
+            "Restart-Computer",
+            "git push --force origin main",
+            "git push -f",
+            "chmod -R 777 /",
+            "chown -R me /",
+            "if ($x) {rm x}",
+        ] {
+            let mut p = valid_plan();
+            p.command = cmd.to_string();
+            accept_llm_plan(&mut p).unwrap();
+            assert!(p.destructive, "{cmd}");
+            assert_eq!(p.risk, "high", "{cmd}");
+            assert!(p.requires_approval, "{cmd}");
+        }
+        let mut su = valid_plan();
+        su.command = "su -".to_string();
+        accept_llm_plan(&mut su).unwrap();
+        assert!(su.escalates_privileges && su.requires_approval);
+
+        let mut push = valid_plan();
+        push.command = "git push origin main".to_string();
+        accept_llm_plan(&mut push).unwrap();
+        assert!(!push.destructive);
+    }
+
+    #[test]
+    fn truncating_redirect_needs_approval_but_append_and_null_do_not() {
+        for cmd in ["echo hi > notes.txt", ": > notes.txt", "ls >out.txt"] {
+            let mut p = valid_plan();
+            p.command = cmd.to_string();
+            accept_llm_plan(&mut p).unwrap();
+            assert_eq!(p.risk, "medium", "{cmd}");
+            assert!(p.requires_approval, "{cmd}");
+            assert!(!p.destructive, "{cmd}");
+        }
+        for cmd in ["echo hi >> notes.txt", "ls > /dev/null", "make 2>&1", "echo \"a > b\""] {
+            let mut p = valid_plan();
+            p.command = cmd.to_string();
+            accept_llm_plan(&mut p).unwrap();
+            assert_eq!(p.risk, "low", "{cmd}");
+            assert!(!p.requires_approval, "{cmd}");
+        }
     }
 }

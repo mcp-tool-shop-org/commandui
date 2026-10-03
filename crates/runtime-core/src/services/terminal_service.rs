@@ -42,6 +42,15 @@ impl TerminalService {
         if request.command.is_empty() {
             return Err("command cannot be empty".to_string());
         }
+        // A newline or other control byte would be sent as keystrokes: extra
+        // prompt cycles, end-of-input, escape sequences. Only a single plain
+        // line is run.
+        if request.command.chars().any(|c| c.is_ascii_control()) {
+            return Err(
+                "command contains a newline or control character; run one single-line command at a time"
+                    .to_string(),
+            );
+        }
 
         let now = chrono::Utc::now().to_rfc3339();
 
@@ -53,6 +62,10 @@ impl TerminalService {
             let record = registry
                 .get_mut(&request.session_id)
                 .ok_or_else(|| format!("Session not found: {}", request.session_id))?;
+
+            if record.status == "exited" {
+                return Err("The shell in this session has exited; open a new session".to_string());
+            }
 
             match record.exec_state {
                 SessionExecState::Running | SessionExecState::Interrupting => {
@@ -196,17 +209,22 @@ impl TerminalService {
     }
 
     pub fn resync(&self, session_id: &str) -> Result<(), String> {
-        let (writer, seen_pending, seen_state, probe) = {
+        let (writer, seen_pending, seen_state, seen_gen, probe) = {
             let registry = self.sessions.lock().map_err(|e| e.to_string())?;
 
             let record = registry
                 .get(session_id)
                 .ok_or_else(|| format!("Session not found: {session_id}"))?;
 
+            if record.status == "exited" {
+                return Err("The shell in this session has exited; open a new session".to_string());
+            }
+
             (
                 record.writer.clone(),
                 record.pending_execution_id.clone(),
                 record.exec_state.clone(),
+                record.marker_gen,
                 resync_input(&record.shell, &record.marker_nonce),
             )
         };
@@ -222,7 +240,10 @@ impl TerminalService {
             let record = registry
                 .get_mut(session_id)
                 .ok_or_else(|| format!("Session not found: {session_id}"))?;
-            if record.pending_execution_id == seen_pending && record.exec_state == seen_state {
+            if record.marker_gen == seen_gen
+                && record.pending_execution_id == seen_pending
+                && record.exec_state == seen_state
+            {
                 let pending = record.pending_execution_id.take();
                 record.exec_state = SessionExecState::Booting;
                 record.command_sent_at = None;
@@ -317,6 +338,26 @@ mod tests {
     }
 
     #[test]
+    fn execute_rejects_newlines_and_control_bytes() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let svc = TerminalService::new(sessions, sink.clone() as Arc<dyn RuntimeEventSink>);
+        for bad in ["ls\nrm x", "ls\r", "a\x04", "a\x1b[A"] {
+            let err = svc
+                .execute(ExecuteRequest {
+                    execution_id: "e1".to_string(),
+                    session_id: "s1".to_string(),
+                    command: bad.to_string(),
+                    source: "user".to_string(),
+                    linked_plan_id: None,
+                })
+                .unwrap_err();
+            assert!(err.contains("control character"), "{err}");
+        }
+        assert_eq!(sink.len(), 0);
+    }
+
+    #[test]
     fn test_execute_session_not_found() {
         let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
         let sink: Arc<dyn RuntimeEventSink> = Arc::new(CollectingSink::new());
@@ -355,6 +396,9 @@ mod tests {
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -394,6 +438,9 @@ mod tests {
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -616,6 +663,9 @@ mod tests {
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
                 read_buffer: String::new(),
+                emitted_tail: 0,
+                marker_gen: 0,
+                child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -631,7 +681,7 @@ mod tests {
         .unwrap();
         let bytes = captured.lock().unwrap();
         let text = String::from_utf8_lossy(&bytes);
-        assert!(text.starts_with("dir & call set __cui_ec=%^ERRORLEVEL% & "));
+        assert!(text.starts_with("dir\ncall set __cui_ec=%^ERRORLEVEL% & "));
         assert!(text.contains("!__cui_ec!"));
         assert!(text.contains("test-nonce"));
         assert!(!text.contains('~'));
@@ -660,6 +710,9 @@ mod tests {
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
                 read_buffer: String::new(),
+                emitted_tail: 0,
+                marker_gen: 0,
+                child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -714,6 +767,9 @@ mod tests {
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
                 read_buffer: String::new(),
+                emitted_tail: 0,
+                marker_gen: 0,
+                child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -760,6 +816,9 @@ mod tests {
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
                 read_buffer: String::new(),
+                emitted_tail: 0,
+                marker_gen: 0,
+                child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -903,6 +962,9 @@ mod tests {
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
                 read_buffer: String::new(),
+                emitted_tail: 0,
+                marker_gen: 0,
+                child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -941,6 +1003,9 @@ mod tests {
             command_sent_at: None,
             marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
         });

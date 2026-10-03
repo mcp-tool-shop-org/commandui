@@ -44,6 +44,14 @@ pub struct SessionRecord {
     pub command_sent_at: Option<String>,
     // Incomplete reader line. Only complete lines are parsed.
     pub read_buffer: String,
+    /// Bytes at the start of `read_buffer` already shown to the user (the
+    /// unterminated tail is displayed at once; marker parsing waits for the line).
+    pub emitted_tail: usize,
+    /// Bumped by the reader on every prompt marker, so resync can tell that
+    /// its probe was answered even if the state looks unchanged.
+    pub marker_gen: u64,
+    /// The shell process, kept so close() can kill and reap it.
+    pub child: Option<crate::pty::ShellChild>,
     pub created_at: String,
     pub last_active_at: String,
 }
@@ -184,6 +192,9 @@ mod tests {
             boot_prompt_received: false,
             command_sent_at: None,
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             last_active_at: "2026-01-01T00:00:00Z".into(),
         }

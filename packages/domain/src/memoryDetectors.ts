@@ -12,11 +12,34 @@ export type DetectorInput = {
 
 // --- Command normalizer ---
 
+// Tools whose first argument is a subcommand verb, not user data. For every
+// other executable the family is the executable alone, because the first
+// argument may be a secret, a URL or a host (export KEY=..., curl URL, ssh host).
+const SUBCOMMAND_TOOLS = new Set([
+  "git", "gh", "pnpm", "npm", "npx", "yarn", "bun", "deno", "cargo", "rustup",
+  "docker", "podman", "kubectl", "helm", "terraform", "go", "dotnet", "pip",
+  "pip3", "poetry", "uv", "composer", "brew", "apt", "apt-get", "systemctl",
+]);
+const SUBCOMMAND_WORD = /^[a-z][a-z0-9:_-]*$/i;
+
+function executableOf(token: string): string {
+  // Not a plain program name: env assignment, URL, user@host.
+  if (/[=@]|:\/\//.test(token)) return "";
+  return token;
+}
+
 export function normalizeCommand(cmd: string): { family: string; full: string } {
   const full = cmd.trim().replace(/\s+/g, " ");
   const parts = full.split(" ");
-  // family = executable + first subcommand (e.g. "git status", "pnpm test")
-  const family = parts.length >= 2 ? `${parts[0]} ${parts[1]}` : parts[0] ?? "";
+  const exe = executableOf(parts[0] ?? "");
+  const base = exe.split(/[\\/]/).pop()?.toLowerCase().replace(/\.exe$/, "") ?? "";
+  const sub = parts[1];
+  // family = executable (+ subcommand for known subcommand tools),
+  // e.g. "git status", "pnpm test"
+  const family =
+    sub !== undefined && SUBCOMMAND_TOOLS.has(base) && SUBCOMMAND_WORD.test(sub)
+      ? `${exe} ${sub}`
+      : exe;
   return { family, full };
 }
 
@@ -30,6 +53,17 @@ function suggestionId(prefix: string, value: string, input: DetectorInput): stri
   return `${prefix}-${scope}-${value}`;
 }
 
+// A suggestion or memory item only suppresses a new suggestion in the same
+// scope: project A's dismissal must not hide the value from project B or global.
+function sameScope(
+  item: { scope?: "global" | "project"; projectRoot?: string },
+  input: DetectorInput,
+): boolean {
+  const itemScope = item.scope ?? (item.projectRoot ? "project" : "global");
+  if (!input.projectRoot) return itemScope === "global";
+  return itemScope === "project" && item.projectRoot === input.projectRoot;
+}
+
 function isDismissedOrExists(
   kind: MemorySuggestionKind,
   proposedValue: string,
@@ -38,6 +72,7 @@ function isDismissedOrExists(
   // Check dismissed suggestions
   const dismissed = input.existingSuggestions.some(
     (s) =>
+      sameScope(s, input) &&
       s.kind === kind &&
       s.proposedValue === proposedValue &&
       s.status === "dismissed",
@@ -47,6 +82,7 @@ function isDismissedOrExists(
   // Check pending suggestions
   const pending = input.existingSuggestions.some(
     (s) =>
+      sameScope(s, input) &&
       s.kind === kind &&
       s.proposedValue === proposedValue &&
       s.status === "pending",
@@ -55,9 +91,7 @@ function isDismissedOrExists(
 
   // Check accepted memory items
   const accepted = input.existingMemory.some(
-    (m) =>
-      (m.kind === kind || m.kind === "common_directory") &&
-      m.value === proposedValue,
+    (m) => sameScope(m, input) && m.kind === kind && m.value === proposedValue,
   );
   return accepted;
 }
@@ -220,6 +254,7 @@ export function detectWorkflowPatterns(
 
     // Sliding window for pairs
     for (let i = 0; i < families.length - 1; i++) {
+      if (!families[i] || !families[i + 1]) continue;
       const pair = `${families[i]} → ${families[i + 1]}`;
       const entry = pairCounts.get(pair) ?? {
         count: 0,
@@ -235,6 +270,7 @@ export function detectWorkflowPatterns(
 
     // Sliding window for triples
     for (let i = 0; i < families.length - 2; i++) {
+      if (!families[i] || !families[i + 1] || !families[i + 2]) continue;
       const triple = `${families[i]} → ${families[i + 1]} → ${families[i + 2]}`;
       const entry = tripleCounts.get(triple) ?? {
         count: 0,

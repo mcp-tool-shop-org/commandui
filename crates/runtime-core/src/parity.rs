@@ -54,6 +54,9 @@ mod tests {
             command_sent_at: None,
             marker_nonce: "parity-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
         });
@@ -79,6 +82,9 @@ mod tests {
             command_sent_at: None,
             marker_nonce: "parity-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
         });
@@ -104,6 +110,9 @@ mod tests {
             command_sent_at: None,
             marker_nonce: "parity-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
         });

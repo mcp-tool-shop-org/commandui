@@ -97,6 +97,18 @@ pub(crate) async fn try_ollama(
     Ok(llm_to_proposal(&llm, context, user_intent, "ollama"))
 }
 
+/// Truncate to at most 200 bytes on a char boundary (multibyte-safe).
+pub(crate) fn preview_response(response: &str) -> String {
+    if response.len() <= 200 {
+        return response.to_string();
+    }
+    let mut end = 200;
+    while !response.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...", &response[..end])
+}
+
 /// Convert a validated LLM response to a CommandProposal.
 pub(crate) fn llm_to_proposal(
     llm: &LlmPlanResponse,

@@ -11,7 +11,8 @@ use crate::events::{
     SessionExecStateChangedEvent, SessionReadyEvent, TerminalLineEvent,
 };
 use crate::pty::{
-    bootstrap_prompt, clone_reader, default_shell, new_marker_nonce, spawn_reader, spawn_shell,
+    bootstrap_prompt, clone_reader, default_shell, new_marker_nonce, spawn_reader_with_exit,
+    spawn_shell,
     write_raw, PtyHandle, PROMPT_MARKER,
 };
 use crate::session::{SessionExecState, SessionRecord, SessionRegistry};
@@ -79,7 +80,7 @@ impl SessionService {
             return Err(format!("unsupported shell: {shell}"));
         };
 
-        let (pair, writer) = spawn_shell(&shell, Some(&cwd))?;
+        let (pair, writer, child) = spawn_shell(&shell, Some(&cwd))?;
         let reader = clone_reader(&pair)?;
         let bootstrap_writer = writer.clone();
 
@@ -97,6 +98,9 @@ impl SessionService {
             command_sent_at: None,
             marker_nonce: nonce,
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: Some(child),
             created_at: now.clone(),
             last_active_at: now.clone(),
         };
@@ -121,14 +125,21 @@ impl SessionService {
         let session_id_for_reader = id.clone();
         let state_sessions = self.sessions.clone();
         let sink = self.event_sink.clone();
-        spawn_reader(reader, move |text| {
-            Self::process_reader_chunk(
-                &sink,
-                &state_sessions,
-                &session_id_for_reader,
-                &text,
-            );
-        });
+        let exit_sink = self.event_sink.clone();
+        let exit_sessions = self.sessions.clone();
+        let exit_id = id.clone();
+        spawn_reader_with_exit(
+            reader,
+            move |text| {
+                Self::process_reader_chunk(
+                    &sink,
+                    &state_sessions,
+                    &session_id_for_reader,
+                    &text,
+                );
+            },
+            move || Self::handle_session_exit(&exit_sink, &exit_sessions, &exit_id),
+        );
 
         persist_bootstrap(
             &self.sessions,
@@ -160,11 +171,67 @@ impl SessionService {
     }
 
     pub fn close(&self, session_id: &str) -> Result<(), String> {
-        let mut registry = self.sessions.lock().map_err(|e| e.to_string())?;
-        registry
-            .remove(session_id)
-            .ok_or_else(|| format!("Session not found: {session_id}"))?;
+        let mut record = {
+            let mut registry = self.sessions.lock().map_err(|e| e.to_string())?;
+            registry
+                .remove(session_id)
+                .ok_or_else(|| format!("Session not found: {session_id}"))?
+        };
+        // Kill and reap the shell off the registry lock. Closing the PTY alone
+        // leaves backgrounded children running and, on Unix, a zombie shell.
+        if let Some(mut child) = record.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
         Ok(())
+    }
+
+    /// The PTY stream ended, so the shell is gone (typed exit, crash, kill).
+    /// Mark the session dead, fail any in-flight execution and tell the UI.
+    pub(crate) fn handle_session_exit(
+        sink: &Arc<dyn RuntimeEventSink>,
+        sessions: &Arc<Mutex<SessionRegistry>>,
+        session_id: &str,
+    ) {
+        let pending = {
+            let Ok(mut reg) = sessions.lock() else { return };
+            let Some(record) = reg.get_mut(session_id) else {
+                return;
+            };
+            if record.status == "exited" {
+                return;
+            }
+            record.status = "exited".to_string();
+            record.exec_state = SessionExecState::Desynced;
+            record.command_sent_at = None;
+            record.pending_execution_id.take()
+        };
+        let now = chrono::Utc::now().to_rfc3339();
+        sink.emit(RuntimeEvent::TerminalLine(TerminalLineEvent {
+            id: uuid::Uuid::new_v4().to_string(),
+            session_id: session_id.to_string(),
+            execution_id: pending.clone(),
+            kind: "stdout".to_string(),
+            text: "\n[commandui: the shell exited. Open a new session to continue.]\n".to_string(),
+            timestamp: now.clone(),
+        }));
+        if let Some(exec_id) = pending {
+            sink.emit(RuntimeEvent::ExecutionFinished(ExecutionFinishedEvent {
+                execution_id: exec_id,
+                session_id: session_id.to_string(),
+                exit_code: 1,
+                finished_at: now.clone(),
+                status: "failure".to_string(),
+            }));
+        }
+        sink.emit(RuntimeEvent::SessionExecStateChanged(
+            SessionExecStateChangedEvent {
+                session_id: session_id.to_string(),
+                exec_state: SessionExecState::Desynced.to_string(),
+                changed_at: now,
+            },
+        ));
+        eprintln!("[session] {session_id} shell exited");
     }
 
     pub fn update_cwd(&self, session_id: &str, cwd: &str) -> Result<(), String> {
@@ -197,38 +264,54 @@ impl SessionService {
     ) {
         let mut display_text = String::new();
 
-        // Carry a trailing partial line on the session. Chunks are not lines.
-        let (current_exec_id, complete, nonce) = match sessions.lock() {
+        // Carry a trailing partial line on the session for marker parsing.
+        // The unterminated tail is still displayed at once (prompts, echo),
+        // unless it could be the start of a marker line.
+        let (current_exec_id, complete, skip, tail_display, nonce) = match sessions.lock() {
             Ok(mut reg) => {
                 if let Some(record) = reg.get_mut(session_id) {
                     record.read_buffer.push_str(text);
                     let exec_id = record.pending_execution_id.clone();
                     let nonce = record.marker_nonce.clone();
                     let mut complete = drain_complete_lines(&mut record.read_buffer);
+                    let skip = record.emitted_tail.min(complete.len());
+                    record.emitted_tail = record.emitted_tail.saturating_sub(complete.len());
+                    let before = record.read_buffer.len();
                     if let Some(notice) = truncate_read_buffer(&mut record.read_buffer) {
+                        let cut = before - record.read_buffer.len();
+                        record.emitted_tail = record.emitted_tail.saturating_sub(cut);
                         complete.push_str(&notice);
                     }
-                    (exec_id, complete, Some(nonce))
+                    let tail_display = take_displayable_tail(record);
+                    (exec_id, complete, skip, tail_display, Some(nonce))
                 } else {
                     let mut scratch = text.to_string();
                     let complete = drain_complete_lines(&mut scratch);
-                    (None, complete, None)
+                    (None, complete, 0, scratch, None)
                 }
             }
             Err(_) => {
                 let mut scratch = text.to_string();
                 let complete = drain_complete_lines(&mut scratch);
-                (None, complete, None)
+                (None, complete, 0, scratch, None)
             }
         };
 
+        // Bytes of the first complete line that were already shown as a tail.
+        let mut line_start = 0usize;
+        let mut protected = 0usize;
         for line in complete.split_inclusive('\n') {
+            let already = skip.saturating_sub(line_start).min(line.len());
+            line_start += line.len();
+            let shown_rest = &line[already..];
             let Some(nonce) = nonce.as_deref() else {
-                display_text.push_str(line);
+                display_text.push_str(shown_rest);
+                protected = display_text.len();
                 continue;
             };
             let Some(prompt) = parse_prompt_line(line, nonce) else {
-                display_text.push_str(line);
+                display_text.push_str(shown_rest);
+                protected = display_text.len();
                 continue;
             };
 
@@ -240,6 +323,7 @@ impl SessionService {
                     let was_int = record.exec_state == SessionExecState::Interrupting;
                     // Same lock as Ready. take() drops only the id that just finished.
                     let pending = record.pending_execution_id.take();
+                    record.marker_gen = record.marker_gen.wrapping_add(1);
                     if was_boot {
                         record.boot_prompt_received = true;
                     }
@@ -254,13 +338,17 @@ impl SessionService {
             };
 
             let Some((was_booting, pending_exec, was_interrupting)) = applied else {
-                display_text.push_str(line);
+                display_text.push_str(shown_rest);
+                protected = display_text.len();
                 continue;
             };
 
             // The marker is written after a newline of its own, which shows
-            // up as a blank line right before it. Hide that one line.
-            drop_trailing_blank_line(&mut display_text);
+            // up as a blank line right before it. Hide that one line. Text
+            // already committed from earlier lines is left alone.
+            let mut fresh = display_text.split_off(protected.min(display_text.len()));
+            drop_trailing_blank_line(&mut fresh);
+            display_text.push_str(&fresh);
 
             sink.emit(RuntimeEvent::SessionCwdChanged(SessionCwdChangedEvent {
                 session_id: session_id.to_string(),
@@ -301,6 +389,8 @@ impl SessionService {
                 },
             ));
         }
+
+        display_text.push_str(&tail_display);
 
         if !display_text.is_empty() {
             sink.emit(RuntimeEvent::TerminalLine(TerminalLineEvent {
@@ -423,6 +513,28 @@ fn drop_trailing_blank_line(text: &mut String) {
     }
 }
 
+/// Could this unterminated tail be (the start of) a prompt-marker line? Such a
+/// tail is held back so a marker is never shown, even when it arrives split.
+fn tail_could_be_marker(tail: &str) -> bool {
+    let visible = tail.rsplit('\r').next().unwrap_or(tail).trim_start();
+    !visible.is_empty()
+        && (PROMPT_MARKER.starts_with(visible) || visible.starts_with(PROMPT_MARKER))
+}
+
+/// Return the part of the unterminated tail not yet shown and mark it shown,
+/// or nothing while the tail might still turn out to be a marker line.
+fn take_displayable_tail(record: &mut crate::session::SessionRecord) -> String {
+    if record.emitted_tail > record.read_buffer.len() {
+        record.emitted_tail = record.read_buffer.len();
+    }
+    if tail_could_be_marker(&record.read_buffer) {
+        return String::new();
+    }
+    let out = record.read_buffer[record.emitted_tail..].to_string();
+    record.emitted_tail = record.read_buffer.len();
+    out
+}
+
 fn drain_complete_lines(buffer: &mut String) -> String {
     match buffer.rfind('\n') {
         Some(idx) => buffer.drain(..=idx).collect(),
@@ -485,6 +597,9 @@ mod tests {
                 command_sent_at: None,
             marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -532,6 +647,9 @@ mod tests {
                 command_sent_at: Some("2026-01-01T00:00:00Z".to_string()),
                 marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -584,6 +702,9 @@ mod tests {
                 command_sent_at: Some("2026-01-01T00:00:00Z".to_string()),
                 marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -624,6 +745,9 @@ mod tests {
                 command_sent_at: Some("2026-01-01T00:00:00Z".to_string()),
                 marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -663,6 +787,9 @@ mod tests {
                 command_sent_at: None,
             marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
@@ -718,6 +845,89 @@ mod tests {
         assert!(record.boot_prompt_received);
         assert_eq!(record.cwd, "/home/user");
         assert!(record.read_buffer.is_empty());
+    }
+
+    #[test]
+    fn shell_exit_fails_pending_execution_and_marks_session_dead() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Running,
+            true,
+            Some("exec-1".to_string()),
+        );
+        SessionService::handle_session_exit(&sink_dyn, &sessions, "s1");
+        assert_eq!(finished_statuses(&sink), vec![("failure".to_string(), 1)]);
+        {
+            let reg = sessions.lock().unwrap();
+            let record = reg.get("s1").unwrap();
+            assert_eq!(record.status, "exited");
+            assert!(record.pending_execution_id.is_none());
+        }
+        // Idempotent: a second call emits nothing more.
+        let n = sink.len();
+        SessionService::handle_session_exit(&sink_dyn, &sessions, "s1");
+        assert_eq!(sink.len(), n);
+    }
+
+    fn shown_text(sink: &CollectingSink) -> String {
+        sink.events()
+            .iter()
+            .filter_map(|e| match e {
+                RuntimeEvent::TerminalLine(t) => Some(t.text.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn unterminated_prompt_is_displayed_without_a_newline() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(&sessions, "s1", SessionExecState::Ready, true, None);
+
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", "Name: ");
+        assert_eq!(shown_text(&sink), "Name: ");
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", "ls");
+        assert_eq!(shown_text(&sink), "Name: ls");
+    }
+
+    #[test]
+    fn split_marker_is_parsed_and_never_displayed() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(&sessions, "s1", SessionExecState::Booting, false, None);
+
+        let marker = format!("{}|test-nonce|/home/user|0
+", PROMPT_MARKER);
+        for piece in [&marker[..5], &marker[5..PROMPT_MARKER.len() + 4], &marker[PROMPT_MARKER.len() + 4..]] {
+            SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", piece);
+        }
+        assert_eq!(shown_text(&sink), "");
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert!(record.boot_prompt_received);
+        assert_eq!(record.cwd, "/home/user");
+    }
+
+    #[test]
+    fn completing_a_displayed_tail_does_not_duplicate_it() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(&sessions, "s1", SessionExecState::Ready, true, None);
+
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", "hel");
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", "lo wor");
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", "ld
+next");
+        assert_eq!(shown_text(&sink), "hello world
+next");
     }
 
     fn finished_statuses(sink: &CollectingSink) -> Vec<(String, i32)> {
@@ -1121,7 +1331,7 @@ mod tests {
             .create(CreateSessionRequest {
                 label: Some("missing-bash".to_string()),
                 cwd: Some(cwd),
-                shell: Some("bash-not-installed".to_string()),
+                shell: Some("/nonexistent-dir/bash".to_string()),
             })
             .unwrap_err();
         assert!(
@@ -1246,6 +1456,9 @@ mod tests {
             command_sent_at: None,
             marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
+            emitted_tail: 0,
+            marker_gen: 0,
+            child: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
         });

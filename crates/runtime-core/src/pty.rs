@@ -14,17 +14,15 @@ pub(crate) enum ShellFamily {
 }
 
 pub(crate) fn shell_family(shell: &str) -> ShellFamily {
-    let shell_lower = shell.to_lowercase();
-    if shell_lower.contains("pwsh") || shell_lower.contains("powershell") {
-        ShellFamily::PowerShell
-    } else if shell_lower.contains("cmd") {
-        ShellFamily::Cmd
-    } else if shell_lower.contains("bash") {
-        ShellFamily::Bash
-    } else if shell_lower.contains("zsh") {
-        ShellFamily::Zsh
-    } else {
-        ShellFamily::Unsupported
+    // Match the executable's file stem exactly, never a substring of the path.
+    let name = shell.rsplit(['/', '\\']).next().unwrap_or(shell).trim().to_lowercase();
+    let stem = name.strip_suffix(".exe").unwrap_or(&name);
+    match stem {
+        "pwsh" | "powershell" => ShellFamily::PowerShell,
+        "cmd" => ShellFamily::Cmd,
+        "bash" => ShellFamily::Bash,
+        "zsh" => ShellFamily::Zsh,
+        _ => ShellFamily::Unsupported,
     }
 }
 
@@ -55,7 +53,13 @@ pub fn default_shell() -> String {
     }
 }
 
-pub fn spawn_shell(shell: &str, cwd: Option<&str>) -> Result<(PtyPair, PtyHandle), String> {
+/// The shell's child process handle. Kept so the shell can be killed and reaped.
+pub type ShellChild = Box<dyn portable_pty::Child + Send + Sync>;
+
+pub fn spawn_shell(
+    shell: &str,
+    cwd: Option<&str>,
+) -> Result<(PtyPair, PtyHandle, ShellChild), String> {
     let pty_system = native_pty_system();
     let pair = pty_system
         .openpty(PtySize {
@@ -68,7 +72,8 @@ pub fn spawn_shell(shell: &str, cwd: Option<&str>) -> Result<(PtyPair, PtyHandle
 
     let cmd = prepare_shell_command(shell, cwd);
 
-    pair.slave
+    let child = pair
+        .slave
         .spawn_command(cmd)
         .map_err(|e| format!("Failed to spawn shell: {e}"))?;
 
@@ -79,7 +84,7 @@ pub fn spawn_shell(shell: &str, cwd: Option<&str>) -> Result<(PtyPair, PtyHandle
 
     let handle: PtyHandle = Arc::new(Mutex::new(writer));
 
-    Ok((pair, handle))
+    Ok((pair, handle, child))
 }
 
 pub fn write_command(handle: &PtyHandle, command: &str) -> Result<(), String> {
@@ -135,7 +140,7 @@ fn cmd_marker_echo(nonce: &str, exit_expr: &str) -> String {
 pub fn bootstrap_prompt(shell: &str, nonce: &str) -> Option<String> {
     match shell_family(shell) {
         ShellFamily::PowerShell => Some(format!(
-            "function prompt {{ $__cui_ok = $?; $__cui_code = $global:LASTEXITCODE; if (-not $__cui_ok) {{ if ($null -eq $__cui_code -or $__cui_code -eq 0) {{ $__cui_code = 1 }} }} elseif ($null -eq $__cui_code) {{ $__cui_code = 0 }}; $__cui_cwd = (Get-Location).Path.Replace('%','%25').Replace([string][char]13,'%0D').Replace([string][char]10,'%0A'); $__cui_line = ([string][char]10) + '{PROMPT_MARKER}|{nonce}|' + $__cui_cwd + '|' + $__cui_code; \"$__cui_line`n> \" }}\n"
+            "function prompt {{ $__cui_ok = $?; $__cui_code = $global:LASTEXITCODE; if ($__cui_ok) {{ $__cui_code = 0 }} elseif (-not ($__cui_code -is [int]) -or $__cui_code -eq 0) {{ $__cui_code = 1 }}; $__cui_cwd = (Get-Location).Path.Replace('%','%25').Replace([string][char]13,'%0D').Replace([string][char]10,'%0A'); $__cui_line = ([string][char]10) + '{PROMPT_MARKER}|{nonce}|' + $__cui_cwd + '|' + $__cui_code; \"$__cui_line`n> \" }}\n"
         )),
         ShellFamily::Cmd => Some(format!("{}\n", cmd_marker_echo(nonce, "%ERRORLEVEL%"))),
         ShellFamily::Bash => Some(format!(
@@ -153,10 +158,12 @@ pub fn bootstrap_prompt(shell: &str, nonce: &str) -> Option<String> {
 /// a format string.
 pub(crate) fn command_line_for_shell(shell: &str, nonce: &str, command: &str) -> String {
     if shell_family(shell) == ShellFamily::Cmd {
+        // The marker is a separate input line so a trailing rem, :: or an
+        // unbalanced quote in the command cannot swallow it.
         // The exit code is captured into a variable first (`call` expands
         // `%^ERRORLEVEL%` after the command ran), then the child prints it.
         format!(
-            "{command} & call set __cui_ec=%^ERRORLEVEL% & {}\n",
+            "{command}\ncall set __cui_ec=%^ERRORLEVEL% & {}\n",
             cmd_marker_echo(nonce, "!__cui_ec!")
         )
     } else {
@@ -178,10 +185,21 @@ pub(crate) fn clone_reader(pair: &PtyPair) -> Result<Box<dyn Read + Send>, Strin
         .map_err(|e| format!("Failed to clone PTY reader: {e}"))
 }
 
-pub(crate) fn spawn_reader<R, F>(mut reader: R, on_chunk: F)
+pub(crate) fn spawn_reader<R, F>(reader: R, on_chunk: F)
 where
     R: Read + Send + 'static,
     F: Fn(String) + Send + 'static,
+{
+    spawn_reader_with_exit(reader, on_chunk, || {});
+}
+
+/// Like spawn_reader, and calls on_exit once the stream ends (EOF or a read
+/// error), which for a PTY means the shell is gone.
+pub(crate) fn spawn_reader_with_exit<R, F, E>(mut reader: R, on_chunk: F, on_exit: E)
+where
+    R: Read + Send + 'static,
+    F: Fn(String) + Send + 'static,
+    E: FnOnce() + Send + 'static,
 {
     std::thread::spawn(move || {
         let mut buf = [0u8; 4096];
@@ -201,6 +219,7 @@ where
         if !pending.is_empty() {
             on_chunk(String::from_utf8_lossy(&pending).to_string());
         }
+        on_exit();
     });
 }
 
@@ -255,6 +274,18 @@ mod tests {
     const NONCE: &str = "abc123nonce";
 
     #[test]
+    fn shell_family_matches_the_executable_name_only() {
+        assert!(shell_family("/home/cmdr/.local/bin/fish") == ShellFamily::Unsupported);
+        assert!(shell_family(r"/opt/zshkit/bin/fish") == ShellFamily::Unsupported);
+        assert!(shell_family(r"C:\Tools\bash-utils\nu.exe") == ShellFamily::Unsupported);
+        assert!(shell_family(r"C:\Windows\System32\cmd.exe") == ShellFamily::Cmd);
+        assert!(shell_family(r"C:\Program Files\PowerShell\7\pwsh.exe") == ShellFamily::PowerShell);
+        assert!(shell_family("powershell.exe") == ShellFamily::PowerShell);
+        assert!(shell_family("/usr/bin/zsh") == ShellFamily::Zsh);
+        assert!(shell_family("bash") == ShellFamily::Bash);
+    }
+
+    #[test]
     fn supported_prompts_carry_nonce_exit_and_full_cwd() {
         let pwsh = bootstrap_prompt("powershell.exe", NONCE).unwrap();
         assert!(pwsh.contains(PROMPT_MARKER));
@@ -263,6 +294,7 @@ mod tests {
         assert!(pwsh.contains("LASTEXITCODE"));
         assert!(pwsh.contains("Get-Location"));
         assert!(pwsh.contains("$__cui_code = 1"));
+        assert!(pwsh.contains("if ($__cui_ok) { $__cui_code = 0 }"));
         assert!(!pwsh.contains('~'));
 
         let cmd = bootstrap_prompt("cmd.exe", NONCE).unwrap();
@@ -306,7 +338,8 @@ mod tests {
     fn cmd_command_line_appends_marker_without_using_user_text_as_format() {
         let nasty = "echo %CD% & del /q *";
         let line = command_line_for_shell("cmd.exe", NONCE, nasty);
-        assert!(line.starts_with(nasty));
+        assert!(line.starts_with(&format!("{nasty}\ncall set ")));
+        assert_eq!(line.matches('\n').count(), 2);
         assert!(line.contains(&format!("{PROMPT_MARKER}^^^|{NONCE}^^^|!CD!^^^|!__cui_ec!")));
         assert_eq!(command_line_for_shell("bash", NONCE, "ls"), "ls\n");
         assert_eq!(resync_input("bash", NONCE), "\n");
@@ -317,7 +350,7 @@ mod tests {
     fn cmd_commands_with_bangs_are_written_through_unchanged() {
         for command in ["echo hello!", "git commit -m \"done!\"", "cd hello!world"] {
             let line = command_line_for_shell("cmd.exe", NONCE, command);
-            assert!(line.starts_with(&format!("{command} & ")), "{line}");
+            assert!(line.starts_with(&format!("{command}\ncall set ")), "{line}");
             // Only the marker child expands `!`; the session itself never does.
             assert!(line.contains("cmd /v:on /c"), "{line}");
         }
@@ -445,7 +478,7 @@ mod tests {
     fn spawn_shell_echo_reaches_reader_and_clone_reader_is_ok() {
         let cwd = std::env::temp_dir();
         let cwd = cwd.to_string_lossy().to_string();
-        let (pair, handle) = match spawn_shell(&default_shell(), Some(&cwd)) {
+        let (pair, handle, mut child) = match spawn_shell(&default_shell(), Some(&cwd)) {
             Ok(spawned) => spawned,
             Err(err) => panic!("spawn returned {err}"),
         };
@@ -466,6 +499,8 @@ mod tests {
 
         // Ask the shell to leave before the pair drops, so the child does not stay up.
         let _ = write_raw(&handle, "exit\r\n");
+        let _ = child.kill();
+        let _ = child.wait();
         drop(handle);
         drop(pair);
     }
