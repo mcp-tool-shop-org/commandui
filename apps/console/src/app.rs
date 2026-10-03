@@ -47,8 +47,12 @@ pub struct App {
     /// Whether the terminal is currently in raw play passthrough state.
     /// Used for idempotent enter/exit and safe cleanup.
     in_raw_passthrough: bool,
-    /// Terminal modes the Raw Play child enabled. Reset when Raw Play exits.
+    /// Modes the host terminal currently has on for the Raw Play child. Default
+    /// outside Raw Play.
     child_modes: ChildModes,
+    /// Modes each session's app enabled, learned from that session's output
+    /// whether or not Raw Play is showing it. Re-applied on Raw Play re-entry.
+    session_modes: std::collections::HashMap<String, ChildModes>,
 }
 
 impl App {
@@ -69,14 +73,16 @@ impl App {
             session_counter: 0,
             in_raw_passthrough: false,
             child_modes: ChildModes::default(),
+            session_modes: std::collections::HashMap::new(),
         }
     }
 
     pub async fn run(&mut self) -> anyhow::Result<()> {
+        // Armed before the terminal changes, so a failure between the two
+        // setup calls still restores the host. Drop is idempotent.
+        let _restore = ui::TerminalRestoreGuard::arm();
         enable_raw_mode()?;
         stdout().execute(EnterAlternateScreen)?;
-        // Dropped on every exit, including a render panic, so raw mode cannot stick.
-        let _restore = ui::TerminalRestoreGuard::arm();
         let backend = CrosstermBackend::new(stdout());
         let mut terminal = Terminal::new(backend)?;
 
@@ -142,9 +148,18 @@ impl App {
         if self.model.session_count() == 0 {
             return;
         }
+        let session_id = self.model.sessions[self.model.active_index].id.clone();
+        self.close_session_by_id(&session_id);
+    }
 
-        let idx = self.model.active_index;
-        let session_id = self.model.sessions[idx].id.clone();
+    /// Close one session by id. The session the user was on stays selected
+    /// unless it is the one being closed.
+    fn close_session_by_id(&mut self, session_id: &str) {
+        if self.model.session_index(session_id).is_none() {
+            return;
+        }
+        let session_id = session_id.to_string();
+        self.session_modes.remove(&session_id);
 
         // If this session owns the current proposal, clear it
         if self.model.proposal_owner() == Some(session_id.as_str()) {
@@ -159,15 +174,9 @@ impl App {
         let result = self.session_service.close(&session_id);
         self.model.surface_session_result(result);
 
-        // Remove from model
-        self.model.sessions.remove(idx);
-
-        // Adjust active index
-        if self.model.active_index >= self.model.sessions.len() {
-            self.model.active_index = self.model.sessions.len().saturating_sub(1);
-        }
-        // The session now active is the one on screen, so it is not unread.
-        self.model.clear_active_unread();
+        // Remove from model. Closing a session that is not active leaves the
+        // active one selected.
+        self.model.remove_session_by_id(&session_id);
     }
 
     async fn event_loop(
@@ -186,6 +195,7 @@ impl App {
 
                 // 1. Drain runtime events — routed by session_id
                 while let Ok(event) = self.runtime_rx.try_recv() {
+                    self.observe_session_modes(&event);
                     self.model.apply_event(event);
                 }
 
@@ -204,6 +214,12 @@ impl App {
                             if self.model.session_index(&session_id).is_some() {
                                 self.model.set_proposal(proposal, session_id);
                                 self.model.input_mode = InputMode::Review;
+                                // Keys pressed while the planner ran must not
+                                // approve what the user has not seen.
+                                self.model.arm_review_debounce();
+                                if drain_pending_input()? {
+                                    resize_pending = true;
+                                }
                                 self.sync_pane_size(terminal);
                             }
                         }
@@ -277,9 +293,14 @@ impl App {
                     let _ = out.write_all(line_event.text.as_bytes());
                     let _ = out.flush();
                     // Learn which host events the child wants forwarded.
-                    let before = self.child_modes;
-                    self.child_modes.observe(&line_event.text);
-                    apply_host_capture(before, self.child_modes);
+                    self.observe_session_modes(&event);
+                    let learned = self
+                        .session_modes
+                        .get(&line_event.session_id)
+                        .copied()
+                        .unwrap_or_default();
+                    apply_host_capture(self.child_modes, learned);
+                    self.child_modes = learned;
                 }
                 // Non-active session output is NOT written to stdout (targeting truth)
             }
@@ -371,6 +392,10 @@ impl App {
                 self.close_active_session();
                 self.sync_pane_size(terminal);
             }
+            InputAction::CloseSessionAt(id) => {
+                self.close_session_by_id(&id);
+                self.sync_pane_size(terminal);
+            }
             InputAction::NextSession | InputAction::PrevSession => {
                 self.sync_pane_size(terminal);
             }
@@ -424,7 +449,27 @@ impl App {
             }
         }
 
+        // The app may have enabled mouse, focus or paste modes earlier (before a
+        // peek at Console). Turn the host's capture back on to match.
+        let learned = self
+            .model
+            .active_session_id()
+            .and_then(|id| self.session_modes.get(id).copied())
+            .unwrap_or_default();
+        apply_host_capture(self.child_modes, learned);
+        self.child_modes = learned;
+
         self.in_raw_passthrough = true;
+    }
+
+    /// Track the modes a session's app enabled from its own output.
+    fn observe_session_modes(&mut self, event: &RuntimeEvent) {
+        if let RuntimeEvent::TerminalLine(line) = event {
+            self.session_modes
+                .entry(line.session_id.clone())
+                .or_default()
+                .observe(&line.text);
+        }
     }
 
     /// Exit raw play mode — Console resumes.
@@ -454,6 +499,8 @@ impl App {
         self.sync_pane_size(terminal);
 
         // Give the host its own mouse, focus and paste handling back.
+        // The host gets its own handling back. The app keeps its modes: they stay
+        // in session_modes and are re-applied on re-entry.
         apply_host_capture(self.child_modes, ChildModes::default());
         self.child_modes = ChildModes::default();
         self.in_raw_passthrough = false;
@@ -538,9 +585,11 @@ fn pane_size_for(mode: InputMode, width: u16, height: u16) -> Option<(u16, u16)>
 struct ChildModes {
     /// `?2004`: wrap pastes in `ESC[200~` .. `ESC[201~`.
     bracketed_paste: bool,
-    /// `?1000`, `?1002` or `?1003`: report mouse buttons.
-    mouse: bool,
-    /// `?1003`: report motion with no button held.
+    /// `?1000`: report button press and release.
+    mouse_press: bool,
+    /// `?1002`: also report motion while a button is held.
+    mouse_drag: bool,
+    /// `?1003`: report all motion, with or without a button.
     mouse_motion: bool,
     /// `?1006`: SGR mouse encoding, the only one forwarded (the PTY write is text).
     mouse_sgr: bool,
@@ -556,8 +605,10 @@ fn apply_host_capture(before: ChildModes, after: ChildModes) {
         EnableFocusChange, EnableMouseCapture,
     };
     let mut out = stdout();
-    if before.mouse != after.mouse {
-        let _ = if after.mouse {
+    // Host capture only when the app's mouse reports can actually be forwarded;
+    // otherwise the host would swallow the mouse for nothing.
+    if before.mouse_forwardable() != after.mouse_forwardable() {
+        let _ = if after.mouse_forwardable() {
             out.execute(EnableMouseCapture).map(|_| ())
         } else {
             out.execute(DisableMouseCapture).map(|_| ())
@@ -580,6 +631,16 @@ fn apply_host_capture(before: ChildModes, after: ChildModes) {
 }
 
 impl ChildModes {
+    /// Any mouse reporting level is on.
+    fn mouse_on(&self) -> bool {
+        self.mouse_press || self.mouse_drag || self.mouse_motion
+    }
+
+    /// Mouse reports can reach the app: it asked for them and for SGR encoding.
+    fn mouse_forwardable(&self) -> bool {
+        self.mouse_on() && self.mouse_sgr
+    }
+
     /// Scan child output for `ESC [ ? <n>;<n> h|l`. A sequence split across two
     /// chunks is missed; the next toggle corrects it.
     fn observe(&mut self, text: &str) {
@@ -598,11 +659,9 @@ impl ChildModes {
                 for param in after[..end].split(';') {
                     match param {
                         "2004" => self.bracketed_paste = on,
-                        "1000" | "1002" => self.mouse = on,
-                        "1003" => {
-                            self.mouse = on;
-                            self.mouse_motion = on;
-                        }
+                        "1000" => self.mouse_press = on,
+                        "1002" => self.mouse_drag = on,
+                        "1003" => self.mouse_motion = on,
                         "1006" => self.mouse_sgr = on,
                         "1004" => self.focus = on,
                         _ => {}
@@ -630,7 +689,7 @@ impl ChildModes {
     /// SGR mouse report, or `None` when the child did not enable it.
     fn encode_mouse(&self, event: &ct_event::MouseEvent) -> Option<String> {
         use ct_event::{KeyModifiers, MouseButton, MouseEventKind};
-        if !self.mouse || !self.mouse_sgr {
+        if !self.mouse_forwardable() {
             return None;
         }
         let button = |b: &MouseButton| match b {
@@ -641,7 +700,13 @@ impl ChildModes {
         let (mut code, release) = match &event.kind {
             MouseEventKind::Down(b) => (button(b), false),
             MouseEventKind::Up(b) => (button(b), true),
-            MouseEventKind::Drag(b) => (button(b) + 32, false),
+            MouseEventKind::Drag(b) => {
+                // Drag reports need ?1002 or ?1003; ?1000 asked for press/release only.
+                if !(self.mouse_drag || self.mouse_motion) {
+                    return None;
+                }
+                (button(b) + 32, false)
+            }
             MouseEventKind::Moved => {
                 if !self.mouse_motion {
                     return None;
@@ -669,6 +734,18 @@ impl ChildModes {
             event.row.saturating_add(1)
         ))
     }
+}
+
+/// Discard key presses that queued up while the planner ran. Returns true when
+/// a resize was seen, so the caller can still apply it.
+fn drain_pending_input() -> anyhow::Result<bool> {
+    let mut resized = false;
+    while ct_event::poll(Duration::ZERO)? {
+        if let Event::Resize(..) = ct_event::read()? {
+            resized = true;
+        }
+    }
+    Ok(resized)
 }
 
 fn ask_execute_request(
@@ -854,12 +931,29 @@ mod tests {
     fn child_modes_follow_the_sequences_the_child_wrote() {
         let mut modes = ChildModes::default();
         modes.observe("hello \u{1b}[?1000;1006h and \u{1b}[?2004h");
-        assert!(modes.mouse && modes.mouse_sgr && modes.bracketed_paste);
+        assert!(modes.mouse_on() && modes.mouse_sgr && modes.bracketed_paste);
         assert!(!modes.focus && !modes.mouse_motion);
         modes.observe("\u{1b}[?1004h\u{1b}[?1003h");
         assert!(modes.focus && modes.mouse_motion);
-        modes.observe("\u{1b}[?1000l\u{1b}[?2004l");
-        assert!(!modes.mouse && !modes.bracketed_paste);
+        modes.observe("\u{1b}[?1000l\u{1b}[?1003l\u{1b}[?2004l");
+        assert!(!modes.mouse_on() && !modes.bracketed_paste);
+        // ?1003l does not clear ?1000, and ?1000 alone does not forward drags.
+        let mut modes = ChildModes::default();
+        modes.observe("\u{1b}[?1000;1006h\u{1b}[?1003h\u{1b}[?1003l");
+        assert!(modes.mouse_on() && !modes.mouse_motion);
+        let drag = ct_event::MouseEvent {
+            kind: ct_event::MouseEventKind::Drag(ct_event::MouseButton::Left),
+            column: 1,
+            row: 1,
+            modifiers: ct_event::KeyModifiers::NONE,
+        };
+        assert!(modes.encode_mouse(&drag).is_none());
+        modes.observe("\u{1b}[?1002h");
+        assert!(modes.encode_mouse(&drag).is_some());
+        // Without SGR nothing is forwardable, so the host must not capture.
+        let mut modes = ChildModes::default();
+        modes.observe("\u{1b}[?1000h");
+        assert!(!modes.mouse_forwardable());
     }
 
     #[test]

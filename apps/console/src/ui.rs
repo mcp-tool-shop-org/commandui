@@ -22,8 +22,14 @@ impl TerminalRestoreGuard {
 impl Drop for TerminalRestoreGuard {
     fn drop(&mut self) {
         let _ = crossterm::terminal::disable_raw_mode();
+        // Raw Play can leave mouse, focus and paste reporting on in the host;
+        // turn them off so a panic does not leave escape garbage on every click.
+        // All of these are idempotent.
         let _ = crossterm::execute!(
             std::io::stdout(),
+            crossterm::event::DisableMouseCapture,
+            crossterm::event::DisableFocusChange,
+            crossterm::event::DisableBracketedPaste,
             crossterm::terminal::LeaveAlternateScreen,
             crossterm::cursor::Show,
         );
@@ -497,10 +503,17 @@ fn render_composer(frame: &mut Frame, area: Rect, model: &Model) {
             Style::default().fg(Color::DarkGray),
         ))
     } else {
-        let before = &text[..cursor];
-        let cursor_char = text[cursor..].chars().next().unwrap_or(' ');
-        let after_start = cursor + cursor_char.len_utf8().min(text.len() - cursor);
-        let after = if after_start <= text.len() { &text[after_start..] } else { "" };
+        // Scroll a window of the text so the cursor cell is always inside the pane.
+        let width = usize::from(area.width.saturating_sub(2)).max(1);
+        let chars: Vec<char> = text.chars().collect();
+        let cursor_idx = text[..cursor].chars().count();
+        let start = (cursor_idx + 1).saturating_sub(width);
+        let end = (start + width).min(chars.len());
+        let window = &chars[start.min(chars.len())..end];
+        let rel = cursor_idx - start;
+        let before: String = window.iter().take(rel).collect();
+        let cursor_char = window.get(rel).copied().unwrap_or(' ');
+        let after: String = window.iter().skip(rel + 1).collect();
 
         Line::from(vec![
             Span::raw(before),
@@ -652,6 +665,37 @@ fn quote_segment(segment: &str) -> String {
     format!("$ '{}'", escape_segment(segment))
 }
 
+/// Characters that change how text is drawn or ordered without being visible:
+/// Unicode category Cf (bidi overrides and isolates, zero-width characters,
+/// joiners) plus the line and paragraph separators U+2028 and U+2029.
+/// Written out because the standard library has no category lookup.
+fn is_invisible_format(c: char) -> bool {
+    matches!(
+        u32::from(c),
+        0x00AD
+            | 0x0600..=0x0605
+            | 0x061C
+            | 0x06DD
+            | 0x070F
+            | 0x0890..=0x0891
+            | 0x08E2
+            | 0x180E
+            | 0x200B..=0x200F
+            | 0x2028..=0x202E
+            | 0x2060..=0x2064
+            | 0x2066..=0x206F
+            | 0xFEFF
+            | 0xFFF9..=0xFFFB
+            | 0x110BD
+            | 0x110CD
+            | 0x13430..=0x1343F
+            | 0x1BCA0..=0x1BCA3
+            | 0x1D173..=0x1D17A
+            | 0xE0001
+            | 0xE0020..=0xE007F
+    )
+}
+
 fn escape_segment(segment: &str) -> String {
     let mut out = String::with_capacity(segment.len());
     for ch in segment.chars() {
@@ -660,7 +704,7 @@ fn escape_segment(segment: &str) -> String {
             '\'' => out.push_str("\\'"),
             '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
-            c if c.is_control() => {
+            c if c.is_control() || is_invisible_format(c) => {
                 let code = u32::from(c);
                 if code <= 0xff {
                     out.push_str(&format!("\\x{code:02x}"));
@@ -686,8 +730,19 @@ fn review_meta_lines(model: &Model) -> Vec<Line<'_>> {
         ))];
     };
 
-    let mut lines = vec![risk_line(proposal), explanation_line(proposal)];
-    let flags = safety_flags(proposal);
+    let target = proposal.cwd.as_deref().filter(|c| !c.is_empty()).unwrap_or("unknown");
+    let mut lines = vec![
+        risk_line(proposal),
+        Line::from(vec![
+            Span::styled("Runs in: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(target.to_string()),
+        ]),
+        explanation_line(proposal),
+    ];
+    let mut flags = safety_flags(proposal);
+    if !proposal.command.is_ascii() {
+        flags.push("non-ASCII characters");
+    }
     if !flags.is_empty() {
         lines.push(Line::from(vec![
             Span::styled("Flags: ", Style::default().fg(Color::Red)),
@@ -1052,6 +1107,16 @@ mod tests {
         assert!(overlay.height <= host.height);
         assert!(overlay.x.saturating_add(overlay.width) <= frame.width);
         assert!(overlay.y.saturating_add(overlay.height) <= frame.height);
+    }
+
+    #[test]
+    fn format_characters_are_escaped_in_the_review_line() {
+        let lines = visible_command_lines("echo a\u{202e}b\u{200b}c\u{2028}d");
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("\\u{202e}"), "{}", lines[0]);
+        assert!(lines[0].contains("\\u{200b}"), "{}", lines[0]);
+        assert!(lines[0].contains("\\u{2028}"), "{}", lines[0]);
+        assert!(!lines[0].chars().any(is_invisible_format));
     }
 
     #[test]

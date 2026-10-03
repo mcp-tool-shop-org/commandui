@@ -43,7 +43,7 @@
 //! (exit and quit). Mouse, focus, and bracketed paste are forwarded in the
 //! sequences the child enabled.
 
-use crate::model::{InputMode, Model};
+use crate::model::{InputMode, Model, SessionState};
 use crate::ui::{
     command_is_clipped, page_lines, review_window, visible_command_lines, widest_line,
 };
@@ -69,6 +69,8 @@ pub enum InputAction {
     PrevSession,
     CreateSession,
     CloseSession,
+    /// Close the session with this id (run selector), leaving the active session alone.
+    CloseSessionAt(String),
     /// Enter raw play mode — game owns the terminal.
     EnterRawPlay,
     /// Exit raw play mode — Console resumes.
@@ -385,14 +387,20 @@ fn handle_review_key(key: KeyEvent, model: &mut Model) -> InputAction {
             }
             InputAction::Ignored
         }
-        KeyCode::Enter | KeyCode::Char('y') => try_approve(model),
-        KeyCode::Esc | KeyCode::Char('n') => {
+        // Ctrl/Alt chords (readline yank, etc.) never approve or cancel.
+        KeyCode::Enter | KeyCode::Char('y') if !has_ctrl_or_alt(key) => try_approve(model),
+        KeyCode::Esc | KeyCode::Char('n') if key.code == KeyCode::Esc || !has_ctrl_or_alt(key) => {
             model.input_mode = InputMode::Ask;
             model.clear_proposal();
             InputAction::CancelProposal
         }
         _ => InputAction::Ignored,
     }
+}
+
+fn has_ctrl_or_alt(key: KeyEvent) -> bool {
+    key.modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
 }
 
 fn nudge_review(model: &mut Model, dy: isize, dx: isize) {
@@ -426,6 +434,19 @@ fn try_approve(model: &mut Model) -> InputAction {
     ) else {
         return InputAction::Ignored;
     };
+
+    // A keypress buffered while the planner ran must not approve a command that
+    // has not been on screen long enough to read.
+    if !model.review_input_ready() {
+        return InputAction::Ignored;
+    }
+
+    // The proposal was written for the cwd at Ask time. If the shell has moved,
+    // the command would run somewhere the review did not show.
+    if let Some(drift) = model.cwd_drift(&proposal, &session_id) {
+        model.review_error = Some(drift);
+        return InputAction::Ignored;
+    }
 
     let lines = visible_command_lines(&proposal.command);
     let (rows, cols) = review_window(model);
@@ -497,12 +518,18 @@ fn handle_raw_play_key(
     let data = key_to_bytes(key);
     if !data.is_empty() {
         let result = terminal_service.write(&session_id, &data);
+        if let Err(err) = &result {
+            // Raw Play draws no status line, so a dead PTY would swallow keys in
+            // silence. Mark the session, show the reason in Console and leave.
+            if let Some(idx) = model.session_index(&session_id) {
+                model.sessions[idx].session_state = SessionState::Error(err.clone());
+            }
+            model.surface_session_result(result);
+            model.input_mode = InputMode::Shell;
+            return InputAction::ExitRawPlay;
+        }
         model.surface_session_result(result);
-        return if model.status_line.is_none() {
-            InputAction::Forwarded
-        } else {
-            InputAction::Ignored
-        };
+        return InputAction::Forwarded;
     }
 
     InputAction::Ignored
@@ -554,11 +581,14 @@ fn handle_switcher_key(key: KeyEvent, model: &mut Model) -> InputAction {
 
         // Close selected session
         _ if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('w') => {
-            // Close the session at switcher_cursor, not active
+            // Close the session at switcher_cursor, not the active one. The active
+            // session stays selected; app removes the target by id.
+            let target = model.sessions.get(model.switcher_cursor).map(|s| s.id.clone());
             model.close_switcher();
-            // Switch to the cursor target first so close_active_session closes it
-            model.switch_to(model.switcher_cursor);
-            InputAction::CloseSession
+            match target {
+                Some(id) => InputAction::CloseSessionAt(id),
+                None => InputAction::Ignored,
+            }
         }
 
         // Number keys 1-9 jump to the numbered row of the drawn window.
@@ -857,11 +887,14 @@ mod tests {
             &mut model,
             &terminal,
         );
-        assert_eq!(model.input_mode, InputMode::RawPlay);
+        // A failed write marks the session and returns to Console, where the
+        // status line is drawn.
+        assert_eq!(model.input_mode, InputMode::Shell);
         assert_eq!(model.active_index, 0);
+        assert!(matches!(model.sessions[0].session_state, SessionState::Error(_)));
         let status = model.status_line.expect("write error must be surfaced");
         assert!(status.contains("Session not found"), "{status}");
-        assert_eq!(action, InputAction::Ignored);
+        assert_eq!(action, InputAction::ExitRawPlay);
 
         let mut model = two_sessions();
         model.input_mode = InputMode::RawPlay;
@@ -870,7 +903,7 @@ mod tests {
             &mut model,
             &terminal,
         );
-        assert_eq!(model.input_mode, InputMode::RawPlay);
+        assert_eq!(model.input_mode, InputMode::Shell);
         assert_eq!(model.active_index, 0);
         assert!(model.status_line.is_some());
     }
@@ -946,6 +979,69 @@ mod tests {
         );
         assert_eq!(model.input_mode, InputMode::Review);
         assert!(model.current_proposal.is_some());
+    }
+
+    #[test]
+    fn ctrl_and_alt_chords_never_approve_or_cancel() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Review;
+        model.set_proposal(proposal("echo hi", false), "s1".into());
+        for (c, m) in [
+            ('y', KeyModifiers::CONTROL),
+            ('y', KeyModifiers::ALT),
+            ('n', KeyModifiers::CONTROL),
+            ('n', KeyModifiers::ALT),
+        ] {
+            let action = handle_key(press(KeyCode::Char(c), m), &mut model, &terminal);
+            assert_eq!(action, InputAction::Ignored);
+            assert_eq!(model.input_mode, InputMode::Review);
+            assert!(model.current_proposal.is_some());
+        }
+        let action = handle_key(press(KeyCode::Char('y'), KeyModifiers::NONE), &mut model, &terminal);
+        assert!(matches!(action, InputAction::ApproveProposal(_, _, _)));
+    }
+
+    #[test]
+    fn approve_is_ignored_during_the_debounce_after_a_proposal_arrives() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Review;
+        model.set_proposal(proposal("echo hi", false), "s1".into());
+        model.arm_review_debounce();
+        let action = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+        model.review_armed_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(1));
+        let action = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+        assert!(matches!(action, InputAction::ApproveProposal(_, _, _)));
+    }
+
+    #[test]
+    fn approve_is_refused_when_the_session_cwd_moved() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.input_mode = InputMode::Review;
+        model.sessions[0].cwd = Some("/new".into());
+        let mut p = proposal("rm -rf build", false);
+        p.cwd = Some("/old".into());
+        model.set_proposal(p, "s1".into());
+        let action = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+        assert!(model.review_error.as_deref().unwrap().contains("Directory changed"));
+        model.sessions[0].cwd = Some("/old".into());
+        let action = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
+        assert!(matches!(action, InputAction::ApproveProposal(_, _, _)));
+    }
+
+    #[test]
+    fn switcher_close_leaves_the_active_session_selected() {
+        let mut model = two_sessions();
+        model.add_session("s3".into(), "C".into());
+        model.switch_to(2);
+        assert!(model.remove_session_by_id("s1"));
+        assert_eq!(model.active_session_id(), Some("s3"));
+        assert!(model.remove_session_by_id("s3"));
+        assert_eq!(model.active_session_id(), Some("s2"));
     }
 
     #[test]
@@ -1267,14 +1363,15 @@ mod tests {
         model.open_switcher();
         assert_eq!(
             handle_key(press(KeyCode::Char('w'), KeyModifiers::CONTROL), &mut model, &terminal),
-            InputAction::CloseSession
+            InputAction::CloseSessionAt(model.sessions[0].id.clone())
         );
         let mut model = two_sessions();
         model.open_switcher();
         model.switcher_cursor = 1;
+        let second = model.sessions[1].id.clone();
         assert_eq!(
             handle_key(press(KeyCode::Char('w'), KeyModifiers::CONTROL), &mut model, &terminal),
-            InputAction::CloseSession
+            InputAction::CloseSessionAt(second)
         );
         let mut model = two_sessions();
         model.open_switcher();

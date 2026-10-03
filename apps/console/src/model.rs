@@ -168,6 +168,9 @@ impl SessionModel {
                     '[' => EscState::Csi,
                     ']' => EscState::Osc,
                     '(' | ')' | '*' | '+' | '#' | '%' => EscState::EscSkip,
+                    // DCS, SOS, PM and APC carry a string body ended by BEL or ST,
+                    // handled by the same state as OSC.
+                    'P' | 'X' | '^' | '_' => EscState::Osc,
                     _ => EscState::Ground,
                 };
                 return;
@@ -310,6 +313,9 @@ pub struct Model {
     pub review_cols: usize,
     /// Explicit ack for a proposal whose `requires_confirmation` is set.
     pub proposal_confirmed: bool,
+    /// Approve/cancel keys are ignored until this instant. Set when a proposal
+    /// arrives from the planner; None means no debounce.
+    pub review_armed_at: Option<std::time::Instant>,
     /// Execute or approval-gate error, shown in the review pane.
     pub review_error: Option<String>,
     /// One-line status when the active session rejects write, interrupt, resync, resize, or close.
@@ -350,6 +356,7 @@ impl Model {
             review_rows: 0,
             review_cols: 0,
             proposal_confirmed: false,
+            review_armed_at: None,
             review_error: None,
             status_line: None,
             switcher_cursor: 0,
@@ -469,6 +476,59 @@ impl Model {
         self.review_error = None;
     }
 
+    /// Debounce window after a proposal lands: approve keys pressed while the
+    /// planner was still running must not execute an unseen command.
+    pub const REVIEW_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(600);
+
+    /// Start the approve debounce for a freshly arrived proposal.
+    pub fn arm_review_debounce(&mut self) {
+        self.review_armed_at = Some(std::time::Instant::now() + Self::REVIEW_DEBOUNCE);
+    }
+
+    /// True once the debounce window (if any) has passed.
+    pub fn review_input_ready(&self) -> bool {
+        self.review_armed_at
+            .is_none_or(|t| std::time::Instant::now() >= t)
+    }
+
+    /// If the owning session's cwd is known and differs from the cwd the
+    /// proposal was written for, say so. None means safe to approve.
+    pub fn cwd_drift(&self, proposal: &CommandProposal, session_id: &str) -> Option<String> {
+        let planned = proposal.cwd.as_deref().filter(|c| !c.is_empty() && *c != ".")?;
+        let now = self
+            .sessions
+            .iter()
+            .find(|s| s.id == session_id)?
+            .cwd
+            .as_deref()?;
+        if now == planned {
+            None
+        } else {
+            Some(format!(
+                "Directory changed since this was planned ({planned} -> {now}) — cancel and ask again"
+            ))
+        }
+    }
+
+    /// Remove a session by id, keeping the active session selected.
+    /// Returns false when no such session exists.
+    pub fn remove_session_by_id(&mut self, id: &str) -> bool {
+        let Some(idx) = self.sessions.iter().position(|s| s.id == id) else {
+            return false;
+        };
+        let active_id = self.sessions.get(self.active_index).map(|s| s.id.clone());
+        self.sessions.remove(idx);
+        if let Some(aid) = active_id.filter(|a| a != id) {
+            if let Some(i) = self.sessions.iter().position(|s| s.id == aid) {
+                self.active_index = i;
+            }
+        } else if self.active_index >= self.sessions.len() {
+            self.active_index = self.sessions.len().saturating_sub(1);
+        }
+        self.clear_active_unread();
+        true
+    }
+
     /// Get the session ID that owns the current proposal.
     pub fn proposal_owner(&self) -> Option<&str> {
         self.proposal_session_id.as_deref()
@@ -481,6 +541,7 @@ impl Model {
         self.review_scroll = 0;
         self.review_scroll_x = 0;
         self.proposal_confirmed = false;
+        self.review_armed_at = None;
         self.review_error = None;
     }
 
