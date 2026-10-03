@@ -5,6 +5,8 @@
   "windows": ["main"],
   "local": true,
   "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
     "allow-session-create",
     "allow-session-list",
     "allow-session-close",
