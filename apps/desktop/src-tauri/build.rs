@@ -35,6 +35,7 @@ fn main() {
         "memory_dismiss_suggestion",
         "memory_delete",
         "memory_store_suggestion",
+        "memory_list_resolved_suggestions",
     ];
 
     tauri_build::try_build(

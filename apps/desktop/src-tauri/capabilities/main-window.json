@@ -30,6 +30,7 @@
     "allow-memory-accept-suggestion",
     "allow-memory-dismiss-suggestion",
     "allow-memory-delete",
-    "allow-memory-store-suggestion"
+    "allow-memory-store-suggestion",
+    "allow-memory-list-resolved-suggestions"
   ]
 }
