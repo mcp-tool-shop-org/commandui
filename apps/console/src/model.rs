@@ -47,6 +47,11 @@ pub struct SessionModel {
     /// True when this session received output while not active.
     /// Cleared when session becomes the active session.
     pub has_unread: bool,
+    /// Trailing fragment that did not end in a newline. The next chunk appends here.
+    pub line_remainder: String,
+    /// A CR arrived. The next appended character replaces the current logical line.
+    /// CR followed by LF is a line break and does not erase the line.
+    pub line_cr_pending: bool,
 }
 
 impl SessionModel {
@@ -61,6 +66,8 @@ impl SessionModel {
             scroll_offset: 0,
             lines_dropped: 0,
             has_unread: false,
+            line_remainder: String::new(),
+            line_cr_pending: false,
         }
     }
 
@@ -99,21 +106,45 @@ impl SessionModel {
         self.scroll_offset = 0;
     }
 
+    /// Join PTY chunks into logical lines.
+    ///
+    /// A chunk that does not end in `\n` stays in `line_remainder` and the next
+    /// chunk appends to it. Empty lines are kept. `\r` clears the current
+    /// logical line only when a later character is appended, so `\r\n` stays
+    /// one line break.
+    fn ingest_terminal_chunk(&mut self, text: &str) {
+        for ch in text.chars() {
+            match ch {
+                '\n' => {
+                    self.line_cr_pending = false;
+                    let line = std::mem::take(&mut self.line_remainder);
+                    self.terminal_lines.push(line);
+                }
+                '\r' => {
+                    self.line_cr_pending = true;
+                }
+                other => {
+                    if self.line_cr_pending {
+                        self.line_remainder.clear();
+                        self.line_cr_pending = false;
+                    }
+                    self.line_remainder.push(other);
+                }
+            }
+        }
+        if self.terminal_lines.len() > MAX_LINES {
+            let excess = self.terminal_lines.len() - MAX_LINES;
+            self.terminal_lines.drain(..excess);
+            self.lines_dropped += excess;
+            self.scroll_offset = self.scroll_offset.saturating_sub(excess);
+        }
+    }
+
     /// Apply a runtime event to this session's state.
     fn apply_event(&mut self, event: &RuntimeEvent) {
         match event {
             RuntimeEvent::TerminalLine(e) => {
-                for line in e.text.split('\n') {
-                    if !line.is_empty() {
-                        self.terminal_lines.push(line.to_string());
-                    }
-                }
-                if self.terminal_lines.len() > MAX_LINES {
-                    let excess = self.terminal_lines.len() - MAX_LINES;
-                    self.terminal_lines.drain(..excess);
-                    self.lines_dropped += excess;
-                    self.scroll_offset = self.scroll_offset.saturating_sub(excess);
-                }
+                self.ingest_terminal_chunk(&e.text);
             }
             RuntimeEvent::SessionReady(e) => {
                 self.session_state = SessionState::Active;
@@ -893,5 +924,45 @@ mod tests {
         let mut model = Model::new();
         model.add_session("s1".into(), "Session 1".into());
         assert!(!model.sessions.is_empty());
+    }
+
+    #[test]
+    fn test_split_write_joins_remainder() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+
+        model.apply_event(make_line_event("s1", "hel"));
+        assert!(model.sessions[0].terminal_lines.is_empty());
+        assert_eq!(model.sessions[0].line_remainder, "hel");
+
+        model.apply_event(make_line_event("s1", "lo\n"));
+        assert_eq!(model.sessions[0].terminal_lines, vec!["hello"]);
+        assert_eq!(model.sessions[0].line_remainder, "");
+    }
+
+    #[test]
+    fn test_blank_line_is_preserved() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+
+        model.apply_event(make_line_event("s1", "top\n\nbottom\n"));
+        assert_eq!(
+            model.sessions[0].terminal_lines,
+            vec!["top".to_string(), String::new(), "bottom".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_carriage_return_overwrites_current_line() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+
+        model.apply_event(make_line_event("s1", "abc"));
+        model.apply_event(make_line_event("s1", "\rXY\n"));
+        assert_eq!(model.sessions[0].terminal_lines, vec!["XY"]);
+
+        // CR LF is a newline, not an erased line.
+        model.apply_event(make_line_event("s1", "hello\r\n"));
+        assert_eq!(model.sessions[0].terminal_lines, vec!["XY", "hello"]);
     }
 }

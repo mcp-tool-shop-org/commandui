@@ -71,6 +71,8 @@ impl App {
     pub async fn run(&mut self) -> anyhow::Result<()> {
         enable_raw_mode()?;
         stdout().execute(EnterAlternateScreen)?;
+        // Dropped on every exit, including a render panic, so raw mode cannot stick.
+        let _restore = ui::TerminalRestoreGuard::arm();
         let backend = CrosstermBackend::new(stdout());
         let mut terminal = Terminal::new(backend)?;
 
@@ -185,6 +187,7 @@ impl App {
                             if self.model.session_index(&session_id).is_some() {
                                 self.model.set_proposal(proposal, session_id);
                                 self.model.input_mode = InputMode::Review;
+                                self.sync_pane_size(terminal);
                             }
                         }
                         PlannerResult::Error(msg) => {
@@ -277,9 +280,21 @@ impl App {
                     }
                 }
                 Event::Resize(cols, rows) => {
-                    // Full host dimensions — no chrome subtraction
-                    if let Some(ref session_id) = active_id {
-                        let _ = self.terminal_service.resize(session_id, cols, rows);
+                    // Full host dimensions — no chrome subtraction.
+                    if cols > 0 && rows > 0 {
+                        self.model.pane_cols = cols;
+                        self.model.pane_rows = rows;
+                        if let Some(ref session_id) = active_id {
+                            let _ = self.terminal_service.resize(session_id, cols, rows);
+                        }
+                    }
+                }
+                Event::Paste(text) => {
+                    // Crossterm already decoded the paste. Forward that text only.
+                    if !text.is_empty() {
+                        if let Some(ref session_id) = active_id {
+                            let _ = self.terminal_service.write(session_id, &text);
+                        }
                     }
                 }
                 _ => {}
@@ -303,27 +318,30 @@ impl App {
             }
             InputAction::ApproveProposal(command, target_session_id) => {
                 self.execute_on_session(&command, &target_session_id);
+                self.sync_pane_size(terminal);
+            }
+            InputAction::CancelProposal => {
+                self.sync_pane_size(terminal);
             }
             InputAction::CreateSession => {
                 self.create_session();
+                self.sync_pane_size(terminal);
             }
             InputAction::CloseSession => {
                 self.close_active_session();
+                self.sync_pane_size(terminal);
             }
             InputAction::NextSession | InputAction::PrevSession => {
-                if let Some(ref id) = self.model.active_session_id().map(|s| s.to_string()) {
-                    let _ = self.terminal_service.resize(
-                        id,
-                        self.model.pane_cols,
-                        self.model.pane_rows,
-                    );
-                }
+                self.sync_pane_size(terminal);
             }
             InputAction::EnterRawPlay => {
                 self.enter_raw_play(terminal);
             }
             InputAction::ExitRawPlay => {
                 self.exit_raw_play(terminal);
+            }
+            InputAction::ModeSwitched => {
+                self.sync_pane_size(terminal);
             }
             _ => {}
         }
@@ -354,10 +372,15 @@ impl App {
         );
         let _ = stdout().flush();
 
-        // Resize PTY to full host terminal dimensions (no chrome overhead)
-        if let Ok(size) = crossterm::terminal::size() {
-            if let Some(session_id) = self.model.active_session_id().map(|s| s.to_string()) {
-                let _ = self.terminal_service.resize(&session_id, size.0, size.1);
+        // Record the fullscreen size we send. Exit recomputes the chrome pane
+        // and ioctls that, so the restore value is the pane, not this size.
+        if let Ok((cols, rows)) = crossterm::terminal::size() {
+            if cols > 0 && rows > 0 {
+                self.model.pane_cols = cols;
+                self.model.pane_rows = rows;
+                if let Some(session_id) = self.model.active_session_id().map(|s| s.to_string()) {
+                    let _ = self.terminal_service.resize(&session_id, cols, rows);
+                }
             }
         }
 
@@ -380,7 +403,14 @@ impl App {
         // Force full redraw
         let _ = terminal.clear();
 
-        // Resize PTY back to Console's pane dimensions
+        // Callers set Shell before exit. If they did not, do it here so the
+        // restore size is the chrome pane, not the fullscreen raw-play size.
+        if self.model.input_mode == InputMode::RawPlay {
+            self.model.input_mode = InputMode::Shell;
+        }
+
+        // Always ioctl the pane the user is looking at, even when the stored
+        // size already matches.
         self.sync_pane_size(terminal);
 
         self.in_raw_passthrough = false;
@@ -431,10 +461,6 @@ impl App {
         let rows = area.height.saturating_sub(chrome_overhead);
 
         if cols == 0 || rows == 0 {
-            return;
-        }
-
-        if cols == self.model.pane_cols && rows == self.model.pane_rows {
             return;
         }
 

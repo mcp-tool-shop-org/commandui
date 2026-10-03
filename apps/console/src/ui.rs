@@ -9,6 +9,27 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 
+/// Restores the host terminal when dropped, including after a render panic.
+/// Armed for the whole `App::run` so raw mode cannot stay on.
+pub struct TerminalRestoreGuard;
+
+impl TerminalRestoreGuard {
+    pub fn arm() -> Self {
+        Self
+    }
+}
+
+impl Drop for TerminalRestoreGuard {
+    fn drop(&mut self) {
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::LeaveAlternateScreen,
+            crossterm::cursor::Show,
+        );
+    }
+}
+
 pub fn render(frame: &mut Frame, model: &Model) {
     match model.input_mode {
         InputMode::Shell => render_shell_layout(frame, model),
@@ -226,23 +247,32 @@ fn render_terminal_pane(frame: &mut Frame, area: Rect, model: &Model) {
 
     let visible_lines: Vec<Line> = if let Some(session) = active {
         let total = session.terminal_lines.len();
-        let visible_end = if session.scroll_offset > 0 {
-            total.saturating_sub(session.scroll_offset)
-        } else {
-            total
-        };
-        let visible_start = visible_end.saturating_sub(inner_height);
-
-        if total == 0 && !is_ready {
+        let open_line = session.scroll_offset == 0 && !session.line_remainder.is_empty();
+        if total == 0 && session.line_remainder.is_empty() && !is_ready {
             vec![Line::from(Span::styled(
                 "Starting shell...",
                 Style::default().fg(Color::DarkGray),
             ))]
         } else {
-            session.terminal_lines[visible_start..visible_end]
+            let room = if open_line {
+                inner_height.saturating_sub(1)
+            } else {
+                inner_height
+            };
+            let visible_end = if session.scroll_offset > 0 {
+                total.saturating_sub(session.scroll_offset)
+            } else {
+                total
+            };
+            let visible_start = visible_end.saturating_sub(room);
+            let mut lines: Vec<Line> = session.terminal_lines[visible_start..visible_end]
                 .iter()
                 .map(|s| Line::from(s.as_str()))
-                .collect()
+                .collect();
+            if open_line {
+                lines.push(Line::from(session.line_remainder.as_str()));
+            }
+            lines
         }
     } else {
         vec![
@@ -454,14 +484,12 @@ fn render_review_footer(frame: &mut Frame, area: Rect) {
 // ---- Run selector overlay ----
 
 fn render_run_selector_overlay(frame: &mut Frame, area: Rect, model: &Model) {
-    // Center the overlay in the terminal pane area
-    let list_height = (model.session_count() as u16 + 2).min(area.height); // +2 for border
-    let list_width = area.width.min(60).max(30);
-
-    let x = area.x + (area.width.saturating_sub(list_width)) / 2;
-    let y = area.y + (area.height.saturating_sub(list_height)) / 2;
-
-    let overlay_area = Rect::new(x, y, list_width, list_height);
+    // Center the overlay in the terminal pane area. Never wider or taller than the frame.
+    let want_h = (model.session_count() as u16).saturating_add(2); // +2 for border
+    let overlay_area = clamped_overlay(frame.area(), area, 60, want_h);
+    if overlay_area.width == 0 || overlay_area.height == 0 {
+        return;
+    }
 
     // Build the list
     let block = Block::default()
@@ -499,13 +527,7 @@ fn render_run_selector_overlay(frame: &mut Frame, area: Rect, model: &Model) {
             " ".to_string()
         };
 
-        // CWD (shortened)
-        let cwd_short = session.cwd.as_deref().unwrap_or("...");
-        let cwd_display = if cwd_short.len() > 25 {
-            format!("...{}", &cwd_short[cwd_short.len() - 22..])
-        } else {
-            cwd_short.to_string()
-        };
+        let cwd_display = shorten_cwd(session.cwd.as_deref().unwrap_or("..."));
 
         let style = if is_cursor {
             Style::default().fg(Color::Black).bg(Color::White)
@@ -536,7 +558,7 @@ fn render_run_selector_overlay(frame: &mut Frame, area: Rect, model: &Model) {
     }
 
     // Clear the overlay area first (draw background)
-    let bg = Paragraph::new(vec![Line::from(""); list_height as usize])
+    let bg = Paragraph::new(vec![Line::from(""); overlay_area.height as usize])
         .style(Style::default().bg(Color::Black));
     frame.render_widget(bg, overlay_area);
 
@@ -563,16 +585,13 @@ fn render_switcher_footer(frame: &mut Frame, area: Rect) {
 // ---- Help overlay ----
 
 fn render_help_overlay(frame: &mut Frame, area: Rect) {
-    let help_width = area.width.min(56).max(30);
-    let help_height = area.height.min(18).max(6);
-
-    let x = area.x + (area.width.saturating_sub(help_width)) / 2;
-    let y = area.y + (area.height.saturating_sub(help_height)) / 2;
-
-    let overlay_area = Rect::new(x, y, help_width, help_height);
+    let overlay_area = clamped_overlay(frame.area(), area, 56, 18);
+    if overlay_area.width == 0 || overlay_area.height == 0 {
+        return;
+    }
 
     // Background
-    let bg = Paragraph::new(vec![Line::from(""); help_height as usize])
+    let bg = Paragraph::new(vec![Line::from(""); overlay_area.height as usize])
         .style(Style::default().bg(Color::Black));
     frame.render_widget(bg, overlay_area);
 
@@ -612,4 +631,67 @@ fn render_help_overlay(frame: &mut Frame, area: Rect) {
 
     let paragraph = Paragraph::new(lines).block(block);
     frame.render_widget(paragraph, overlay_area);
+}
+
+/// Last 22 characters, prefixed with `...`, when the path is longer than 25
+/// characters. The cut is always on a char boundary.
+fn shorten_cwd(cwd: &str) -> String {
+    let count = cwd.chars().count();
+    if count <= 25 {
+        return cwd.to_string();
+    }
+    let skip = count - 22;
+    let tail: String = cwd.chars().skip(skip).collect();
+    format!("...{tail}")
+}
+
+/// Center `want_w` x `want_h` inside `host`, then clamp so the rect cannot
+/// extend past `frame`. A preferred size larger than the frame shrinks.
+fn clamped_overlay(frame: Rect, host: Rect, want_w: u16, want_h: u16) -> Rect {
+    let frame_right = frame.x.saturating_add(frame.width);
+    let frame_bottom = frame.y.saturating_add(frame.height);
+    let host_right = host.x.saturating_add(host.width).min(frame_right);
+    let host_bottom = host.y.saturating_add(host.height).min(frame_bottom);
+    let host_x = host.x.max(frame.x).min(host_right);
+    let host_y = host.y.max(frame.y).min(host_bottom);
+    let max_w = host_right.saturating_sub(host_x);
+    let max_h = host_bottom.saturating_sub(host_y);
+    let width = want_w.min(max_w);
+    let height = want_h.min(max_h);
+    let x = host_x.saturating_add(max_w.saturating_sub(width) / 2);
+    let y = host_y.saturating_add(max_h.saturating_sub(height) / 2);
+    Rect { x, y, width, height }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cwd_truncation_stays_on_a_char_boundary() {
+        let ideograph = "\u{65e5}";
+        // 9 ideographs are 27 bytes. A byte index at len-22 is mid-character.
+        let short = ideograph.repeat(9);
+        assert!(short.len() > 25);
+        assert_eq!(shorten_cwd(&short), short);
+
+        let long = ideograph.repeat(30);
+        let shown = shorten_cwd(&long);
+        assert!(shown.is_char_boundary(3));
+        assert!(shown.starts_with("..."));
+        let tail = &shown[3..];
+        assert_eq!(tail.chars().count(), 22);
+        assert!(tail.chars().all(|c| c == '\u{65e5}'));
+    }
+
+    #[test]
+    fn overlay_rect_cannot_extend_past_the_frame() {
+        let frame = Rect::new(0, 0, 20, 8);
+        let host = Rect::new(0, 1, 20, 6);
+        let overlay = clamped_overlay(frame, host, 60, 18);
+        assert!(overlay.width <= host.width);
+        assert!(overlay.height <= host.height);
+        assert!(overlay.x.saturating_add(overlay.width) <= frame.width);
+        assert!(overlay.y.saturating_add(overlay.height) <= frame.height);
+    }
 }

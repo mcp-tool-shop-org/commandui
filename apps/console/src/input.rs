@@ -418,46 +418,193 @@ fn handle_switcher_key(key: KeyEvent, model: &mut Model) -> InputAction {
 }
 
 fn key_to_bytes(key: KeyEvent) -> String {
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        if let KeyCode::Char(c) = key.code {
-            let ctrl_byte = (c as u8).wrapping_sub(b'a').wrapping_add(1);
-            if ctrl_byte <= 26 {
-                return String::from(ctrl_byte as char);
+    if let Some(encoded) = encode_control_char(key) {
+        return encoded;
+    }
+    if let Some(seq) = encode_special(key.code, key.modifiers) {
+        return seq;
+    }
+    if let KeyCode::Char(c) = key.code {
+        // Unknown Ctrl chords are not cast to a byte. Alt is ESC plus the key.
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            return String::new();
+        }
+        if key.modifiers.contains(KeyModifiers::ALT) {
+            return format!("\u{1b}{c}");
+        }
+        return c.to_string();
+    }
+    String::new()
+}
+
+/// Ctrl+letter (either case) is the control byte. Alt adds an ESC prefix.
+/// Non-ASCII is not truncated with `as u8`.
+fn encode_control_char(key: KeyEvent) -> Option<String> {
+    if !key.modifiers.contains(KeyModifiers::CONTROL) {
+        return None;
+    }
+    let KeyCode::Char(c) = key.code else {
+        return None;
+    };
+    let byte = control_byte(c)?;
+    let mut out = String::new();
+    if key.modifiers.contains(KeyModifiers::ALT) {
+        out.push('\u{1b}');
+    }
+    out.push(byte as char);
+    Some(out)
+}
+
+fn control_byte(c: char) -> Option<u8> {
+    if !c.is_ascii() {
+        return None;
+    }
+    let upper = c.to_ascii_uppercase() as u8;
+    match upper {
+        b'A'..=b'Z' | b'@' | b'[' | b'\\' | b']' | b'^' | b'_' => Some(upper & 0x1f),
+        b' ' => Some(0),
+        _ => None,
+    }
+}
+
+/// xterm modifier parameter: 1 + shift + 2*alt + 4*ctrl. 1 means unmodified.
+fn modifier_param(mods: KeyModifiers) -> u8 {
+    let mut param = 1u8;
+    if mods.contains(KeyModifiers::SHIFT) {
+        param += 1;
+    }
+    if mods.contains(KeyModifiers::ALT) {
+        param += 2;
+    }
+    if mods.contains(KeyModifiers::CONTROL) {
+        param += 4;
+    }
+    param
+}
+
+fn encode_special(code: KeyCode, mods: KeyModifiers) -> Option<String> {
+    let param = modifier_param(mods);
+    let seq = match code {
+        KeyCode::Up => arrow('A', param),
+        KeyCode::Down => arrow('B', param),
+        KeyCode::Right => arrow('C', param),
+        KeyCode::Left => arrow('D', param),
+        KeyCode::Home => {
+            if param == 1 {
+                "\x1b[H".to_string()
+            } else {
+                format!("\x1b[1;{param}H")
             }
         }
+        KeyCode::End => {
+            if param == 1 {
+                "\x1b[F".to_string()
+            } else {
+                format!("\x1b[1;{param}F")
+            }
+        }
+        KeyCode::Insert => tilde(2, param),
+        KeyCode::Delete => tilde(3, param),
+        KeyCode::PageUp => tilde(5, param),
+        KeyCode::PageDown => tilde(6, param),
+        KeyCode::F(n) => function_key(n, param)?,
+        KeyCode::Enter => alt_prefix(mods, "\r"),
+        KeyCode::Backspace => alt_prefix(mods, "\x7f"),
+        KeyCode::Tab => alt_prefix(mods, "\t"),
+        KeyCode::Esc => alt_prefix(mods, "\x1b"),
+        _ => return None,
+    };
+    Some(seq)
+}
+
+fn arrow(letter: char, param: u8) -> String {
+    if param == 1 {
+        format!("\x1b[{letter}")
+    } else {
+        format!("\x1b[1;{param}{letter}")
+    }
+}
+
+fn tilde(code: u8, param: u8) -> String {
+    if param == 1 {
+        format!("\x1b[{code}~")
+    } else {
+        format!("\x1b[{code};{param}~")
+    }
+}
+
+fn alt_prefix(mods: KeyModifiers, bytes: &str) -> String {
+    if mods.contains(KeyModifiers::ALT) {
+        format!("\x1b{bytes}")
+    } else {
+        bytes.to_string()
+    }
+}
+
+fn function_key(n: u8, param: u8) -> Option<String> {
+    let unmodified = match n {
+        1 => "\x1bOP",
+        2 => "\x1bOQ",
+        3 => "\x1bOR",
+        4 => "\x1bOS",
+        5 => "\x1b[15~",
+        6 => "\x1b[17~",
+        7 => "\x1b[18~",
+        8 => "\x1b[19~",
+        9 => "\x1b[20~",
+        10 => "\x1b[21~",
+        11 => "\x1b[23~",
+        12 => "\x1b[24~",
+        _ => return None,
+    };
+    if param == 1 {
+        return Some(unmodified.to_string());
+    }
+    let modified = match n {
+        1 => format!("\x1b[1;{param}P"),
+        2 => format!("\x1b[1;{param}Q"),
+        3 => format!("\x1b[1;{param}R"),
+        4 => format!("\x1b[1;{param}S"),
+        5 => format!("\x1b[15;{param}~"),
+        6 => format!("\x1b[17;{param}~"),
+        7 => format!("\x1b[18;{param}~"),
+        8 => format!("\x1b[19;{param}~"),
+        9 => format!("\x1b[20;{param}~"),
+        10 => format!("\x1b[21;{param}~"),
+        11 => format!("\x1b[23;{param}~"),
+        12 => format!("\x1b[24;{param}~"),
+        _ => return None,
+    };
+    Some(modified)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn press(code: KeyCode, mods: KeyModifiers) -> KeyEvent {
+        KeyEvent::new(code, mods)
     }
 
-    match key.code {
-        KeyCode::Char(c) => c.to_string(),
-        KeyCode::Enter => "\r".to_string(),
-        KeyCode::Backspace => "\x7f".to_string(),
-        KeyCode::Tab => "\t".to_string(),
-        KeyCode::Esc => "\x1b".to_string(),
-        KeyCode::Up => "\x1b[A".to_string(),
-        KeyCode::Down => "\x1b[B".to_string(),
-        KeyCode::Right => "\x1b[C".to_string(),
-        KeyCode::Left => "\x1b[D".to_string(),
-        KeyCode::Home => "\x1b[H".to_string(),
-        KeyCode::End => "\x1b[F".to_string(),
-        KeyCode::Delete => "\x1b[3~".to_string(),
-        KeyCode::PageUp => "\x1b[5~".to_string(),
-        KeyCode::PageDown => "\x1b[6~".to_string(),
-        KeyCode::Insert => "\x1b[2~".to_string(),
-        KeyCode::F(n) => match n {
-            1 => "\x1bOP".to_string(),
-            2 => "\x1bOQ".to_string(),
-            3 => "\x1bOR".to_string(),
-            4 => "\x1bOS".to_string(),
-            5 => "\x1b[15~".to_string(),
-            6 => "\x1b[17~".to_string(),
-            7 => "\x1b[18~".to_string(),
-            8 => "\x1b[19~".to_string(),
-            9 => "\x1b[20~".to_string(),
-            10 => "\x1b[21~".to_string(),
-            11 => "\x1b[23~".to_string(),
-            12 => "\x1b[24~".to_string(),
-            _ => String::new(),
-        },
-        _ => String::new(),
+    #[test]
+    fn alt_b_is_esc_then_b() {
+        let bytes = key_to_bytes(press(KeyCode::Char('b'), KeyModifiers::ALT));
+        assert_eq!(bytes, "\u{1b}b");
+    }
+
+    #[test]
+    fn ctrl_letter_is_the_control_byte() {
+        let lower = key_to_bytes(press(KeyCode::Char('d'), KeyModifiers::CONTROL));
+        let upper = key_to_bytes(press(KeyCode::Char('D'), KeyModifiers::CONTROL));
+        assert_eq!(lower, "\u{4}");
+        assert_eq!(upper, "\u{4}");
+    }
+
+    #[test]
+    fn shift_up_is_a_modified_cursor_sequence() {
+        let bytes = key_to_bytes(press(KeyCode::Up, KeyModifiers::SHIFT));
+        assert_eq!(bytes, "\u{1b}[1;2A");
+        let plain = key_to_bytes(press(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(plain, "\u{1b}[A");
     }
 }
