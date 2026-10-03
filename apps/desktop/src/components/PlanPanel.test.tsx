@@ -44,7 +44,86 @@ describe("PlanPanel", () => {
     // Now Run Plan should be enabled
     expect(runButton).not.toBeDisabled();
     await userEvent.click(runButton);
-    expect(onApprove).toHaveBeenCalled();
+    expect(onApprove).toHaveBeenCalledWith("git status --short");
+  });
+
+  it("approves the trimmed command for high risk", async () => {
+    const onApprove = vi.fn();
+    render(
+      <PlanPanel
+        {...defaultProps}
+        command={"  git push  "}
+        risk="high"
+        onApprove={onApprove}
+      />,
+    );
+    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByText("Run Plan"));
+    expect(onApprove).toHaveBeenCalledWith("git push");
+  });
+
+  it("requires confirmation for medium risk by default", async () => {
+    const onApprove = vi.fn();
+    render(<PlanPanel {...defaultProps} risk="medium" onApprove={onApprove} />);
+    const runButton = screen.getByText("Run Plan");
+    expect(runButton).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox"));
+    expect(runButton).not.toBeDisabled();
+    await userEvent.click(runButton);
+    expect(onApprove).toHaveBeenCalledWith("git status --short");
+  });
+
+  it("runs medium risk without confirmation when not required", async () => {
+    const onApprove = vi.fn();
+    render(
+      <PlanPanel
+        {...defaultProps}
+        risk="medium"
+        requireMediumRiskConfirmation={false}
+        onApprove={onApprove}
+      />,
+    );
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    const runButton = screen.getByText("Run Plan");
+    expect(runButton).not.toBeDisabled();
+    await userEvent.click(runButton);
+    expect(onApprove).toHaveBeenCalledWith("git status --short");
+  });
+
+  it("reports the run gate with the trimmed edited command and confirmation", async () => {
+    const onRunGate = vi.fn();
+    render(
+      <PlanPanel
+        {...defaultProps}
+        command={"  git push  "}
+        risk="high"
+        onRunGate={onRunGate}
+      />,
+    );
+    expect(onRunGate).toHaveBeenLastCalledWith({
+      command: "git push",
+      confirmed: false,
+    });
+
+    await userEvent.click(screen.getByRole("checkbox"));
+    expect(onRunGate).toHaveBeenLastCalledWith({
+      command: "git push",
+      confirmed: true,
+    });
+
+    const textarea = screen.getByRole("textbox");
+    await userEvent.clear(textarea);
+    await userEvent.type(textarea, "  git fetch ");
+    expect(onRunGate).toHaveBeenLastCalledWith({
+      command: "git fetch",
+      confirmed: true,
+    });
+  });
+
+  it("reports an empty gate when there is no command", () => {
+    const onRunGate = vi.fn();
+    render(<PlanPanel {...defaultProps} command="" onRunGate={onRunGate} />);
+    expect(onRunGate).toHaveBeenLastCalledWith({ command: "", confirmed: false });
   });
 
   it("shows empty state when no command", () => {

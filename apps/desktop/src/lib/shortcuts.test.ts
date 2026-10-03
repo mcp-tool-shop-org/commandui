@@ -40,6 +40,38 @@ describe("parseCombo", () => {
     expect(p.ctrl).toBe(true);
   });
 
+  it("cmd combo matches a metaKey event and a ctrlKey event", () => {
+    const parsed = parseCombo("cmd+k");
+    expect(matchesEvent(parsed, mockKeyEvent("k", { metaKey: true }))).toBe(true);
+    expect(matchesEvent(parsed, mockKeyEvent("k", { ctrlKey: true }))).toBe(true);
+    expect(matchesEvent(parsed, mockKeyEvent("k"))).toBe(false);
+  });
+
+  it("ctrl combo matches a metaKey event", () => {
+    const parsed = parseCombo("ctrl+k");
+    expect(matchesEvent(parsed, mockKeyEvent("k", { metaKey: true }))).toBe(true);
+  });
+
+  it("ctrl+k does not match ctrl+shift+k", () => {
+    const parsed = parseCombo("ctrl+k");
+    expect(
+      matchesEvent(parsed, mockKeyEvent("k", { ctrlKey: true, shiftKey: true })),
+    ).toBe(false);
+  });
+
+  it("shift+enter and bare enter do not match each other's events", () => {
+    expect(matchesEvent(parseCombo("shift+enter"), mockKeyEvent("Enter"))).toBe(false);
+    expect(
+      matchesEvent(parseCombo("enter"), mockKeyEvent("Enter", { shiftKey: true })),
+    ).toBe(false);
+  });
+
+  it("alt must match on both sides", () => {
+    expect(matchesEvent(parseCombo("alt+k"), mockKeyEvent("k"))).toBe(false);
+    expect(matchesEvent(parseCombo("alt+k"), mockKeyEvent("k", { altKey: true }))).toBe(true);
+    expect(matchesEvent(parseCombo("k"), mockKeyEvent("k", { altKey: true }))).toBe(false);
+  });
+
   it("parses single letter", () => {
     const p = parseCombo("a");
     expect(p).toEqual({ ctrl: false, shift: false, alt: false, meta: false, key: "a" });
@@ -163,5 +195,40 @@ describe("resolveShortcut", () => {
   it("allows bare keys in plan zone", () => {
     const match = resolveShortcut(bareKeyDefs, mockKeyEvent("a"), "plan");
     expect(match?.id).toBe("bare-a");
+  });
+
+  function eventFrom(target: HTMLElement, key: string): KeyboardEvent {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true });
+    Object.defineProperty(event, "target", { value: target });
+    return event;
+  }
+
+  it("suppresses bare keys when the event target is a text field in plan zone", () => {
+    const textarea = document.createElement("textarea");
+    expect(resolveShortcut(bareKeyDefs, eventFrom(textarea, "a"), "plan")).toBeNull();
+    const input = document.createElement("input");
+    expect(resolveShortcut(bareKeyDefs, eventFrom(input, "a"), "plan")).toBeNull();
+  });
+
+  it("suppresses bare keys when document.activeElement is a text field in plan zone", () => {
+    const textarea = document.createElement("textarea");
+    document.body.appendChild(textarea);
+    textarea.focus();
+    try {
+      expect(resolveShortcut(bareKeyDefs, mockKeyEvent("a"), "plan")).toBeNull();
+    } finally {
+      textarea.remove();
+    }
+  });
+
+  it("allows bare keys in plan zone when the target is a non-text element", () => {
+    const button = document.createElement("button");
+    expect(resolveShortcut(bareKeyDefs, eventFrom(button, "a"), "plan")?.id).toBe("bare-a");
+  });
+
+  it("still resolves escape when the target is a textarea", () => {
+    const defs = [makeDef("esc", "escape", ["plan"])];
+    const textarea = document.createElement("textarea");
+    expect(resolveShortcut(defs, eventFrom(textarea, "Escape"), "plan")?.id).toBe("esc");
   });
 });

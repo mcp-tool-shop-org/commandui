@@ -292,10 +292,12 @@ describe("detectWorkflowPatterns", () => {
     // Should have the triple, but not the constituent pairs
     const triple = result.find((r) => r.label.includes("git status → pnpm test → pnpm build"));
     expect(triple).toBeDefined();
-    const pair = result.find(
-      (r) => r.label === "You often run: git status → pnpm test" && !r.label.includes("build"),
-    );
-    expect(pair).toBeUndefined();
+    const labels = result.map((r) => r.label);
+    expect(labels).not.toContain("You often run: git status → pnpm test");
+    expect(labels).not.toContain("You often run: pnpm test → pnpm build");
+    const workflows = result.filter((r) => r.kind === "workflow_pattern");
+    expect(workflows).toHaveLength(1);
+    expect(workflows[0]).toBe(triple);
   });
 
   it("skips dismissed workflow patterns", () => {
@@ -321,6 +323,81 @@ describe("detectWorkflowPatterns", () => {
     };
     const result = detectWorkflowPatterns(
       emptyInput(history, { existingSuggestions: [dismissed] }),
+    );
+    expect(result).toHaveLength(0);
+  });
+});
+
+// --- pending suggestion suppression ---
+
+describe("pending suggestions suppress re-emission", () => {
+  const pendingOf = (
+    kind: MemorySuggestion["kind"],
+    proposedKey: string,
+    proposedValue: string,
+  ): MemorySuggestion => ({
+    id: "p1",
+    scope: "global",
+    kind,
+    label: "pending",
+    proposedKey,
+    proposedValue,
+    confidence: 0.8,
+    derivedFromHistoryIds: [],
+    status: "pending",
+    createdAt: "2026-03-13T10:00:00Z",
+  });
+
+  it("detectPreferredCwd emits once, then not when the same value is pending", () => {
+    const history = [
+      makeHistory({ id: "1", sessionId: "s1", cwd: "/proj", executedCommand: "ls" }),
+      makeHistory({ id: "2", sessionId: "s1", cwd: "/proj", executedCommand: "ls" }),
+      makeHistory({ id: "3", sessionId: "s1", cwd: "/proj", executedCommand: "ls" }),
+      makeHistory({ id: "4", sessionId: "s2", cwd: "/proj", executedCommand: "ls" }),
+      makeHistory({ id: "5", sessionId: "s2", cwd: "/proj", executedCommand: "ls" }),
+    ];
+    expect(detectPreferredCwd(emptyInput(history))).toHaveLength(1);
+    const result = detectPreferredCwd(
+      emptyInput(history, {
+        existingSuggestions: [pendingOf("preferred_cwd", "workspace", "/proj")],
+      }),
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("detectRecurringCommands emits once, then not when the same value is pending", () => {
+    const history = Array.from({ length: 5 }, (_, i) =>
+      makeHistory({ id: `${i}`, executedCommand: "pnpm test" }),
+    );
+    expect(detectRecurringCommands(emptyInput(history))).toHaveLength(1);
+    const result = detectRecurringCommands(
+      emptyInput(history, {
+        existingSuggestions: [pendingOf("recurring_command", "pnpm test", "pnpm test")],
+      }),
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("detectWorkflowPatterns emits once, then not when the same value is pending", () => {
+    const history = [
+      makeHistory({ id: "1a", sessionId: "s1", executedCommand: "git status", createdAt: "2026-03-13T10:00:00Z" }),
+      makeHistory({ id: "1b", sessionId: "s1", executedCommand: "pnpm test", createdAt: "2026-03-13T10:01:00Z" }),
+      makeHistory({ id: "2a", sessionId: "s2", executedCommand: "git status", createdAt: "2026-03-13T11:00:00Z" }),
+      makeHistory({ id: "2b", sessionId: "s2", executedCommand: "pnpm test", createdAt: "2026-03-13T11:01:00Z" }),
+      makeHistory({ id: "3a", sessionId: "s3", executedCommand: "git status", createdAt: "2026-03-13T12:00:00Z" }),
+      makeHistory({ id: "3b", sessionId: "s3", executedCommand: "pnpm test", createdAt: "2026-03-13T12:01:00Z" }),
+    ];
+    expect(detectWorkflowPatterns(emptyInput(history))).toHaveLength(1);
+    const result = detectWorkflowPatterns(
+      emptyInput(history, {
+        existingSuggestions: [
+          pendingOf(
+            "workflow_pattern",
+            "git status → pnpm test",
+            JSON.stringify(["git status", "pnpm test"]),
+          ),
+        ],
+      }),
     );
     expect(result).toHaveLength(0);
   });

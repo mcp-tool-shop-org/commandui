@@ -1,38 +1,70 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, expectTypeOf } from "vitest";
 import type {
+  PlannerContext,
   PlannerGeneratePlanRequest,
   TerminalExecuteRequest,
 } from "./index";
 
+// Type-level checks are enforced by vitest typecheck mode (see vitest.config.ts).
+// A change to the contract that breaks these fails `vitest run`.
+
 describe("API Contract shapes", () => {
-  it("PlannerGeneratePlanRequest compiles with expected fields", () => {
+  it("PlannerGeneratePlanRequest keeps its required keys and unions", () => {
+    expectTypeOf<PlannerGeneratePlanRequest>().toHaveProperty("sessionId");
+    expectTypeOf<PlannerGeneratePlanRequest>().toHaveProperty("userIntent");
+    expectTypeOf<PlannerGeneratePlanRequest>().toHaveProperty("context");
+    expectTypeOf<PlannerGeneratePlanRequest["sessionId"]>().toEqualTypeOf<string>();
+    expectTypeOf<PlannerContext["os"]>().toEqualTypeOf<
+      "windows" | "macos" | "linux"
+    >();
+    expectTypeOf<PlannerContext["recentCommands"]>().toEqualTypeOf<string[]>();
+
+    const context: PlannerContext = {
+      sessionId: "s1",
+      cwd: "/home/user/project",
+      os: "linux",
+      shell: "bash",
+      recentCommands: [],
+      memoryItems: [],
+      projectFacts: [],
+    };
     const request: PlannerGeneratePlanRequest = {
       sessionId: "s1",
       userIntent: "show changed files",
-      context: {
-        sessionId: "s1",
-        cwd: "/home/user/project",
-        projectRoot: "/home/user/project",
-        os: "linux",
-        shell: "bash",
-        recentCommands: ["git log"],
-        memoryItems: [
-          { kind: "preferred_package_manager", key: "pm", value: "pnpm", confidence: 0.9 },
-        ],
-        projectFacts: [],
-      },
+      context,
     };
-    expect(request.sessionId).toBe("s1");
-    expect(request.context.memoryItems.length).toBe(1);
+
+    // @ts-expect-error missing required userIntent must be rejected
+    const missing: PlannerGeneratePlanRequest = { sessionId: "s1", context };
+    // @ts-expect-error os outside the union must be rejected
+    const badOs: PlannerContext = { ...context, os: "beos" };
+    // @ts-expect-error unknown extra keys must be rejected
+    const extra: PlannerGeneratePlanRequest = { ...request, bogus: true };
+
+    expect([request, missing, badOs, extra]).toHaveLength(4);
   });
 
-  it("TerminalExecuteRequest compiles with expected fields", () => {
-    const request: TerminalExecuteRequest = {
+  it("TerminalExecuteRequest keeps its required keys and source union", () => {
+    expectTypeOf<TerminalExecuteRequest["source"]>().toEqualTypeOf<
+      "raw" | "semantic"
+    >();
+    expectTypeOf<TerminalExecuteRequest["executionId"]>().toEqualTypeOf<string>();
+    expectTypeOf<TerminalExecuteRequest["command"]>().toEqualTypeOf<string>();
+
+    const ok: TerminalExecuteRequest = {
       executionId: "e1",
       sessionId: "s1",
       command: "git status",
       source: "raw",
     };
-    expect(request.command).toBe("git status");
+    // @ts-expect-error source outside the union must be rejected
+    const badSource: TerminalExecuteRequest = { ...ok, source: "manual" };
+    // @ts-expect-error missing required command must be rejected
+    const noCommand: TerminalExecuteRequest = {
+      executionId: "e1",
+      sessionId: "s1",
+      source: "raw",
+    };
+    expect([ok, badSource, noCommand]).toHaveLength(3);
   });
 });
