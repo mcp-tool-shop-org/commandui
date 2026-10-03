@@ -6,16 +6,27 @@
 pub use commandui_runtime_planner::OllamaConfig;
 use commandui_runtime_planner::{self as planner, CommandProposal, PlanContext};
 
-/// Build a PlanContext from Console's current state.
+/// Build a PlanContext from Console's current state, with the default shell.
+#[allow(dead_code)]
 pub fn build_context(
     session_id: &str,
     cwd: &str,
+) -> PlanContext {
+    build_context_for_shell(session_id, cwd, None)
+}
+
+/// Build a PlanContext for a session whose shell is known. The planner writes
+/// commands for the shell the session actually runs, not for COMSPEC.
+pub fn build_context_for_shell(
+    session_id: &str,
+    cwd: &str,
+    shell: Option<&str>,
 ) -> PlanContext {
     PlanContext {
         session_id: session_id.to_string(),
         cwd: cwd.to_string(),
         os: std::env::consts::OS.to_string(),
-        shell: detect_shell(),
+        shell: detect_shell(shell),
         ..Default::default()
     }
 }
@@ -29,14 +40,12 @@ pub async fn generate_proposal(
     planner::generate_proposal(config, context, user_intent).await
 }
 
-fn detect_shell() -> String {
-    #[cfg(windows)]
-    {
-        std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string())
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string())
+/// The session's own shell when known. Otherwise the shell a session with no
+/// shell set resolves to (pwsh or powershell on Windows, $SHELL elsewhere).
+fn detect_shell(session_shell: Option<&str>) -> String {
+    match session_shell.filter(|s| !s.is_empty()) {
+        Some(shell) => shell.to_string(),
+        None => commandui_runtime_core::pty::default_shell(),
     }
 }
 
@@ -51,6 +60,17 @@ mod tests {
         assert_eq!(ctx.cwd, "/home/user");
         assert!(!ctx.os.is_empty());
         assert!(!ctx.shell.is_empty());
+    }
+
+    #[test]
+    fn the_planner_is_told_the_sessions_real_shell_not_comspec() {
+        let ctx = build_context_for_shell("s1", "C:/work", Some("pwsh.exe"));
+        assert_eq!(ctx.shell, "pwsh.exe");
+        // No shell recorded: the default a session would resolve to, never COMSPEC.
+        let ctx = build_context_for_shell("s1", "C:/work", None);
+        assert_eq!(ctx.shell, commandui_runtime_core::pty::default_shell());
+        #[cfg(windows)]
+        assert!(!ctx.shell.to_lowercase().ends_with("cmd.exe"));
     }
 
     #[test]

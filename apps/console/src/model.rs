@@ -44,6 +44,8 @@ pub struct SessionModel {
     pub label: String,
     pub terminal_lines: Vec<String>,
     pub cwd: Option<String>,
+    /// The shell this session runs, from the runtime's session summary.
+    pub shell: Option<String>,
     pub exec_state: String,
     pub session_state: SessionState,
     pub scroll_offset: usize,
@@ -56,6 +58,11 @@ pub struct SessionModel {
     /// A CR arrived. The next appended character replaces the current logical line.
     /// CR followed by LF is a line break and does not erase the line.
     pub line_cr_pending: bool,
+    /// Cursor inside `line_remainder`, as a byte offset on a char boundary. Output
+    /// writes overwrite at the cursor; BS, CSI C/D/G move it; CSI K/P/@ edit around it.
+    pub line_cursor: usize,
+    /// Parameter bytes of the CSI sequence being parsed.
+    csi_params: String,
     /// Bytes discarded because one line grew past `MAX_LINE_BYTES` with no newline.
     pub bytes_dropped: usize,
     /// Escape-sequence parser state, kept across chunks.
@@ -85,6 +92,7 @@ impl SessionModel {
             label,
             terminal_lines: Vec::new(),
             cwd: None,
+            shell: None,
             exec_state: "booting".to_string(),
             session_state: SessionState::Booting,
             scroll_offset: 0,
@@ -92,6 +100,8 @@ impl SessionModel {
             has_unread: false,
             line_remainder: String::new(),
             line_cr_pending: false,
+            line_cursor: 0,
+            csi_params: String::new(),
             bytes_dropped: 0,
             esc_state: EscState::Ground,
         }
@@ -113,6 +123,11 @@ impl SessionModel {
 
     pub fn is_ready(&self) -> bool {
         matches!(self.session_state, SessionState::Active)
+    }
+
+    /// A command is running (or being stopped) in this session.
+    pub fn has_running_command(&self) -> bool {
+        matches!(self.exec_state.as_str(), "running" | "interrupting")
     }
 
     pub fn can_accept_input(&self) -> bool {
@@ -139,9 +154,12 @@ impl SessionModel {
     /// logical line only when a later character is appended, so `\r\n` stays
     /// one line break.
     ///
-    /// Backspace and DEL delete the previous character, so a readline `\b \b`
-    /// erase leaves the line the shell ran. CSI, OSC and charset escape
-    /// sequences are removed before the line is stored. While the user is
+    /// The open line has a cursor. Backspace moves it left (readline also uses BS
+    /// as plain cursor-left), output overwrites at the cursor, and CSI K, D, C, G,
+    /// P and @ erase, move, delete and insert, so a mid-line edit leaves the line
+    /// the shell holds. A readline `\b \b` erase ends with only blanks after the
+    /// cursor, which are dropped. DEL deletes the previous character. Other CSI,
+    /// OSC and charset escape sequences are removed before the line is stored. While the user is
     /// scrolled up, `scroll_offset` grows with each new line so the viewport
     /// stays on the same lines.
     fn ingest_terminal_chunk(&mut self, text: &str) {
@@ -165,7 +183,10 @@ impl SessionModel {
             EscState::Ground => {}
             EscState::Esc => {
                 self.esc_state = match ch {
-                    '[' => EscState::Csi,
+                    '[' => {
+                        self.csi_params.clear();
+                        EscState::Csi
+                    }
                     ']' => EscState::Osc,
                     '(' | ')' | '*' | '+' | '#' | '%' => EscState::EscSkip,
                     // DCS, SOS, PM and APC carry a string body ended by BEL or ST,
@@ -183,9 +204,15 @@ impl SessionModel {
                 match ch {
                     '\u{40}'..='\u{7e}' => {
                         self.esc_state = EscState::Ground;
+                        self.dispatch_csi(ch);
                         return;
                     }
-                    '\u{20}'..='\u{3f}' => return,
+                    '\u{20}'..='\u{3f}' => {
+                        if self.csi_params.len() < 32 {
+                            self.csi_params.push(ch);
+                        }
+                        return;
+                    }
                     // Anything else cancels the sequence and is handled as text.
                     _ => self.esc_state = EscState::Ground,
                 }
@@ -220,6 +247,8 @@ impl SessionModel {
             '\u{1b}' => self.esc_state = EscState::Esc,
             '\n' => {
                 self.line_cr_pending = false;
+                self.trim_blank_tail();
+                self.line_cursor = 0;
                 let line = std::mem::take(&mut self.line_remainder);
                 self.terminal_lines.push(line);
                 if self.scroll_offset > 0 {
@@ -229,22 +258,157 @@ impl SessionModel {
             '\r' => {
                 self.line_cr_pending = true;
             }
-            '\u{8}' | '\u{7f}' => {
-                self.line_remainder.pop();
+            '\u{8}' => {
+                self.cursor_left(1);
+                self.trim_blank_tail();
+            }
+            '\u{7f}' => {
+                self.clamp_cursor();
+                if let Some(c) = self.line_remainder[..self.line_cursor].chars().next_back() {
+                    let at = self.line_cursor - c.len_utf8();
+                    self.line_remainder.drain(at..self.line_cursor);
+                    self.line_cursor = at;
+                }
             }
             // Bell and other C0 controls draw nothing; tab is kept.
             c if c.is_control() && c != '\t' => {}
-            other => {
-                if self.line_cr_pending {
-                    self.line_remainder.clear();
-                    self.line_cr_pending = false;
-                }
-                if self.line_remainder.len() + other.len_utf8() > MAX_LINE_BYTES {
-                    self.bytes_dropped += other.len_utf8();
-                } else {
-                    self.line_remainder.push(other);
-                }
+            other => self.put_char(other),
+        }
+    }
+
+    fn clamp_cursor(&mut self) {
+        let len = self.line_remainder.len();
+        if self.line_cursor > len {
+            self.line_cursor = len;
+        }
+        while !self.line_remainder.is_char_boundary(self.line_cursor) {
+            self.line_cursor -= 1;
+        }
+    }
+
+    /// Write one printable character at the cursor, overwriting what is there.
+    fn put_char(&mut self, ch: char) {
+        if self.line_cr_pending {
+            self.line_remainder.clear();
+            self.line_cursor = 0;
+            self.line_cr_pending = false;
+        }
+        self.clamp_cursor();
+        let len = self.line_remainder.len();
+        if self.line_cursor >= len {
+            if len + ch.len_utf8() > MAX_LINE_BYTES {
+                self.bytes_dropped += ch.len_utf8();
+            } else {
+                self.line_remainder.push(ch);
+                self.line_cursor = self.line_remainder.len();
             }
+            return;
+        }
+        let next_len = self.line_remainder[self.line_cursor..]
+            .chars()
+            .next()
+            .map_or(0, char::len_utf8);
+        if len - next_len + ch.len_utf8() > MAX_LINE_BYTES {
+            self.bytes_dropped += ch.len_utf8();
+            return;
+        }
+        let mut buf = [0u8; 4];
+        self.line_remainder.replace_range(
+            self.line_cursor..self.line_cursor + next_len,
+            ch.encode_utf8(&mut buf),
+        );
+        self.line_cursor += ch.len_utf8();
+    }
+
+    fn cursor_left(&mut self, n: usize) {
+        self.clamp_cursor();
+        for _ in 0..n {
+            match self.line_remainder[..self.line_cursor].chars().next_back() {
+                Some(c) => self.line_cursor -= c.len_utf8(),
+                None => break,
+            }
+        }
+    }
+
+    fn cursor_right(&mut self, n: usize) {
+        self.clamp_cursor();
+        for _ in 0..n {
+            match self.line_remainder[self.line_cursor..].chars().next() {
+                Some(c) => self.line_cursor += c.len_utf8(),
+                None => break,
+            }
+        }
+    }
+
+    /// Drop blanks after the cursor. A `\b \b` erase leaves them; a terminal
+    /// shows them as nothing.
+    fn trim_blank_tail(&mut self) {
+        self.clamp_cursor();
+        if self.line_remainder[self.line_cursor..]
+            .chars()
+            .all(|c| c == ' ')
+        {
+            self.line_remainder.truncate(self.line_cursor);
+        }
+    }
+
+    /// Apply a CSI final byte to the open line. Only the sequences that edit or
+    /// move within a line matter here; colour and mode sequences draw nothing.
+    fn dispatch_csi(&mut self, fin: char) {
+        let params = std::mem::take(&mut self.csi_params);
+        if !matches!(fin, 'K' | 'D' | 'C' | 'G' | 'P' | '@') {
+            return;
+        }
+        if !params.chars().all(|c| c.is_ascii_digit() || c == ';') {
+            return;
+        }
+        // A pending CR is a move to column 0; the sequence applies from there.
+        if self.line_cr_pending {
+            self.line_cursor = 0;
+            self.line_cr_pending = false;
+        }
+        let first: Option<usize> = params.split(';').next().and_then(|p| p.parse().ok());
+        let n = first.unwrap_or(1).clamp(1, 1000);
+        self.clamp_cursor();
+        match fin {
+            'D' => self.cursor_left(n),
+            'C' => self.cursor_right(n),
+            'G' => {
+                self.line_cursor = 0;
+                self.cursor_right(first.unwrap_or(1).clamp(1, 1000) - 1);
+            }
+            'K' => match first.unwrap_or(0) {
+                0 => self.line_remainder.truncate(self.line_cursor),
+                1 => {
+                    let blanks =
+                        " ".repeat(self.line_remainder[..self.line_cursor].chars().count());
+                    self.line_remainder
+                        .replace_range(..self.line_cursor, &blanks);
+                    self.line_cursor = blanks.len();
+                }
+                2 => {
+                    self.line_remainder.clear();
+                    self.line_cursor = 0;
+                }
+                _ => {}
+            },
+            'P' => {
+                let mut end = self.line_cursor;
+                for _ in 0..n {
+                    match self.line_remainder[end..].chars().next() {
+                        Some(c) => end += c.len_utf8(),
+                        None => break,
+                    }
+                }
+                self.line_remainder.drain(self.line_cursor..end);
+            }
+            '@' => {
+                let room = MAX_LINE_BYTES.saturating_sub(self.line_remainder.len());
+                let add = n.min(room);
+                self.line_remainder
+                    .insert_str(self.line_cursor, &" ".repeat(add));
+            }
+            _ => {}
         }
     }
 
@@ -263,6 +427,11 @@ impl SessionModel {
             }
             RuntimeEvent::SessionExecStateChanged(e) => {
                 self.exec_state = e.exec_state.clone();
+                // runtime-core emits 'desynced' only when the shell process has
+                // exited. The session is over: it cannot take input again.
+                if e.exec_state == "desynced" {
+                    self.session_state = SessionState::Closed;
+                }
             }
             RuntimeEvent::ExecutionStarted(_) => {
                 self.exec_state = "running".to_string();
@@ -333,7 +502,22 @@ pub struct Model {
 
     /// Whether the help overlay is visible.
     pub show_help: bool,
+
+    /// A destructive chord waits for y/n. Any other key cancels it.
+    pub pending_confirm: Option<PendingConfirm>,
 }
+
+/// An action held back until the user presses `y`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PendingConfirm {
+    /// Close the session with this id; it has a running command.
+    CloseSession(String),
+    /// Quit; this kills every session.
+    Quit,
+}
+
+pub const CLOSE_RUNNING_PROMPT: &str = "Close session with a running command? y/n";
+pub const QUIT_PROMPT: &str = "Quit and end every session (running commands included)? y/n";
 
 impl Model {
     pub fn new() -> Self {
@@ -364,7 +548,38 @@ impl Model {
             switcher_rows: 0,
             create_error: None,
             show_help: false,
+            pending_confirm: None,
         }
+    }
+
+    /// Ask before a destructive chord. The prompt also goes to the status line.
+    pub fn ask_confirm(&mut self, pending: PendingConfirm) {
+        let prompt = match pending {
+            PendingConfirm::CloseSession(_) => CLOSE_RUNNING_PROMPT,
+            PendingConfirm::Quit => QUIT_PROMPT,
+        };
+        self.status_line = Some(prompt.to_string());
+        self.pending_confirm = Some(pending);
+    }
+
+    /// The prompt for the pending confirmation, if any.
+    pub fn confirm_prompt(&self) -> Option<&'static str> {
+        self.pending_confirm.as_ref().map(|p| match p {
+            PendingConfirm::CloseSession(_) => CLOSE_RUNNING_PROMPT,
+            PendingConfirm::Quit => QUIT_PROMPT,
+        })
+    }
+
+    /// Whether the session with this id has a running command.
+    pub fn session_is_running(&self, id: &str) -> bool {
+        self.sessions
+            .iter()
+            .any(|s| s.id == id && s.has_running_command())
+    }
+
+    /// Whether any session has a running command.
+    pub fn any_session_running(&self) -> bool {
+        self.sessions.iter().any(|s| s.has_running_command())
     }
 
     /// Add a session and return its index.
@@ -604,6 +819,14 @@ impl Model {
 
         if let Some(idx) = self.sessions.iter().position(|s| s.id == *session_id) {
             self.sessions[idx].apply_event(&event);
+
+            if matches!(&event, RuntimeEvent::SessionExecStateChanged(e) if e.exec_state == "desynced")
+            {
+                self.status_line = Some(format!(
+                    "{} exited — Ctrl+W closes it",
+                    self.sessions[idx].label
+                ));
+            }
 
             // Mark unread if output arrived on a non-active session
             if is_output && active_id.as_deref() != Some(session_id) {
@@ -1266,7 +1489,8 @@ mod tests {
         );
         assert_eq!(
             model.sessions[0].terminal_lines,
-            vec!["dir  file", "after-bel", "link", "plain!"]
+            // CSI 2K erases the whole line, so "plain" is gone before the "!".
+            vec!["dir  file", "after-bel", "link", "!"]
         );
     }
 
@@ -1483,5 +1707,70 @@ mod tests {
 
         model.prev_session();
         assert_eq!(model.active_index, 0);
+    }
+
+    #[test]
+    fn a_mid_line_edit_leaves_the_line_the_shell_holds() {
+        // bash: type abcd, Left twice (two BS), type X (prints Xcd, two BS), Enter.
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        feed(&mut model, &["abcd\u{8}\u{8}"]);
+        assert_eq!(model.sessions[0].line_remainder, "abcd");
+        feed(&mut model, &["Xcd\u{8}\u{8}"]);
+        assert_eq!(model.sessions[0].line_remainder, "abXcd");
+        feed(&mut model, &["\r\n"]);
+        assert_eq!(model.sessions[0].terminal_lines, vec!["abXcd"]);
+    }
+
+    #[test]
+    fn erase_and_cursor_sequences_edit_the_open_line() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        // CSI K from the cursor, after CSI D moves it left.
+        feed(&mut model, &["hello world\u{1b}[6D\u{1b}[K\n"]);
+        assert_eq!(model.sessions[0].terminal_lines.last().unwrap(), "hello");
+        // A redraw: CR, new text, erase to end (PSReadLine / history recall).
+        feed(&mut model, &["PS> old command\rPS> new\u{1b}[K\n"]);
+        assert_eq!(model.sessions[0].terminal_lines.last().unwrap(), "PS> new");
+        // CSI P deletes in place, CSI G jumps to a column, CSI @ inserts.
+        feed(&mut model, &["abcdef\u{1b}[4G\u{1b}[2P\n"]);
+        assert_eq!(model.sessions[0].terminal_lines.last().unwrap(), "abcf");
+        feed(&mut model, &["abc\u{1b}[2D\u{1b}[2@\n"]);
+        assert_eq!(model.sessions[0].terminal_lines.last().unwrap(), "a  bc");
+        // Colour and private-mode sequences still draw nothing.
+        feed(&mut model, &["\u{1b}[?25l\u{1b}[31mred\u{1b}[0m\n"]);
+        assert_eq!(model.sessions[0].terminal_lines.last().unwrap(), "red");
+    }
+
+    #[test]
+    fn a_shell_exit_marks_the_session_closed_and_done() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        model.apply_event(make_ready_event("s1", "/w"));
+        assert!(model.active_session_alive());
+        assert_eq!(model.sessions[0].state_badge(), "IDLE");
+
+        model.apply_event(RuntimeEvent::SessionExecStateChanged(
+            SessionExecStateChangedEvent {
+                session_id: "s1".into(),
+                exec_state: "desynced".into(),
+                changed_at: "t".into(),
+            },
+        ));
+        assert_eq!(model.sessions[0].session_state, SessionState::Closed);
+        assert_eq!(model.sessions[0].state_badge(), "DONE");
+        // Raw Play auto-exits and Shell stops forwarding on this signal.
+        assert!(!model.active_session_alive());
+        assert!(!model.can_accept_input());
+        assert!(model.status_line.as_deref().unwrap().contains("exited"));
+        // A later ExecutionFinished does not reopen it.
+        model.apply_event(RuntimeEvent::ExecutionFinished(ExecutionFinishedEvent {
+            execution_id: "e".into(),
+            session_id: "s1".into(),
+            exit_code: 1,
+            finished_at: "t".into(),
+            status: "failure".into(),
+        }));
+        assert_eq!(model.sessions[0].session_state, SessionState::Closed);
     }
 }

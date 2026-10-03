@@ -97,7 +97,7 @@ impl App {
         // If we were in raw passthrough, restore alternate screen first
         if self.in_raw_passthrough {
             let _ = stdout().execute(EnterAlternateScreen);
-            apply_host_capture(self.child_modes, ChildModes::default());
+            reset_host_capture();
             self.child_modes = ChildModes::default();
             self.in_raw_passthrough = false;
         }
@@ -127,6 +127,7 @@ impl App {
         }) {
             Ok(summary) => {
                 let idx = self.model.add_session(summary.id, label);
+                self.model.sessions[idx].shell = Some(summary.shell);
                 self.model.switch_to(idx);
                 self.model.create_error = None;
             }
@@ -193,11 +194,10 @@ impl App {
             } else {
                 // --- Normal Console mode loop ---
 
-                // 1. Drain runtime events — routed by session_id
-                while let Ok(event) = self.runtime_rx.try_recv() {
-                    self.observe_session_modes(&event);
-                    self.model.apply_event(event);
-                }
+                // 1. Drain runtime events — routed by session_id. A budget per
+                // frame: a flood (`yes`) must not starve the render and key poll,
+                // or Ctrl+C could never be read. The rest waits for the next frame.
+                self.drain_events(EVENTS_PER_FRAME);
 
                 // 2. Drain planner results — proposals are session-bound
                 while let Ok(result) = self.planner_rx.try_recv() {
@@ -285,15 +285,21 @@ impl App {
 
         let active_id = self.model.active_session_id().map(|s| s.to_string());
 
-        // Drain runtime events — active session output goes directly to stdout
-        while let Ok(event) = self.runtime_rx.try_recv() {
+        // Drain runtime events — active session output goes directly to stdout.
+        // Same per-frame budget as Console mode, so keys are still polled in a flood.
+        for _ in 0..EVENTS_PER_FRAME {
+            let Ok(event) = self.runtime_rx.try_recv() else {
+                break;
+            };
             if let RuntimeEvent::TerminalLine(ref line_event) = event {
+                // Every session's mode changes are learned, not only the active
+                // session's, so a background session's toggles are not missed.
+                self.observe_session_modes(&event);
                 if active_id.as_deref() == Some(line_event.session_id.as_str()) {
                     let mut out = stdout();
                     let _ = out.write_all(line_event.text.as_bytes());
                     let _ = out.flush();
-                    // Learn which host events the child wants forwarded.
-                    self.observe_session_modes(&event);
+                    // Apply what the child wants forwarded.
                     let learned = self
                         .session_modes
                         .get(&line_event.session_id)
@@ -336,9 +342,24 @@ impl App {
                     // child enabled bracketed paste.
                     if !text.is_empty() {
                         if let Some(ref session_id) = active_id {
-                            let data = self.child_modes.encode_paste(&text);
-                            let result = self.terminal_service.write(session_id, &data);
-                            self.model.surface_session_result(result);
+                            let running = self.model.session_is_running(session_id);
+                            if paste_refused(running, text.len()) {
+                                // The PTY write blocks the only UI thread when the
+                                // child is not reading. Refuse, with a bell, and say
+                                // why once Console is back.
+                                let mut out = stdout();
+                                let _ = out.write_all(b"\x07");
+                                let _ = out.flush();
+                                self.model.status_line = Some(format!(
+                                    "Paste of {} bytes refused while a command is running (limit {} bytes)",
+                                    text.len(),
+                                    RUNNING_PASTE_LIMIT
+                                ));
+                            } else {
+                                let data = self.child_modes.encode_paste(&text);
+                                let result = self.terminal_service.write(session_id, &data);
+                                self.raw_write_result(session_id, result, terminal);
+                            }
                         }
                     }
                 }
@@ -347,7 +368,7 @@ impl App {
                         (active_id.as_ref(), self.child_modes.encode_mouse(&mouse))
                     {
                         let result = self.terminal_service.write(session_id, &data);
-                        self.model.surface_session_result(result);
+                        self.raw_write_result(session_id, result, terminal);
                     }
                 }
                 focus @ (Event::FocusGained | Event::FocusLost) => {
@@ -356,13 +377,48 @@ impl App {
                         (active_id.as_ref(), self.child_modes.encode_focus(gained))
                     {
                         let result = self.terminal_service.write(session_id, &data);
-                        self.model.surface_session_result(result);
+                        self.raw_write_result(session_id, result, terminal);
                     }
                 }
             }
         }
 
         Ok(())
+    }
+
+    /// Apply at most `budget` queued runtime events. Returns how many were applied.
+    fn drain_events(&mut self, budget: usize) -> usize {
+        let mut applied = 0;
+        while applied < budget {
+            let Ok(event) = self.runtime_rx.try_recv() else {
+                break;
+            };
+            self.observe_session_modes(&event);
+            self.model.apply_event(event);
+            applied += 1;
+        }
+        applied
+    }
+
+    /// Outcome of a Raw Play write that is not a key (paste, mouse, focus).
+    /// A failed write takes the same path as a failed key write: the session is
+    /// marked as an error and Console comes back, since Raw Play draws no status line.
+    fn raw_write_result(
+        &mut self,
+        session_id: &str,
+        result: Result<(), String>,
+        terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    ) {
+        if let Err(err) = &result {
+            if let Some(idx) = self.model.session_index(session_id) {
+                self.model.sessions[idx].session_state = crate::model::SessionState::Error(err.clone());
+            }
+            self.model.surface_session_result(result);
+            self.model.input_mode = InputMode::Shell;
+            self.exit_raw_play(terminal);
+        } else {
+            self.model.surface_session_result(result);
+        }
     }
 
     fn handle_action(
@@ -501,7 +557,9 @@ impl App {
         // Give the host its own mouse, focus and paste handling back.
         // The host gets its own handling back. The app keeps its modes: they stay
         // in session_modes and are re-applied on re-entry.
-        apply_host_capture(self.child_modes, ChildModes::default());
+        // Unconditional: the host turned these on from the child's raw bytes even
+        // when Console would not have forwarded them (?1000 without ?1006).
+        reset_host_capture();
         self.child_modes = ChildModes::default();
         self.in_raw_passthrough = false;
     }
@@ -514,9 +572,15 @@ impl App {
         let session_id = self.model.active_session_id().unwrap_or("").to_string();
         let epoch = self.model.planner_epoch;
 
-        let context = planner::build_context(
+        let context = planner::build_context_for_shell(
             &session_id,
-            &self.model.active_session().and_then(|s| s.cwd.as_deref()).unwrap_or("."),
+            self.model
+                .active_session()
+                .and_then(|s| s.cwd.as_deref())
+                .unwrap_or("."),
+            self.model
+                .active_session()
+                .and_then(|s| s.shell.as_deref()),
         );
 
         tokio::spawn(async move {
@@ -595,6 +659,28 @@ struct ChildModes {
     mouse_sgr: bool,
     /// `?1004`: report focus in and out.
     focus: bool,
+}
+
+/// Runtime events applied per frame before Console renders and polls keys.
+const EVENTS_PER_FRAME: usize = 256;
+
+/// The largest paste written to a session with a running command. A child that
+/// is not reading stdin fills the PTY input queue (a few KB) and the write blocks.
+const RUNNING_PASTE_LIMIT: usize = 4096;
+
+/// Whether a paste of `len` bytes must be refused.
+fn paste_refused(running: bool, len: usize) -> bool {
+    running && len > RUNNING_PASTE_LIMIT
+}
+
+/// Turn mouse, focus and bracketed-paste reporting off on the host terminal,
+/// whatever Console believes is on. Safe to repeat.
+fn reset_host_capture() {
+    use crossterm::event::{DisableBracketedPaste, DisableFocusChange, DisableMouseCapture};
+    let mut out = stdout();
+    let _ = out.execute(DisableMouseCapture);
+    let _ = out.execute(DisableFocusChange);
+    let _ = out.execute(DisableBracketedPaste);
 }
 
 /// Turn the host terminal's mouse, focus and bracketed-paste reporting on or
@@ -815,6 +901,52 @@ mod tests {
             expected_output: None,
             generated_at: "2026-01-01T00:00:00Z".to_string(),
         }
+    }
+
+    #[test]
+    fn a_flood_of_output_is_drained_in_bounded_slices() {
+        use commandui_runtime_core::events::TerminalLineEvent;
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(NoopSink);
+        let session_service = SessionService::new(sessions.clone(), sink.clone());
+        let terminal_service = TerminalService::new(sessions, sink);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut app = App::new(session_service, terminal_service, rx);
+        app.model.add_session("s1".into(), "A".into());
+        for i in 0..(EVENTS_PER_FRAME * 3) {
+            tx.send(RuntimeEvent::TerminalLine(TerminalLineEvent {
+                id: format!("l{i}"),
+                session_id: "s1".into(),
+                execution_id: None,
+                kind: "stdout".into(),
+                text: "y\n".into(),
+                timestamp: "t".into(),
+            }))
+            .unwrap();
+        }
+        // One frame applies the budget and no more; the rest waits for the next.
+        assert_eq!(app.drain_events(EVENTS_PER_FRAME), EVENTS_PER_FRAME);
+        assert_eq!(app.model.sessions[0].terminal_lines.len(), EVENTS_PER_FRAME);
+        assert_eq!(app.drain_events(EVENTS_PER_FRAME), EVENTS_PER_FRAME);
+        assert_eq!(app.drain_events(EVENTS_PER_FRAME), EVENTS_PER_FRAME);
+        assert_eq!(app.drain_events(EVENTS_PER_FRAME), 0);
+    }
+
+    #[test]
+    fn a_big_paste_is_refused_only_while_a_command_runs() {
+        assert!(paste_refused(true, RUNNING_PASTE_LIMIT + 1));
+        assert!(!paste_refused(true, RUNNING_PASTE_LIMIT));
+        assert!(!paste_refused(false, RUNNING_PASTE_LIMIT * 100));
+    }
+
+    #[test]
+    fn a_session_shell_reaches_the_planner_context() {
+        let mut app = test_app();
+        app.model.add_session("s1".into(), "A".into());
+        app.model.sessions[0].shell = Some("pwsh.exe".into());
+        let shell = app.model.active_session().and_then(|s| s.shell.as_deref());
+        let ctx = planner::build_context_for_shell("s1", ".", shell);
+        assert_eq!(ctx.shell, "pwsh.exe");
     }
 
     #[test]

@@ -4,7 +4,7 @@
 //! Session switching is Console-owned and changes which session is active.
 //!
 //! SHELL mode:
-//!   - Ctrl+Q       → quit
+//!   - Ctrl+Q       → quit; asks y/n first while any session has a running command
 //!   - Ctrl+C       → interrupt active session (or ETX when idle)
 //!   - Ctrl+R       → resync active session
 //!   - Ctrl+T       → switch to ASK mode
@@ -12,7 +12,8 @@
 //!   - Ctrl+S       → open the run selector
 //!   - Ctrl+H       → help overlay (Esc or Ctrl+H closes it)
 //!   - Ctrl+N       → create new session
-//!   - Ctrl+W       → close active session (the last one too)
+//!   - Ctrl+W       → close active session (the last one too); asks y/n first
+//!     when it has a running command (only a bare y proceeds)
 //!   - Ctrl+] / Ctrl+5 → next session (Unix crossterm 0.28 reports Ctrl+] as Ctrl+5)
 //!   - Ctrl+[       → previous session (Windows reports the bracket)
 //!   - Esc          → previous session on Unix only, where Ctrl+[ arrives as Esc,
@@ -40,10 +41,10 @@
 //! Esc or Ctrl+S to close.
 //!
 //! RAW PLAY: every key is forwarded to the PTY except Ctrl+\ (exit) and Ctrl+Q
-//! (exit and quit). Mouse, focus, and bracketed paste are forwarded in the
+//! (exit, then ask y/n to quit). Mouse, focus, and bracketed paste are forwarded in the
 //! sequences the child enabled.
 
-use crate::model::{InputMode, Model, SessionState};
+use crate::model::{InputMode, Model, PendingConfirm, SessionState};
 use crate::ui::{
     command_is_clipped, page_lines, review_window, visible_command_lines, widest_line,
 };
@@ -84,8 +85,31 @@ pub fn handle_key(
     model: &mut Model,
     terminal_service: &TerminalService,
 ) -> InputAction {
-    // Ctrl+Q — quit (always)
-    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
+    // A destructive chord is waiting for y/n. Only a bare `y` proceeds; every
+    // other key cancels it and is not passed on.
+    if let Some(pending) = model.pending_confirm.take() {
+        model.status_line = None;
+        let yes = key.code == KeyCode::Char('y') && key.modifiers.is_empty();
+        return match (yes, pending) {
+            (true, PendingConfirm::CloseSession(id)) => InputAction::CloseSessionAt(id),
+            (true, PendingConfirm::Quit) => InputAction::Quit,
+            (false, _) => InputAction::Ignored,
+        };
+    }
+
+    // Ctrl+Q — quit. Asks first while any session has a running command. Raw
+    // Play handles its own Ctrl+Q: the child may use the chord.
+    if key.modifiers.contains(KeyModifiers::CONTROL)
+        && key.code == KeyCode::Char('q')
+        && model.input_mode != InputMode::RawPlay
+    {
+        if model.any_session_running() {
+            if model.input_mode == InputMode::Switcher {
+                model.close_switcher();
+            }
+            model.ask_confirm(PendingConfirm::Quit);
+            return InputAction::Ignored;
+        }
         return InputAction::Quit;
     }
 
@@ -179,10 +203,16 @@ fn handle_shell_key(
             // Ctrl+W — close active session. The last one can close; the
             // empty welcome state is a supported state.
             KeyCode::Char('w') => {
-                if model.session_count() > 0 {
-                    return InputAction::CloseSession;
+                let Some(id) = model.active_session_id().map(str::to_string) else {
+                    return InputAction::Ignored;
+                };
+                // The chord is also readline's word-rubout: never kill a running
+                // command (an ssh session, a build) without asking.
+                if model.session_is_running(&id) {
+                    model.ask_confirm(PendingConfirm::CloseSession(id));
+                    return InputAction::Ignored;
                 }
-                return InputAction::Ignored;
+                return InputAction::CloseSession;
             }
             // Ctrl+] — next session. Unix crossterm 0.28 emits this byte as Ctrl+5.
             KeyCode::Char(']') | KeyCode::Char('5') => {
@@ -491,12 +521,12 @@ fn handle_raw_play_key(
         return InputAction::ExitRawPlay;
     }
 
-    // Ctrl+Q during raw play — exit raw mode first, then quit
-    // (handle_key already caught Ctrl+Q for non-raw modes, but raw mode
-    //  needs special handling to restore the terminal before quitting)
+    // Ctrl+Q during raw play — exit raw mode, then ask. The child may be a
+    // full-screen editor where Ctrl+Q is its own chord, so one press never quits
+    // here; the prompt is drawn by Console after the terminal is restored.
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('q') {
         model.input_mode = InputMode::Shell;
-        model.should_quit = true;
+        model.ask_confirm(PendingConfirm::Quit);
         return InputAction::ExitRawPlay;
     }
 
@@ -586,6 +616,10 @@ fn handle_switcher_key(key: KeyEvent, model: &mut Model) -> InputAction {
             let target = model.sessions.get(model.switcher_cursor).map(|s| s.id.clone());
             model.close_switcher();
             match target {
+                Some(id) if model.session_is_running(&id) => {
+                    model.ask_confirm(PendingConfirm::CloseSession(id));
+                    InputAction::Ignored
+                }
                 Some(id) => InputAction::CloseSessionAt(id),
                 None => InputAction::Ignored,
             }
@@ -1389,11 +1423,18 @@ mod tests {
         );
         let mut model = two_sessions();
         model.input_mode = InputMode::RawPlay;
+        // Ctrl+Q in Raw Play leaves Raw Play and asks; it never quits on one press.
         assert_eq!(
-            handle_raw_play_key(press(KeyCode::Char('q'), KeyModifiers::CONTROL), &mut model, &terminal),
+            handle_key(press(KeyCode::Char('q'), KeyModifiers::CONTROL), &mut model, &terminal),
             InputAction::ExitRawPlay
         );
-        assert!(model.should_quit);
+        assert!(!model.should_quit);
+        assert_eq!(model.pending_confirm, Some(PendingConfirm::Quit));
+        assert_eq!(model.input_mode, InputMode::Shell);
+        assert_eq!(
+            handle_key(press(KeyCode::Char('y'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Quit
+        );
         let mut model = two_sessions();
         model.input_mode = InputMode::RawPlay;
         assert_eq!(
@@ -1533,6 +1574,108 @@ mod tests {
         let blocked = handle_key(press(KeyCode::Enter, KeyModifiers::NONE), &mut model, &terminal);
         assert_eq!(blocked, InputAction::Ignored);
         assert!(model.review_error.as_deref().unwrap().contains("clipped"));
+    }
+
+    #[test]
+    fn ctrl_w_on_a_running_session_asks_and_only_a_bare_y_closes_it() {
+        let terminal = service();
+        let ctrl_w = || press(KeyCode::Char('w'), KeyModifiers::CONTROL);
+
+        // Idle: closes at once, as before.
+        let mut model = two_sessions();
+        assert_eq!(handle_key(ctrl_w(), &mut model, &terminal), InputAction::CloseSession);
+        assert!(model.pending_confirm.is_none());
+
+        // Running: asks, closes nothing.
+        let mut model = two_sessions();
+        model.sessions[0].exec_state = "running".into();
+        assert_eq!(handle_key(ctrl_w(), &mut model, &terminal), InputAction::Ignored);
+        assert_eq!(
+            model.pending_confirm,
+            Some(PendingConfirm::CloseSession("s1".into()))
+        );
+        assert!(model.status_line.as_deref().unwrap().contains("running command"));
+        assert_eq!(model.session_count(), 2);
+
+        // y with a modifier cancels; so does any other key. Neither is forwarded.
+        for key in [
+            press(KeyCode::Char('y'), KeyModifiers::CONTROL),
+            press(KeyCode::Char('Y'), KeyModifiers::SHIFT),
+            press(KeyCode::Char('n'), KeyModifiers::NONE),
+            press(KeyCode::Enter, KeyModifiers::NONE),
+        ] {
+            let mut model = two_sessions();
+            model.sessions[0].exec_state = "interrupting".into();
+            handle_key(ctrl_w(), &mut model, &terminal);
+            assert_eq!(handle_key(key, &mut model, &terminal), InputAction::Ignored);
+            assert!(model.pending_confirm.is_none());
+            assert!(model.status_line.is_none());
+        }
+
+        // A bare y proceeds, targeting the session that was asked about.
+        let mut model = two_sessions();
+        model.sessions[0].exec_state = "running".into();
+        handle_key(ctrl_w(), &mut model, &terminal);
+        assert_eq!(
+            handle_key(press(KeyCode::Char('y'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::CloseSessionAt("s1".into())
+        );
+        assert!(model.pending_confirm.is_none());
+    }
+
+    #[test]
+    fn ctrl_q_asks_while_any_session_runs_and_quits_when_all_are_idle() {
+        let terminal = service();
+        let ctrl_q = || press(KeyCode::Char('q'), KeyModifiers::CONTROL);
+
+        // The running session is not the active one: Ctrl+Q still asks.
+        let mut model = two_sessions();
+        model.sessions[1].exec_state = "running".into();
+        assert_eq!(handle_key(ctrl_q(), &mut model, &terminal), InputAction::Ignored);
+        assert_eq!(model.pending_confirm, Some(PendingConfirm::Quit));
+        assert_eq!(
+            handle_key(press(KeyCode::Esc, KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert!(model.pending_confirm.is_none());
+        handle_key(ctrl_q(), &mut model, &terminal);
+        assert_eq!(
+            handle_key(press(KeyCode::Char('y'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::Quit
+        );
+
+        // Also from the run selector, which leaves so the prompt shows.
+        let mut model = two_sessions();
+        model.sessions[0].exec_state = "running".into();
+        model.open_switcher();
+        assert_eq!(handle_key(ctrl_q(), &mut model, &terminal), InputAction::Ignored);
+        assert_eq!(model.input_mode, InputMode::Shell);
+        assert_eq!(model.pending_confirm, Some(PendingConfirm::Quit));
+
+        // All idle: quits at once.
+        let mut model = two_sessions();
+        assert_eq!(handle_key(ctrl_q(), &mut model, &terminal), InputAction::Quit);
+    }
+
+    #[test]
+    fn closing_a_running_session_from_the_run_selector_asks_first() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.sessions[1].exec_state = "running".into();
+        model.open_switcher();
+        model.switcher_cursor = 1;
+        assert_eq!(
+            handle_key(press(KeyCode::Char('w'), KeyModifiers::CONTROL), &mut model, &terminal),
+            InputAction::Ignored
+        );
+        assert_eq!(
+            model.pending_confirm,
+            Some(PendingConfirm::CloseSession("s2".into()))
+        );
+        assert_eq!(
+            handle_key(press(KeyCode::Char('y'), KeyModifiers::NONE), &mut model, &terminal),
+            InputAction::CloseSessionAt("s2".into())
+        );
     }
 
     #[test]

@@ -441,7 +441,12 @@ fn render_shell_footer(frame: &mut Frame, area: Rect, model: &Model) {
         .active_session()
         .map_or(false, |s| s.exec_state == "running" || s.exec_state == "interrupting");
 
-    if model.can_accept_input() {
+    if let Some(prompt) = model.confirm_prompt() {
+        spans.push(Span::styled(
+            format!("  {prompt}"),
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        ));
+    } else if model.can_accept_input() {
         if is_running {
             spans.push(Span::raw("  ^C Stop  ^S Runs  ^H Help  ^Q Quit"));
         } else {
@@ -460,11 +465,13 @@ fn render_shell_footer(frame: &mut Frame, area: Rect, model: &Model) {
         }
     }
 
-    if let Some(ref err) = model.status_line {
-        spans.push(Span::styled(
-            format!("  {err}"),
-            Style::default().fg(Color::Red),
-        ));
+    if model.confirm_prompt().is_none() {
+        if let Some(ref err) = model.status_line {
+            spans.push(Span::styled(
+                format!("  {err}"),
+                Style::default().fg(Color::Red),
+            ));
+        }
     }
 
     let footer = Paragraph::new(Line::from(spans)).style(Style::default().bg(Color::DarkGray));
@@ -477,10 +484,12 @@ fn render_composer(frame: &mut Frame, area: Rect, model: &Model) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Magenta))
-        .title(if model.planner_busy {
-            " Ask (generating...) "
+        .title(if let Some(prompt) = model.confirm_prompt() {
+            format!(" {prompt} ")
+        } else if model.planner_busy {
+            " Ask (generating...) ".to_string()
         } else {
-            " Ask — describe what you want "
+            " Ask — describe what you want ".to_string()
         });
 
     let text = &model.composer_text;
@@ -537,12 +546,12 @@ fn render_review_panel(frame: &mut Frame, area: Rect, model: &mut Model) {
         .as_ref()
         .map(|proposal| visible_command_lines(&proposal.command))
         .unwrap_or_default();
-    let meta_len = review_meta_rows(model);
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Yellow));
     let inner = block.inner(area);
-    let (command_rows, meta_rows) = split_review_rows(inner.height as usize, meta_len);
+    let meta = review_meta_lines(model, inner.width as usize);
+    let (command_rows, meta_rows) = split_review_rows(inner.height as usize, meta.len());
     model.review_rows = command_rows;
     model.review_cols = inner.width as usize;
 
@@ -554,7 +563,6 @@ fn render_review_panel(frame: &mut Frame, area: Rect, model: &mut Model) {
         inner.width as usize,
     );
     let title = review_title(model, clipped);
-    let meta = review_meta_lines(model);
     let block = block.title(title);
 
     frame.render_widget(block, area);
@@ -628,13 +636,22 @@ fn render_review_footer(frame: &mut Frame, area: Rect, model: &Model) {
             " REVIEW ",
             Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD),
         ),
-        Span::raw("  ↑↓ scroll  ←→ wide  c confirm  Enter approve  Esc cancel  ^Q Quit"),
     ];
-    if let Some(ref err) = model.status_line {
+    if let Some(prompt) = model.confirm_prompt() {
         spans.push(Span::styled(
-            format!("  {err}"),
-            Style::default().fg(Color::Red),
+            format!("  {prompt}"),
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
         ));
+    } else {
+        spans.push(Span::raw(
+            "  ↑↓ scroll  ←→ wide  c confirm  Enter approve  Esc cancel  ^Q Quit",
+        ));
+        if let Some(ref err) = model.status_line {
+            spans.push(Span::styled(
+                format!("  {err}"),
+                Style::default().fg(Color::Red),
+            ));
+        }
     }
 
     let footer = Paragraph::new(Line::from(spans)).style(Style::default().bg(Color::DarkGray));
@@ -719,10 +736,72 @@ fn escape_segment(segment: &str) -> String {
 }
 
 pub(crate) fn review_meta_rows(model: &Model) -> usize {
-    review_meta_lines(model).len()
+    let width = if model.review_cols == 0 {
+        model.pane_cols.max(1) as usize
+    } else {
+        model.review_cols
+    };
+    review_meta_lines(model, width).len()
 }
 
-fn review_meta_lines(model: &Model) -> Vec<Line<'_>> {
+/// Greedy word wrap to `cols` cells. A word wider than a row is cut by cell.
+fn wrap_words(text: &str, cols: usize) -> Vec<String> {
+    let mut rows: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    for word in text.split(' ') {
+        if display_width(word) > cols {
+            if !cur.is_empty() {
+                rows.push(std::mem::take(&mut cur));
+            }
+            let mut pieces = wrap_rows(word, cols);
+            cur = pieces.pop().unwrap_or_default();
+            rows.extend(pieces);
+        } else if cur.is_empty() {
+            cur = word.to_string();
+        } else if display_width(&cur) + 1 + display_width(word) <= cols {
+            cur.push(' ');
+            cur.push_str(word);
+        } else {
+            rows.push(std::mem::replace(&mut cur, word.to_string()));
+        }
+    }
+    rows.push(cur);
+    rows
+}
+
+/// A meta line: a bold label, then text. Wrapped to `width` cells so nothing
+/// is clipped on the right; the label keeps its style on the first row only.
+fn wrapped_meta(
+    label: &str,
+    label_style: Style,
+    body: &str,
+    body_style: Style,
+    width: usize,
+) -> Vec<Line<'static>> {
+    let label_chars = label.chars().count();
+    wrap_words(&format!("{label}{body}"), width.max(1))
+        .into_iter()
+        .enumerate()
+        .map(|(i, row)| {
+            if i == 0 && label_chars > 0 && row.chars().count() >= label_chars {
+                let head: String = row.chars().take(label_chars).collect();
+                let tail: String = row.chars().skip(label_chars).collect();
+                Line::from(vec![
+                    Span::styled(head, label_style),
+                    Span::styled(tail, body_style),
+                ])
+            } else {
+                Line::from(Span::styled(row, body_style))
+            }
+        })
+        .collect()
+}
+
+/// The review meta block, in priority order. The pane drops rows from the end
+/// when it is short, so what guards the approve comes first: the safety flags
+/// (non-ASCII first, the homoglyph warning), the confirmation notice, and the
+/// error row (always reserved). Risk, directory and explanation follow.
+fn review_meta_lines(model: &Model, width: usize) -> Vec<Line<'static>> {
     let Some(proposal) = model.current_proposal.as_ref() else {
         return vec![Line::from(Span::styled(
             "No proposal to review.",
@@ -730,24 +809,16 @@ fn review_meta_lines(model: &Model) -> Vec<Line<'_>> {
         ))];
     };
 
-    let target = proposal.cwd.as_deref().filter(|c| !c.is_empty()).unwrap_or("unknown");
-    let mut lines = vec![
-        risk_line(proposal),
-        Line::from(vec![
-            Span::styled("Runs in: ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(target.to_string()),
-        ]),
-        explanation_line(proposal),
-    ];
-    let mut flags = safety_flags(proposal);
+    let red = Style::default().fg(Color::Red);
+    let mut lines: Vec<Line<'static>> = Vec::new();
+
+    let mut flags: Vec<&'static str> = Vec::new();
     if !proposal.command.is_ascii() {
         flags.push("non-ASCII characters");
     }
+    flags.extend(safety_flags(proposal));
     if !flags.is_empty() {
-        lines.push(Line::from(vec![
-            Span::styled("Flags: ", Style::default().fg(Color::Red)),
-            Span::styled(flags.join(", "), Style::default().fg(Color::Red)),
-        ]));
+        lines.extend(wrapped_meta("Flags: ", red, &flags.join(", "), red, width));
     }
     if proposal.requires_confirmation {
         let label = if model.proposal_confirmed {
@@ -755,20 +826,37 @@ fn review_meta_lines(model: &Model) -> Vec<Line<'_>> {
         } else {
             "Confirmation required — press c, then Enter"
         };
-        lines.push(Line::from(Span::styled(
+        lines.extend(wrapped_meta(
+            "",
+            Style::default(),
             label,
             Style::default().fg(Color::Yellow),
-        )));
+            width,
+        ));
     }
     let err = model.review_error.as_deref().unwrap_or("");
-    lines.push(Line::from(Span::styled(
-        err,
-        Style::default().fg(Color::Red),
-    )));
+    lines.extend(wrapped_meta("", Style::default(), err, red, width));
+
+    lines.push(risk_line(proposal));
+    let target = proposal.cwd.as_deref().filter(|c| !c.is_empty()).unwrap_or("unknown");
+    lines.extend(wrapped_meta(
+        "Runs in: ",
+        Style::default().add_modifier(Modifier::BOLD),
+        target,
+        Style::default(),
+        width,
+    ));
+    lines.extend(wrapped_meta(
+        "Explanation: ",
+        Style::default().add_modifier(Modifier::BOLD),
+        proposal.explanation.as_str(),
+        Style::default(),
+        width,
+    ));
     lines
 }
 
-fn risk_line(proposal: &CommandProposal) -> Line<'_> {
+fn risk_line(proposal: &CommandProposal) -> Line<'static> {
     let risk_color = match proposal.risk.as_str() {
         "low" => Color::Green,
         "medium" => Color::Yellow,
@@ -786,13 +874,6 @@ fn risk_line(proposal: &CommandProposal) -> Line<'_> {
         ),
         Span::raw(format!("  confidence: {:.0}%", proposal.confidence * 100.0)),
         Span::raw(format!("  source: {}", proposal.source)),
-    ])
-}
-
-fn explanation_line(proposal: &CommandProposal) -> Line<'_> {
-    Line::from(vec![
-        Span::styled("Explanation: ", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(proposal.explanation.as_str()),
     ])
 }
 
@@ -1575,5 +1656,73 @@ mod tests {
         let overlay = clamped_overlay(frame, host, 10, 10);
         assert!(overlay.width <= frame.width);
         assert!(overlay.height <= frame.height);
+    }
+
+    #[test]
+    fn review_meta_puts_flags_first_and_wraps_instead_of_clipping() {
+        let mut p = sample_proposal("echo caf\u{e9}", true);
+        p.destructive = true;
+        p.touches_network = true;
+        p.escalates_privileges = true;
+        p.cwd = Some("/very/long/directory/that/names/where/it/runs".into());
+        let mut model = Model::new();
+        model.set_proposal(p, "s1".into());
+        let lines = review_meta_lines(&model, 30);
+        let text: Vec<String> = lines
+            .iter()
+            .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>())
+            .collect();
+        // Non-ASCII leads the flags and is on the first row.
+        assert!(text[0].starts_with("Flags: non-ASCII"), "{text:?}");
+        // No row is wider than the pane, and every flag survives the wrap.
+        // The risk badge row is short and left as is.
+        assert!(
+            text.iter()
+                .filter(|r| !r.starts_with("Risk:"))
+                .all(|row| row.chars().count() <= 30),
+            "{text:?}"
+        );
+        let joined = text.join(" ");
+        for flag in ["DESTRUCTIVE", "PRIVILEGE_ESCALATION", "NETWORK_ACCESS"] {
+            assert!(joined.replace("  ", " ").contains(flag) || text.iter().any(|r| r.contains(flag)), "{flag}: {text:?}");
+        }
+        // The confirmation notice and the error row precede risk and directory.
+        let conf = text.iter().position(|r| r.starts_with("Confirmation")).unwrap();
+        let risk = text.iter().position(|r| r.starts_with("Risk:")).unwrap();
+        let runs = text.iter().position(|r| r.starts_with("Runs in:")).unwrap();
+        assert!(conf < risk && risk < runs, "{text:?}");
+        // The directory is wrapped whole, not cut to its first characters.
+        assert!(text.join("").contains("where/it/runs"), "{text:?}");
+    }
+
+    #[test]
+    fn a_short_pane_keeps_the_flags_and_the_error_and_drops_the_explanation() {
+        let mut p = sample_proposal("echo caf\u{e9}", false);
+        p.destructive = true;
+        let mut model = Model::new();
+        model.set_proposal(p, "s1".into());
+        model.review_error = Some("Directory changed".into());
+        let lines = review_meta_lines(&model, 60);
+        let (command_rows, meta_rows) = split_review_rows(4, lines.len());
+        assert!(command_rows >= 1);
+        let shown: Vec<String> = lines
+            .iter()
+            .take(meta_rows)
+            .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>())
+            .collect();
+        assert!(shown.iter().any(|r| r.contains("non-ASCII")), "{shown:?}");
+        assert!(shown.iter().any(|r| r.contains("Directory changed")), "{shown:?}");
+        assert!(!shown.iter().any(|r| r.starts_with("Explanation")), "{shown:?}");
+    }
+
+    #[test]
+    fn the_confirm_prompt_replaces_the_footer_hints() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        model.sessions[0].session_state = crate::model::SessionState::Active;
+        model.sessions[0].exec_state = "running".into();
+        model.ask_confirm(crate::model::PendingConfirm::CloseSession("s1".into()));
+        let shown = draw_text(&mut model);
+        assert!(shown.contains("Close session with a running command? y/n"), "{shown}");
     }
 }
