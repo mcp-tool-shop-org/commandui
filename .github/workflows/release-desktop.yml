@@ -4,6 +4,8 @@ name: Release Desktop
 # one build-windows job on windows-latest, 7m05s wall (8 billed minutes at
 # the 2x Windows multiplier). Release-only; no push cost. The publish job
 # added later runs on ubuntu-latest and only downloads and uploads files.
+# workflow_dispatch runs are build-only: they skip the version check and
+# publish nothing to a release. Tests run in ci.yml, not here.
 
 on:
   release:
@@ -22,6 +24,7 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
