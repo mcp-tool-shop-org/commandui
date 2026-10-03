@@ -141,6 +141,10 @@ impl SessionService {
             move || Self::handle_session_exit(&exit_sink, &exit_sessions, &exit_id),
         );
 
+        // On Windows the ConPTY output pipe can stay open after the shell
+        // exits, so EOF alone is not enough: also watch the child itself.
+        Self::spawn_child_watcher(self.event_sink.clone(), self.sessions.clone(), id.clone());
+
         persist_bootstrap(
             &self.sessions,
             &id,
@@ -184,6 +188,36 @@ impl SessionService {
             let _ = child.wait();
         }
         Ok(())
+    }
+
+    /// Poll the shell's child handle (`try_wait`, never blocking) and run the
+    /// exit handling when the process ends. Stops when the session is closed
+    /// or already marked exited by the reader's EOF path.
+    pub(crate) fn spawn_child_watcher(
+        sink: Arc<dyn RuntimeEventSink>,
+        sessions: Arc<Mutex<SessionRegistry>>,
+        session_id: String,
+    ) {
+        std::thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let ended = {
+                let Ok(mut reg) = sessions.lock() else { return };
+                let Some(record) = reg.get_mut(&session_id) else {
+                    return;
+                };
+                if record.status == "exited" {
+                    return;
+                }
+                match record.child.as_mut() {
+                    Some(child) => matches!(child.try_wait(), Ok(Some(_))),
+                    None => return,
+                }
+            };
+            if ended {
+                Self::handle_session_exit(&sink, &sessions, &session_id);
+                return;
+            }
+        });
     }
 
     /// The PTY stream ended, so the shell is gone (typed exit, crash, kill).
@@ -299,19 +333,19 @@ impl SessionService {
 
         // Bytes of the first complete line that were already shown as a tail.
         let mut line_start = 0usize;
-        let mut protected = 0usize;
+        let mut prev_fresh = false;
         for line in complete.split_inclusive('\n') {
             let already = skip.saturating_sub(line_start).min(line.len());
             line_start += line.len();
             let shown_rest = &line[already..];
+            let prev_line_fresh = prev_fresh;
+            prev_fresh = already == 0;
             let Some(nonce) = nonce.as_deref() else {
                 display_text.push_str(shown_rest);
-                protected = display_text.len();
                 continue;
             };
             let Some(prompt) = parse_prompt_line(line, nonce) else {
                 display_text.push_str(shown_rest);
-                protected = display_text.len();
                 continue;
             };
 
@@ -339,16 +373,15 @@ impl SessionService {
 
             let Some((was_booting, pending_exec, was_interrupting)) = applied else {
                 display_text.push_str(shown_rest);
-                protected = display_text.len();
                 continue;
             };
 
             // The marker is written after a newline of its own, which shows
-            // up as a blank line right before it. Hide that one line. Text
-            // already committed from earlier lines is left alone.
-            let mut fresh = display_text.split_off(protected.min(display_text.len()));
-            drop_trailing_blank_line(&mut fresh);
-            display_text.push_str(&fresh);
+            // up as a blank line right before it. Hide that one line when it
+            // is still in this chunk's pending display text.
+            if prev_line_fresh {
+                drop_trailing_blank_line(&mut display_text);
+            }
 
             sink.emit(RuntimeEvent::SessionCwdChanged(SessionCwdChangedEvent {
                 session_id: session_id.to_string(),
@@ -418,8 +451,16 @@ fn persist_bootstrap(
     shell: &str,
 ) -> Result<(), String> {
     if let Err(e) = write_raw(writer, prompt_cmd) {
-        if let Ok(mut registry) = sessions.lock() {
-            registry.remove(session_id);
+        let removed = match sessions.lock() {
+            Ok(mut registry) => registry.remove(session_id),
+            Err(_) => None,
+        };
+        // Kill and reap the shell off the registry lock, as close() does.
+        if let Some(mut record) = removed {
+            if let Some(mut child) = record.child.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
         }
         eprintln!("[session] bootstrap write failed for shell {shell}: {e}");
         return Err(format!("bootstrap write failed: {e}"));
@@ -501,14 +542,16 @@ fn truncate_read_buffer(buffer: &mut String) -> Option<String> {
     ))
 }
 
-/// Remove one whitespace-only last line from `text`.
+/// Remove the last complete line of `text` when it is whitespace-only
+/// (`out\n\n` becomes `out\n`). Text that does not end in a line break is
+/// left alone.
 fn drop_trailing_blank_line(text: &mut String) {
-    let body_end = text.trim_end_matches(['\r', '\n']).len();
-    if body_end == text.len() {
+    let Some(body) = text.strip_suffix('\n') else {
         return;
-    }
-    let line_start = text[..body_end].rfind('\n').map(|i| i + 1).unwrap_or(0);
-    if text[line_start..body_end].trim().is_empty() {
+    };
+    let body = body.strip_suffix('\r').unwrap_or(body);
+    let line_start = body.rfind('\n').map(|i| i + 1).unwrap_or(0);
+    if body[line_start..].trim().is_empty() {
         text.truncate(line_start);
     }
 }
@@ -678,6 +721,63 @@ mod tests {
         let record = reg.get("s1").unwrap();
         assert!(record.pending_execution_id.is_none());
         assert_eq!(record.exec_state, SessionExecState::Ready);
+    }
+
+    #[test]
+    fn marker_leading_blank_line_is_hidden_in_the_same_chunk() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        {
+            let mut reg = sessions.lock().unwrap();
+            reg.insert(SessionRecord {
+                id: "s1".to_string(),
+                label: "Test".to_string(),
+                cwd: "/tmp".to_string(),
+                shell: "bash".to_string(),
+                status: "active".to_string(),
+                pty_pair: make_dummy_pty_pair(),
+                writer: make_dummy_writer(),
+                pending_execution_id: Some("exec-1".to_string()),
+                exec_state: SessionExecState::Running,
+                boot_prompt_received: true,
+                command_sent_at: Some("2026-01-01T00:00:00Z".to_string()),
+                marker_nonce: "test-nonce".to_string(),
+                read_buffer: String::new(),
+                emitted_tail: 0,
+                marker_gen: 0,
+                child: None,
+                created_at: "2026-01-01T00:00:00Z".to_string(),
+                last_active_at: "2026-01-01T00:00:00Z".to_string(),
+            });
+        }
+        let chunk = format!("out\n\n{}|test-nonce|/tmp|0\n", PROMPT_MARKER);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &chunk);
+        let text = sink
+            .events()
+            .iter()
+            .find_map(|e| match e {
+                RuntimeEvent::TerminalLine(t) => Some(t.text.clone()),
+                _ => None,
+            })
+            .expect("terminal line");
+        assert_eq!(text, "out\n");
+    }
+
+    #[test]
+    fn drop_trailing_blank_line_cases() {
+        let mut s = "out\n\n".to_string();
+        drop_trailing_blank_line(&mut s);
+        assert_eq!(s, "out\n");
+        let mut s = "out\r\n\r\n".to_string();
+        drop_trailing_blank_line(&mut s);
+        assert_eq!(s, "out\r\n");
+        let mut s = "out\n".to_string();
+        drop_trailing_blank_line(&mut s);
+        assert_eq!(s, "out\n");
+        let mut s = "\n".to_string();
+        drop_trailing_blank_line(&mut s);
+        assert_eq!(s, "");
     }
 
     #[test]

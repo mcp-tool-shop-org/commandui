@@ -22,6 +22,23 @@ pub struct ExecuteRequest {
     pub linked_plan_id: Option<String>,
 }
 
+/// Characters that must never reach the PTY inside a command line: every
+/// control character (C0, DEL, C1 including U+0085), the Unicode line and
+/// paragraph separators PowerShell treats as line ends, bidi controls that
+/// reorder displayed text, and invisible format characters that hide text.
+pub(crate) fn is_forbidden_command_char(c: char) -> bool {
+    c.is_control()
+        || matches!(
+            c,
+            '\u{2028}' | '\u{2029}'
+                | '\u{200B}'..='\u{200F}'
+                | '\u{202A}'..='\u{202E}'
+                | '\u{2060}'..='\u{2064}'
+                | '\u{2066}'..='\u{2069}'
+                | '\u{FEFF}'
+        )
+}
+
 pub struct TerminalService {
     sessions: Arc<Mutex<SessionRegistry>>,
     event_sink: Arc<dyn RuntimeEventSink>,
@@ -45,7 +62,7 @@ impl TerminalService {
         // A newline or other control byte would be sent as keystrokes: extra
         // prompt cycles, end-of-input, escape sequences. Only a single plain
         // line is run.
-        if request.command.chars().any(|c| c.is_ascii_control()) {
+        if request.command.chars().any(is_forbidden_command_char) {
             return Err(
                 "command contains a newline or control character; run one single-line command at a time"
                     .to_string(),
@@ -157,7 +174,15 @@ impl TerminalService {
         let still_running = {
             let registry = self.sessions.lock().map_err(|e| e.to_string())?;
             match registry.get(&request.session_id) {
-                Some(record) => Some(record.exec_state == SessionExecState::Running),
+                Some(record) => {
+                    let running = record.exec_state == SessionExecState::Running;
+                    // Emitted under the registry lock so the reader cannot
+                    // finish this command and emit Ready before Running.
+                    if running {
+                        self.emit_exec_state(&request.session_id, &SessionExecState::Running);
+                    }
+                    Some(running)
+                }
                 None => None,
             }
         };
@@ -167,7 +192,6 @@ impl TerminalService {
         };
 
         if still_running {
-            self.emit_exec_state(&request.session_id, &SessionExecState::Running);
             Ok(summary)
         } else {
             let mut done = summary;
@@ -342,7 +366,43 @@ mod tests {
         let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
         let sink = Arc::new(CollectingSink::new());
         let svc = TerminalService::new(sessions, sink.clone() as Arc<dyn RuntimeEventSink>);
-        for bad in ["ls\nrm x", "ls\r", "a\x04", "a\x1b[A"] {
+        for bad in [
+            "ls\nrm x",
+            "ls\r",
+            "a\x04",
+            "a\x1b[A",
+            "a\x7f",
+            "a\x00",
+            "a\x03",
+            // TAB is rejected on purpose: it would trigger shell completion.
+            "a\tb",
+            // C1 NEL and the Unicode line/paragraph separators.
+            "a\u{85}b",
+            "a\u{2028}b",
+            "a\u{2029}b",
+            // Bidi controls.
+            "a\u{202A}b",
+            "a\u{202B}b",
+            "a\u{202C}b",
+            "a\u{202D}b",
+            "a\u{202E}b",
+            "a\u{2066}b",
+            "a\u{2067}b",
+            "a\u{2068}b",
+            "a\u{2069}b",
+            // Invisible format characters.
+            "a\u{200B}b",
+            "a\u{200C}b",
+            "a\u{200D}b",
+            "a\u{200E}b",
+            "a\u{200F}b",
+            "a\u{2060}b",
+            "a\u{2061}b",
+            "a\u{2062}b",
+            "a\u{2063}b",
+            "a\u{2064}b",
+            "a\u{FEFF}b",
+        ] {
             let err = svc
                 .execute(ExecuteRequest {
                     execution_id: "e1".to_string(),
@@ -355,6 +415,69 @@ mod tests {
             assert!(err.contains("control character"), "{err}");
         }
         assert_eq!(sink.len(), 0);
+    }
+
+    fn capture_writer(buf: &Arc<Mutex<Vec<u8>>>, sessions: &Arc<Mutex<SessionRegistry>>) -> PtyHandle {
+        Arc::new(Mutex::new(Box::new(CaptureWrite {
+            buf: buf.clone(),
+            sessions: sessions.clone(),
+        }) as Box<dyn std::io::Write + Send>))
+    }
+
+    #[test]
+    fn execute_accepts_plain_single_line_with_non_ascii_text() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+        insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+        let svc = TerminalService::new(sessions, sink as Arc<dyn RuntimeEventSink>);
+        let mut req = exec_request("e1");
+        req.command = "echo h\u{e9}llo \u{65e5}\u{672c}".to_string();
+        svc.execute(req).expect("plain command must pass the guard");
+        let bytes = captured.lock().unwrap().clone();
+        assert!(String::from_utf8(bytes).unwrap().ends_with("echo h\u{e9}llo \u{65e5}\u{672c}\n"));
+    }
+
+    #[test]
+    fn execute_clears_pending_input_before_the_command_per_shell() {
+        for (shell, clear) in [
+            ("bash", "\x05\x15"),
+            ("zsh", "\x05\x15"),
+            ("pwsh.exe", "\x1b"),
+            ("powershell.exe", "\x1b"),
+        ] {
+            let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+            let sink = Arc::new(CollectingSink::new());
+            let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+            insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+            sessions.lock().unwrap().get_mut("s1").unwrap().shell = shell.to_string();
+            let svc = TerminalService::new(sessions, sink as Arc<dyn RuntimeEventSink>);
+            svc.execute(exec_request("e1")).unwrap();
+            let bytes = captured.lock().unwrap().clone();
+            assert_eq!(String::from_utf8(bytes).unwrap(), format!("{clear}ls\n"), "{shell}");
+        }
+    }
+
+    #[test]
+    fn execute_and_resync_refuse_an_exited_session_without_side_effects() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+        insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+        sessions.lock().unwrap().get_mut("s1").unwrap().status = "exited".to_string();
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+
+        let err = svc.execute(exec_request("e1")).unwrap_err();
+        assert!(err.contains("has exited"), "{err}");
+        let err = svc.resync("s1").unwrap_err();
+        assert!(err.contains("has exited"), "{err}");
+
+        assert_eq!(sink.len(), 0);
+        assert!(captured.lock().unwrap().is_empty());
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.exec_state, SessionExecState::Ready);
+        assert!(record.pending_execution_id.is_none());
     }
 
     #[test]
@@ -681,7 +804,7 @@ mod tests {
         .unwrap();
         let bytes = captured.lock().unwrap();
         let text = String::from_utf8_lossy(&bytes);
-        assert!(text.starts_with("dir\ncall set __cui_ec=%^ERRORLEVEL% & "));
+        assert!(text.starts_with("\x1bdir\ncall set __cui_ec=%^ERRORLEVEL% & "));
         assert!(text.contains("!__cui_ec!"));
         assert!(text.contains("test-nonce"));
         assert!(!text.contains('~'));

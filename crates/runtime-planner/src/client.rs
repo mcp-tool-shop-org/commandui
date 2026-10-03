@@ -83,12 +83,7 @@ pub(crate) async fn try_ollama(
         .map_err(|e| format!("envelope parse: {e}"))?;
 
     let mut llm: LlmPlanResponse = serde_json::from_str(&envelope.response).map_err(|e| {
-        let preview = if envelope.response.len() > 200 {
-            format!("{}...", &envelope.response[..200])
-        } else {
-            envelope.response.clone()
-        };
-        format!("plan parse: {e} | raw: {preview}")
+        format!("plan parse: {e} | raw: {}", preview_response(&envelope.response))
     })?;
 
     // Floor then validate — fail closed. Flags the model omitted cannot pass.
@@ -419,6 +414,19 @@ mod tests {
         assert!(err.contains("..."), "{err}");
         assert!(err.contains(&"a".repeat(200)), "{err}");
         assert!(!err.contains(&"a".repeat(201)), "{err}");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn try_ollama_plan_parse_multibyte_straddling_byte_200_does_not_panic() {
+        // 199 ASCII bytes then 2-byte chars: byte 200 is inside a character.
+        let raw = format!("{}{}", "a".repeat(199), "\u{e9}".repeat(40));
+        assert!(!raw.is_char_boundary(200));
+        let endpoint = test_support::spawn_body("200 OK", &test_support::envelope(&raw));
+        let err = try_ollama(&config(endpoint, 2), &context(), "list files")
+            .await
+            .expect_err("non-plan response must fail, not panic");
+        assert!(err.contains("plan parse"), "{err}");
+        assert!(err.contains(&format!("{}...", "a".repeat(199))), "{err}");
     }
 
     #[tokio::test(flavor = "current_thread")]

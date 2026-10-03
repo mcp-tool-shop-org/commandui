@@ -140,6 +140,24 @@ fn token_base(token: &str) -> &str {
     base.strip_suffix(".exe").unwrap_or(base)
 }
 
+/// Commands that overwrite a file like `>` does: Set-Content / Out-File /
+/// Clear-Content and `tee` without an append flag. cp/mv are not listed: the
+/// floor cannot see whether the destination already exists.
+fn overwrites_file_by_command(tokens: &[String]) -> bool {
+    tokens.iter().enumerate().any(|(i, token)| {
+        let base = token_base(token);
+        match base {
+            "set-content" | "out-file" | "clear-content" | "sc" => {
+                !tokens[i + 1..].iter().any(|t| t == "-append")
+            }
+            "tee" => !tokens[i + 1..]
+                .iter()
+                .any(|t| t == "-a" || t == "--append" || t == "-append"),
+            _ => false,
+        }
+    })
+}
+
 pub(crate) fn command_floor(command: &str) -> CommandFloor {
     let mut floor = CommandFloor {
         destructive: false,
@@ -147,6 +165,9 @@ pub(crate) fn command_floor(command: &str) -> CommandFloor {
         truncates_file: has_truncating_redirect(command),
     };
     let tokens = command_tokens(command);
+    if overwrites_file_by_command(&tokens) {
+        floor.truncates_file = true;
+    }
     let has_after = |start: usize, wanted: &str| tokens[start + 1..].iter().any(|t| t == wanted);
     for (i, token) in tokens.iter().enumerate() {
         let base = token_base(token);
@@ -504,6 +525,28 @@ format E:",
         push.command = "git push origin main".to_string();
         accept_llm_plan(&mut push).unwrap();
         assert!(!push.destructive);
+    }
+
+    #[test]
+    fn overwrite_commands_are_medium_unless_appending() {
+        for cmd in [
+            "Set-Content notes.txt hi",
+            "echo hi | Out-File notes.txt",
+            "echo hi | tee notes.txt",
+            "Clear-Content notes.txt",
+        ] {
+            let mut p = valid_plan();
+            p.command = cmd.to_string();
+            accept_llm_plan(&mut p).unwrap();
+            assert_eq!(p.risk, "medium", "{cmd}");
+            assert!(p.requires_approval, "{cmd}");
+        }
+        for cmd in ["echo hi | tee -a notes.txt", "echo hi | Out-File notes.txt -Append"] {
+            let mut p = valid_plan();
+            p.command = cmd.to_string();
+            accept_llm_plan(&mut p).unwrap();
+            assert_eq!(p.risk, "low", "{cmd}");
+        }
     }
 
     #[test]

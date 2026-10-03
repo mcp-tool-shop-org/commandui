@@ -36,7 +36,10 @@ pub fn default_shell() -> String {
     #[cfg(target_os = "windows")]
     {
         if let Ok(shell) = std::env::var("COMMANDUI_WINDOWS_SHELL") {
-            return shell;
+            if shell_family(&shell) != ShellFamily::Unsupported {
+                return shell;
+            }
+            eprintln!("[session] COMMANDUI_WINDOWS_SHELL={shell} is not a supported shell; using the default");
         }
         let pwsh7 = format!(
             "{}\\PowerShell\\7\\pwsh.exe",
@@ -49,7 +52,14 @@ pub fn default_shell() -> String {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
+        match std::env::var("SHELL") {
+            Ok(shell) if shell_family(&shell) != ShellFamily::Unsupported => shell,
+            Ok(shell) => {
+                eprintln!("[session] SHELL={shell} is not a supported shell; using /bin/bash");
+                "/bin/bash".to_string()
+            }
+            Err(_) => "/bin/bash".to_string(),
+        }
     }
 }
 
@@ -122,7 +132,7 @@ fn prepare_shell_command(shell: &str, cwd: Option<&str>) -> CommandBuilder {
 /// The carets are tripled because the parent shell consumes one level.
 fn cmd_marker_echo(nonce: &str, exit_expr: &str) -> String {
     format!(
-        "cmd /v:on /c echo. ^& echo {PROMPT_MARKER}^^^|{nonce}^^^|!CD!^^^|{exit_expr}"
+        "\"%ComSpec%\" /v:on /c echo. ^& echo {PROMPT_MARKER}^^^|{nonce}^^^|!CD!^^^|{exit_expr}"
     )
 }
 
@@ -157,17 +167,31 @@ pub fn bootstrap_prompt(shell: &str, nonce: &str) -> Option<String> {
 /// its prompt cannot expand ERRORLEVEL. The command text is the command, not
 /// a format string.
 pub(crate) fn command_line_for_shell(shell: &str, nonce: &str, command: &str) -> String {
+    let clear = clear_input_line(shell);
     if shell_family(shell) == ShellFamily::Cmd {
         // The marker is a separate input line so a trailing rem, :: or an
         // unbalanced quote in the command cannot swallow it.
         // The exit code is captured into a variable first (`call` expands
         // `%^ERRORLEVEL%` after the command ran), then the child prints it.
         format!(
-            "{command}\ncall set __cui_ec=%^ERRORLEVEL% & {}\n",
+            "{clear}{command}\ncall set __cui_ec=%^ERRORLEVEL% & {}\n",
             cmd_marker_echo(nonce, "!__cui_ec!")
         )
     } else {
-        format!("{command}\n")
+        format!("{clear}{command}\n")
+    }
+}
+
+/// Bytes that discard whatever the user already typed at the prompt, written
+/// before an approved command so it cannot be appended to a half-typed line
+/// (`rm -rf ` + approved `ls` must not run `rm -rf ls`).
+/// bash/zsh (readline/zle): Ctrl+E (end of line) then Ctrl+U (kill to start).
+/// PowerShell (PSReadLine) and cmd: Escape (RevertLine / clear the line).
+pub(crate) fn clear_input_line(shell: &str) -> &'static str {
+    match shell_family(shell) {
+        ShellFamily::Bash | ShellFamily::Zsh => "\x05\x15",
+        ShellFamily::PowerShell | ShellFamily::Cmd => "\x1b",
+        ShellFamily::Unsupported => "",
     }
 }
 
@@ -338,21 +362,29 @@ mod tests {
     fn cmd_command_line_appends_marker_without_using_user_text_as_format() {
         let nasty = "echo %CD% & del /q *";
         let line = command_line_for_shell("cmd.exe", NONCE, nasty);
-        assert!(line.starts_with(&format!("{nasty}\ncall set ")));
+        assert!(line.starts_with(&format!("\x1b{nasty}\ncall set ")));
         assert_eq!(line.matches('\n').count(), 2);
         assert!(line.contains(&format!("{PROMPT_MARKER}^^^|{NONCE}^^^|!CD!^^^|!__cui_ec!")));
-        assert_eq!(command_line_for_shell("bash", NONCE, "ls"), "ls\n");
+        assert_eq!(command_line_for_shell("bash", NONCE, "ls"), "\x05\x15ls\n");
         assert_eq!(resync_input("bash", NONCE), "\n");
         assert!(resync_input("cmd.exe", NONCE).contains("%ERRORLEVEL%"));
+    }
+
+    #[test]
+    fn command_line_clears_pending_input_per_shell_family() {
+        assert_eq!(command_line_for_shell("zsh", NONCE, "ls"), "\x05\x15ls\n");
+        assert_eq!(command_line_for_shell("pwsh.exe", NONCE, "ls"), "\x1bls\n");
+        assert_eq!(command_line_for_shell("powershell.exe", NONCE, "ls"), "\x1bls\n");
+        assert!(command_line_for_shell("cmd.exe", NONCE, "dir").starts_with("\x1bdir\ncall set "));
     }
 
     #[test]
     fn cmd_commands_with_bangs_are_written_through_unchanged() {
         for command in ["echo hello!", "git commit -m \"done!\"", "cd hello!world"] {
             let line = command_line_for_shell("cmd.exe", NONCE, command);
-            assert!(line.starts_with(&format!("{command}\ncall set ")), "{line}");
+            assert!(line.starts_with(&format!("\x1b{command}\ncall set ")), "{line}");
             // Only the marker child expands `!`; the session itself never does.
-            assert!(line.contains("cmd /v:on /c"), "{line}");
+            assert!(line.contains("\"%ComSpec%\" /v:on /c"), "{line}");
         }
         let cmd = prepare_shell_command("cmd.exe", None);
         assert!(!cmd.get_argv().iter().any(|arg| arg == "/v:on"));

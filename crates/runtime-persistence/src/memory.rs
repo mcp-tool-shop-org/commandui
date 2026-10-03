@@ -86,6 +86,32 @@ pub fn list_pending_suggestions(conn: &Connection) -> Result<Vec<MemorySuggestio
         .map_err(|e| format!("memory suggestions: {e}"))
 }
 
+/// Id and final status of every suggestion that is no longer pending
+/// (accepted or dismissed). The detectors need these so a resolved suggestion
+/// is not proposed again after a restart.
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedSuggestion {
+    pub id: String,
+    pub status: String,
+}
+
+pub fn list_resolved_suggestions(conn: &Connection) -> Result<Vec<ResolvedSuggestion>, String> {
+    let mut stmt = conn
+        .prepare("SELECT id, status FROM memory_suggestions WHERE status IN ('accepted', 'dismissed') ORDER BY created_at DESC")
+        .map_err(|e| format!("memory resolved suggestions: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ResolvedSuggestion {
+                id: row.get(0)?,
+                status: row.get(1)?,
+            })
+        })
+        .map_err(|e| format!("memory resolved suggestions: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("memory resolved suggestions: {e}"))
+}
+
 pub fn add_item(conn: &Connection, item: &MemoryItem) -> Result<(), String> {
     conn.execute(
         "INSERT OR REPLACE INTO memory_items (id, scope, project_root, kind, key, value, confidence, source, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
@@ -160,11 +186,21 @@ pub fn accept_suggestion(conn: &Connection, suggestion_id: &str) -> Result<Memor
 pub fn dismiss_suggestion(conn: &Connection, suggestion_id: &str) -> Result<(), String> {
     let changed = conn
         .execute(
-            "UPDATE memory_suggestions SET status = 'dismissed' WHERE id = ?1",
+            "UPDATE memory_suggestions SET status = 'dismissed' WHERE id = ?1 AND status = 'pending'",
             rusqlite::params![suggestion_id],
         )
         .map_err(|e| format!("dismiss suggestion: {e}"))?;
     if changed == 0 {
+        let exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM memory_suggestions WHERE id = ?1",
+                rusqlite::params![suggestion_id],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        if exists {
+            return Err(format!("suggestion not pending: {suggestion_id}"));
+        }
         return Err(format!("dismiss suggestion: no suggestion with id {suggestion_id}"));
     }
     Ok(())
@@ -183,11 +219,14 @@ pub fn delete_item(conn: &Connection, memory_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn store_suggestion(conn: &Connection, suggestion: &MemorySuggestion) -> Result<(), String> {
+/// Returns true when the row was inserted, false when a suggestion with this
+/// id already exists (pending, accepted or dismissed): the caller must not
+/// surface an ignored row as a new pending suggestion.
+pub fn store_suggestion(conn: &Connection, suggestion: &MemorySuggestion) -> Result<bool, String> {
     let ids_json =
         serde_json::to_string(&suggestion.derived_from_history_ids).unwrap_or_else(|_| "[]".to_string());
 
-    conn.execute(
+    let inserted = conn.execute(
         "INSERT OR IGNORE INTO memory_suggestions (id, scope, project_root, kind, label, proposed_key, proposed_value, confidence, derived_from_history_ids_json, status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         rusqlite::params![
             suggestion.id, suggestion.scope, suggestion.project_root, suggestion.kind, suggestion.label,
@@ -195,7 +234,7 @@ pub fn store_suggestion(conn: &Connection, suggestion: &MemorySuggestion) -> Res
             ids_json, suggestion.status, suggestion.created_at,
         ],
     ).map_err(|e| format!("store suggestion: {e}"))?;
-    Ok(())
+    Ok(inserted > 0)
 }
 
 #[cfg(test)]
@@ -298,6 +337,34 @@ mod tests {
         let items = list_items(&conn).unwrap();
         assert_eq!(items.len(), items_before);
         assert!(items.iter().any(|row| row.id == created.id));
+        assert!(list_pending_suggestions(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn resolved_suggestions_are_listed_and_not_flipped_or_reinserted() {
+        let conn = open();
+        assert!(store_suggestion(&conn, &suggestion("a", "pending")).unwrap());
+        assert!(store_suggestion(&conn, &suggestion("b", "pending")).unwrap());
+        // Same id again: reported as not inserted.
+        assert!(!store_suggestion(&conn, &suggestion("a", "pending")).unwrap());
+
+        dismiss_suggestion(&conn, "a").unwrap();
+        accept_suggestion(&conn, "b").unwrap();
+        // A dismissed id is still "existing", so a re-proposal is not inserted.
+        assert!(!store_suggestion(&conn, &suggestion("a", "pending")).unwrap());
+        // Late or repeated dismiss must not flip an accepted or dismissed row.
+        expect_err(dismiss_suggestion(&conn, "b"), "not pending");
+        expect_err(dismiss_suggestion(&conn, "a"), "not pending");
+
+        let mut resolved = list_resolved_suggestions(&conn).unwrap();
+        resolved.sort_by(|x, y| x.id.cmp(&y.id));
+        assert_eq!(
+            resolved,
+            vec![
+                ResolvedSuggestion { id: "a".into(), status: "dismissed".into() },
+                ResolvedSuggestion { id: "b".into(), status: "accepted".into() },
+            ]
+        );
         assert!(list_pending_suggestions(&conn).unwrap().is_empty());
     }
 
