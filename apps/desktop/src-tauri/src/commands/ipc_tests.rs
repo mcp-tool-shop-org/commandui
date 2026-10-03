@@ -188,7 +188,7 @@ fn history_item() -> Value {
         "executedCommand": null,
         "linkedPlanId": null,
         "plannerRequestId": null,
-        "status": "pending",
+        "status": "planned",
         "exitCode": null,
         "createdAt": "2026-01-01T00:00:00Z",
         "finishedAt": null,
@@ -238,7 +238,7 @@ fn database_commands_round_trip() {
     .unwrap();
     assert_eq!(listed["items"][0]["id"], "h1");
     assert_eq!(listed["items"][0]["userInput"], "list files");
-    assert_eq!(listed["items"][0]["status"], "pending");
+    assert_eq!(listed["items"][0]["status"], "planned");
 
     assert_ok(
         &ipc(
@@ -247,7 +247,7 @@ fn database_commands_round_trip() {
             json!({
                 "request": {
                     "historyId": "h1",
-                    "status": "done",
+                    "status": "success",
                     "exitCode": 0,
                     "executedCommand": "Get-ChildItem",
                     "finishedAt": "2026-01-01T00:00:01Z",
@@ -271,7 +271,7 @@ fn database_commands_round_trip() {
         json!({ "request": { "sessionId": "s1", "limit": 10 } }),
     )
     .unwrap();
-    assert_eq!(listed["items"][0]["status"], "done");
+    assert_eq!(listed["items"][0]["status"], "success");
     assert_eq!(listed["items"][0]["exitCode"], 0);
     assert_eq!(listed["items"][0]["executedCommand"], "Get-ChildItem");
 
@@ -353,6 +353,15 @@ fn database_commands_round_trip() {
     .unwrap_err();
     assert_api_error(&missing, "DATABASE_ERROR", "suggestion not found");
 
+    // A second accept of an already accepted suggestion is rejected, not a silent no-op.
+    let repeated = ipc(
+        &webview,
+        "memory_accept_suggestion",
+        json!({ "request": { "suggestionId": "sg1" } }),
+    )
+    .unwrap_err();
+    assert_api_error(&repeated, "DATABASE_ERROR", "suggestion not pending");
+
     let second = json!({
         "id": "sg2",
         "scope": "project",
@@ -390,6 +399,13 @@ fn database_commands_round_trip() {
         .map(|s| s["id"].as_str().unwrap())
         .collect();
     assert!(!suggestion_ids.contains(&"sg2"));
+    let missing = ipc(
+        &webview,
+        "memory_dismiss_suggestion",
+        json!({ "request": { "suggestionId": "missing-suggestion" } }),
+    )
+    .unwrap_err();
+    assert_api_error(&missing, "DATABASE_ERROR", "no suggestion");
 
     assert_ok(
         &ipc(
@@ -408,6 +424,13 @@ fn database_commands_round_trip() {
         .collect();
     assert!(!item_ids.contains(&created_id.as_str()));
     assert!(item_ids.contains(&"m1"));
+    let missing = ipc(
+        &webview,
+        "memory_delete",
+        json!({ "request": { "memoryId": "missing-memory" } }),
+    )
+    .unwrap_err();
+    assert_api_error(&missing, "DATABASE_ERROR", "no memory item");
 
     let workflow = json!({
         "id": "w1",

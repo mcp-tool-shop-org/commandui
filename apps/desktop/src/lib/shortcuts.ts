@@ -85,6 +85,17 @@ function isBareKey(parsed: ParsedCombo): boolean {
   return !hasModifier(parsed);
 }
 
+/** Plain Ctrl+<letter> (no Shift/Alt): a control character the shell reads. */
+export function isShellChord(event: KeyboardEvent): boolean {
+  return (
+    event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    /^[a-z]$/i.test(event.key)
+  );
+}
+
 /** Special keys that should work even in text input zones. */
 const SPECIAL_KEYS = new Set(["escape", "enter", "tab"]);
 
@@ -159,6 +170,11 @@ export function resolveShortcut(
     if (currentZone && def.context.includes(currentZone)) {
       return def;
     }
+
+    // Plain Ctrl+<letter> belongs to the shell while the terminal has focus
+    // (^W word-rubout, ^K kill-line, ^M enter, ...). A global app shortcut must not
+    // also fire; app actions use Ctrl+Shift+<letter> there. Zone-specific defs still match.
+    if (currentZone === "terminal" && isShellChord(event)) continue;
 
     // Track first global match as fallback
     if (!globalMatch && def.context.includes("global")) {

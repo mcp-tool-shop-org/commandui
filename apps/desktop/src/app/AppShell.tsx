@@ -202,6 +202,8 @@ export function AppShell() {
   const planGateRef = useRef<PlanRunGate>({ command: "", confirmed: false });
   const approvePlanRef = useRef<(command: string) => void>(() => {});
   const planNonceSeenRef = useRef(0);
+  const approveInFlightRef = useRef(false);
+  const terminalIoFailedRef = useRef(new Set<string>());
 
   const acceptPlanRunGate = useCallback((gate: PlanRunGate) => {
     planGateRef.current = gate;
@@ -540,9 +542,10 @@ export function AppShell() {
         });
       }
     };
-    // Rebind when reduced clutter changes so the line filter is not stuck on the first render.
+    // Subscriptions live for the whole shell: appendTerminalLine reads reducedClutter from
+    // getState(), and resubscribing is asynchronous so events in the gap would be lost.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reducedClutter]);
+  }, []);
 
   // --- Replay buffer on session switch ---
   useEffect(() => {
@@ -619,6 +622,14 @@ export function AppShell() {
   const shortcuts = useMemo<ShortcutDef[]>(() => {
     const defs: ShortcutDef[] = [
       { id: "palette",       combo: "ctrl+k",       context: ["global"], action: () => setPaletteOpen(true) },
+      // Ctrl+Shift variants: the only app chords that work while the terminal has focus
+      // (plain Ctrl+<letter> goes to the shell there).
+      { id: "palette-term",  combo: "ctrl+shift+k", context: ["global"], action: () => setPaletteOpen(true) },
+      { id: "focus-composer-term", combo: "ctrl+shift+j", context: ["global"], action: focusComposer },
+      { id: "clear-terminal-term", combo: "ctrl+shift+l", context: ["global"], action: clearTerminalView },
+      { id: "new-session-term", combo: "ctrl+shift+t", context: ["global"], action: handleCreateSession },
+      { id: "history-term",   combo: "ctrl+shift+h", context: ["global"], action: () => setHistoryOpen((v) => !v) },
+      { id: "memory-term",    combo: "ctrl+shift+m", context: ["global"], action: () => setMemoryOpen((v) => !v) },
       { id: "focus-composer", combo: "ctrl+j",       context: ["global"], action: focusComposer },
       { id: "clear-terminal", combo: "ctrl+l",       context: ["global"], action: clearTerminalView },
       { id: "new-session",   combo: "ctrl+t",        context: ["global"], action: handleCreateSession },
@@ -646,14 +657,25 @@ export function AppShell() {
       })),
     ];
 
-    // Ctrl+W close session only in Tauri mode (conflicts with browser tab close)
+    // Close session only in Tauri mode (Ctrl+W conflicts with browser tab close).
+    // Ctrl+W is the shell's word-rubout, so it never fires from the terminal zone
+    // (see resolveShortcut); Ctrl+Shift+X is the chord that works everywhere.
+    // Either one asks first when a command is running.
     if (!browserPreview) {
-      defs.push({
-        id: "close-session",
-        combo: "ctrl+w",
-        context: ["global"],
-        action: () => activeSessionId && handleCloseSession(activeSessionId),
-      });
+      const closeActive = () => {
+        if (!activeSessionId) return;
+        if (
+          sessionIsRunning(activeSessionId) &&
+          !window.confirm("A command is still running in this session. Close it and stop the command?")
+        ) {
+          return;
+        }
+        void handleCloseSession(activeSessionId);
+      };
+      defs.push(
+        { id: "close-session", combo: "ctrl+w", context: ["global"], action: closeActive },
+        { id: "close-session-term", combo: "ctrl+shift+x", context: ["global"], action: closeActive },
+      );
     }
 
     return defs;
@@ -784,6 +806,10 @@ export function AppShell() {
           context,
         });
 
+        // The user switched tabs while the plan was generating: drop it rather than show
+        // a plan for another session that Approve could run in the wrong place.
+        if (activeSessionIdRef.current !== sessionId) return;
+
         planGateRef.current = { command: "", confirmed: false };
         setPlan(res);
         setPlanNonce((n) => n + 1);
@@ -819,7 +845,15 @@ export function AppShell() {
 
   // --- Plan actions ---
   async function handleApprovePlan(approvedCommand: string) {
-    if (!session || !plan) return;
+    if (!plan) return;
+    // Execute on the session the plan was made for, never on whichever tab is active now.
+    const planSessionId = plan.plan.sessionId;
+    const session = sessions.find((s) => s.id === planSessionId) ?? null;
+    if (!session) {
+      setError("The session this plan was made for is no longer open. Reject the plan and ask again.");
+      return;
+    }
+    if (approveInFlightRef.current) return;
     if (sessionIsRunning(session.id) || busySessionsRef.current.has(session.id)) {
       setError(SESSION_BUSY_MESSAGE);
       return;
@@ -845,6 +879,7 @@ export function AppShell() {
     }
     const sessionId = session.id;
     lockSession(sessionId);
+    approveInFlightRef.current = true;
 
     try {
       if (sessionIsRunning(sessionId)) {
@@ -860,8 +895,8 @@ export function AppShell() {
       let createdRunRow = false;
       if (currentPlanHistoryId) {
         runHistoryId = currentPlanHistoryId;
+        // Local only until execute accepts; the database is written after success.
         updateHistoryItem(runHistoryId, { executedCommand: trimmed });
-        persistInBackground("history update", historyUpdate({ historyId: runHistoryId, executedCommand: trimmed }));
       } else {
         runHistoryId = executionId;
         createdRunRow = true;
@@ -929,12 +964,17 @@ export function AppShell() {
         } else {
           // Row existed before the run: record the failure, drop the claim it ran.
           const finishedAt = new Date().toISOString();
+          // executedCommand was never persisted for this row, so the database agrees.
           updateHistoryItem(runHistoryId, { status: "failure", executedCommand: undefined, finishedAt });
-          persistInBackground("history update", historyUpdate({ historyId: runHistoryId, status: "failure", executedCommand: undefined, finishedAt }));
+          persistInBackground("history update", historyUpdate({ historyId: runHistoryId, status: "failure", finishedAt }));
         }
         throw err;
       } finally {
         inFlightExecRef.current.delete(sessionId);
+      }
+
+      if (!createdRunRow) {
+        persistInBackground("history update", historyUpdate({ historyId: runHistoryId, executedCommand: trimmed }));
       }
 
       if (pendingSuggestion) {
@@ -955,6 +995,7 @@ export function AppShell() {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
     } finally {
+      approveInFlightRef.current = false;
       unlockSession(sessionId);
     }
   }
@@ -965,6 +1006,10 @@ export function AppShell() {
 
   function handleRejectPlan() {
     if (!session) return;
+    // An approve is awaiting execute for this plan: rejecting now would mark a running command rejected.
+    const planSessionId = plan?.plan.sessionId;
+    if (approveInFlightRef.current) return;
+    if (planSessionId && busySessionsRef.current.has(planSessionId)) return;
 
     if (currentPlanHistoryId) {
       updateHistoryItem(currentPlanHistoryId, { status: "rejected" });
@@ -979,7 +1024,7 @@ export function AppShell() {
     setCurrentPlanHistoryId(null);
   }
 
-  function handleSaveWorkflow(command: string) {
+  async function handleSaveWorkflow(command: string) {
     if (!session || !plan) return;
 
     const workflow: Workflow = {
@@ -992,16 +1037,34 @@ export function AppShell() {
       createdAt: new Date().toISOString(),
     };
 
+    // Show the workflow only once it is stored, or it would be undeletable.
+    try {
+      await workflowAdd({ workflow });
+    } catch (e: unknown) {
+      setError(`Could not save the workflow: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
     addWorkflow(workflow);
-    persistInBackground("workflow add", workflowAdd({ workflow }));
     appendTerminalLine(session.id, `[workflow:saved] ${workflow.label}\r\n`);
   }
 
   // --- Terminal handlers ---
+  // A dead or not-ready session rejects every write and resize. Log once per
+  // session and surface a single banner instead of one unhandled rejection per keystroke.
+  function reportTerminalIoFailure(sessionId: string, write: Promise<unknown>) {
+    write.catch((e: unknown) => {
+      if (terminalIoFailedRef.current.has(sessionId)) return;
+      terminalIoFailedRef.current.add(sessionId);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn("[terminal] write failed:", msg);
+      setError(`This terminal session has ended or is not accepting input (${msg}).`);
+    });
+  }
+
   const handleTerminalData = useCallback(
     (data: string) => {
       if (!activeSessionId) return;
-      void writeTerminal({ sessionId: activeSessionId, data });
+      reportTerminalIoFailure(activeSessionId, writeTerminal({ sessionId: activeSessionId, data }));
     },
     [activeSessionId],
   );
@@ -1009,7 +1072,7 @@ export function AppShell() {
   const handleTerminalResize = useCallback(
     (cols: number, rows: number) => {
       if (!activeSessionId) return;
-      void resizeTerminal({ sessionId: activeSessionId, cols, rows });
+      reportTerminalIoFailure(activeSessionId, resizeTerminal({ sessionId: activeSessionId, cols, rows }));
     },
     [activeSessionId],
   );
@@ -1049,9 +1112,11 @@ export function AppShell() {
   }
 
   async function handleCloseSession(sessionId: string) {
-    workflowAbortBySessionRef.current.get(sessionId)?.abort();
     try {
       await closeSession({ sessionId });
+      // Abort the workflow poll only once the session is really gone; aborting first
+      // made the aborted branch report an idle session whose PTY was still busy.
+      workflowAbortBySessionRef.current.get(sessionId)?.abort();
       removeSession(sessionId);
       delete terminalLinesBySessionRef.current[sessionId];
       clearSessionRunning(sessionId);
@@ -1163,7 +1228,7 @@ export function AppShell() {
     setHistoryOpen(false);
   }
 
-  function handleSaveWorkflowFromHistory(item: HistoryItem) {
+  async function handleSaveWorkflowFromHistory(item: HistoryItem) {
     if (!session) return;
     const command = item.executedCommand ?? item.generatedCommand;
     if (!command) return;
@@ -1178,8 +1243,13 @@ export function AppShell() {
       createdAt: new Date().toISOString(),
     };
 
+    try {
+      await workflowAdd({ workflow });
+    } catch (e: unknown) {
+      setError(`Could not save the workflow: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
     addWorkflow(workflow);
-    persistInBackground("workflow add", workflowAdd({ workflow }));
     appendTerminalLine(session.id, `[workflow:saved] ${workflow.label}\r\n`);
     setHistoryOpen(false);
   }
@@ -1399,6 +1469,11 @@ export function AppShell() {
       await workflowDelete({ id: workflowId });
       removeWorkflow(workflowId);
     } catch (e: unknown) {
+      // The row never reached the database: it can only be removed from the UI.
+      if (isMissingIdError(e)) {
+        removeWorkflow(workflowId);
+        return;
+      }
       setError(e instanceof Error ? e.message : String(e));
     }
   }
@@ -1469,6 +1544,16 @@ export function AppShell() {
         ),
       );
     } catch (e: unknown) {
+      if (isMissingIdError(e)) {
+        // Already handled (or never stored): reconcile the UI so it stops offering it.
+        setMemorySuggestions((prev) =>
+          prev.map((s) =>
+            s.id === suggestionId ? { ...s, status: "dismissed" as const } : s,
+          ),
+        );
+        setError("That suggestion was already handled, so it was removed from the list.");
+        return;
+      }
       setError(e instanceof Error ? e.message : String(e));
     }
   }
@@ -1478,21 +1563,10 @@ export function AppShell() {
     if (!workflowEditorData || confirmingRef.current) return;
     confirmingRef.current = true;
     const { workflowId, suggestionId, projectRoot } = workflowEditorData;
-    setWorkflowEditorData(null);
 
     try {
-      // 1. Accept the memory suggestion
-      const res = await memoryAcceptSuggestion({ suggestionId });
-      if (res.createdItem) {
-        addMemoryItem(res.createdItem);
-      }
-      setMemorySuggestions((prev) =>
-        prev.map((s) =>
-          s.id === suggestionId ? { ...s, status: "accepted" as const } : s,
-        ),
-      );
-
-      // 2. Create and persist the workflow with edited data
+      // 1. Create and persist the workflow first. The editor stays open until this
+      //    succeeds so the user's edits are never lost to a failed write.
       const workflow: Workflow = {
         id: workflowId,
         label,
@@ -1504,8 +1578,35 @@ export function AppShell() {
       };
       await workflowAdd({ workflow });
       addWorkflow(workflow);
+      setWorkflowEditorData(null);
       if (session) {
         appendTerminalLine(session.id, `[workflow:promoted] ${workflow.label}\r\n`);
+      }
+
+      // 2. Accept the memory suggestion. A failure here is partial success: the
+      //    workflow exists, so report it instead of discarding anything.
+      try {
+        const res = await memoryAcceptSuggestion({ suggestionId });
+        if (res.createdItem) {
+          addMemoryItem(res.createdItem);
+        }
+        setMemorySuggestions((prev) =>
+          prev.map((s) =>
+            s.id === suggestionId ? { ...s, status: "accepted" as const } : s,
+          ),
+        );
+      } catch (acceptErr: unknown) {
+        if (isMissingIdError(acceptErr)) {
+          setMemorySuggestions((prev) =>
+            prev.map((s) =>
+              s.id === suggestionId ? { ...s, status: "accepted" as const } : s,
+            ),
+          );
+        } else {
+          setError(
+            `Workflow saved, but the suggestion could not be marked accepted: ${acceptErr instanceof Error ? acceptErr.message : String(acceptErr)}`,
+          );
+        }
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -1521,15 +1622,19 @@ export function AppShell() {
   async function handleDismissSuggestion(suggestionId: string) {
     try {
       await memoryDismissSuggestion({ suggestionId });
-      // Mark as dismissed in store (don't remove — detectors need dismissed state to avoid re-suggesting)
-      setMemorySuggestions((prev) =>
-        prev.map((s) =>
-          s.id === suggestionId ? { ...s, status: "dismissed" as const } : s,
-        ),
-      );
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (!isMissingIdError(e)) {
+        setError(e instanceof Error ? e.message : String(e));
+        return;
+      }
+      // Not stored or already handled: dismissing locally is the intended end state.
     }
+    // Mark as dismissed in store (don't remove — detectors need dismissed state to avoid re-suggesting)
+    setMemorySuggestions((prev) =>
+      prev.map((s) =>
+        s.id === suggestionId ? { ...s, status: "dismissed" as const } : s,
+      ),
+    );
   }
 
   async function handleDeleteMemory(memoryId: string) {
@@ -1537,8 +1642,19 @@ export function AppShell() {
       await memoryDelete({ memoryId });
       removeMemoryItem(memoryId);
     } catch (e: unknown) {
+      if (isMissingIdError(e)) {
+        removeMemoryItem(memoryId);
+        return;
+      }
       setError(e instanceof Error ? e.message : String(e));
     }
+  }
+
+  // The backend reports an id it does not hold (or a suggestion no longer pending) as an error.
+  // For the UI that is the state the user asked for, so callers reconcile instead of looping on it.
+  function isMissingIdError(e: unknown): boolean {
+    const msg = e instanceof Error ? e.message : String(e);
+    return /not found|not pending|no suggestion|no memory item|no workflow/i.test(msg);
   }
 
   // --- Suggestion generation ---
@@ -1555,17 +1671,21 @@ export function AppShell() {
       projectRoot: session?.cwd,
     });
 
+    // Only suggestions that reached the database go into state; a suggestion the
+    // backend does not know could never be accepted or dismissed.
+    const stored: MemorySuggestion[] = [];
     for (const candidate of candidates) {
       try {
         await memoryStoreSuggestion({ suggestion: candidate });
-      } catch {
-        // persistence not critical
+        stored.push(candidate);
+      } catch (e: unknown) {
+        console.warn("[memory] suggestion store failed:", e instanceof Error ? e.message : e);
       }
     }
 
-    if (candidates.length > 0) {
+    if (stored.length > 0) {
       // Use function-form setter so the store's built-in dedup runs on latest state
-      setMemorySuggestions((prev) => [...prev, ...candidates]);
+      setMemorySuggestions((prev) => [...prev, ...stored]);
     }
   }
 

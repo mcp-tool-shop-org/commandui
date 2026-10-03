@@ -86,6 +86,23 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
 
       resizeObserver.observe(containerRef.current);
 
+      // Ctrl+Shift+<letter> is the app's escape hatch out of the terminal. xterm would
+      // otherwise turn it into a control character; let it bubble to the window
+      // shortcut handler instead. Copy/paste chords stay with the terminal.
+      term.attachCustomKeyEventHandler((event) => {
+        if (
+          event.type === "keydown" &&
+          event.ctrlKey &&
+          event.shiftKey &&
+          !event.altKey &&
+          /^[a-z]$/i.test(event.key) &&
+          !/^[cv]$/i.test(event.key)
+        ) {
+          return false;
+        }
+        return true;
+      });
+
       const disposable = term.onData((data) => {
         onData?.(data);
       });
