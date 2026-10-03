@@ -67,6 +67,7 @@ import {
   memoryDismissSuggestion,
   memoryDelete,
   memoryStoreSuggestion,
+  memoryListResolvedSuggestions,
 } from "../features/memory/memoryClient";
 import { InputComposer } from "../components/InputComposer";
 import type { InputComposerHandle } from "../components/InputComposer";
@@ -91,6 +92,10 @@ import { waitForTerminalStatus } from "./workflowStepWait";
 
 const APP_VERSION = "1.0.2";
 const SESSION_BUSY_MESSAGE = "A command is already running in this session.";
+const SESSION_USER_RUNNING_MESSAGE =
+  "A command you typed is still running in this session. Wait for the prompt or interrupt it.";
+/** How long a session may stay in "booting" before the UI offers Resync and Close. */
+const BOOT_STALL_MS = 20_000;
 const SESSION_NOT_READY_MESSAGE =
   "The terminal is not ready yet. Wait for the session to finish starting, or resync it.";
 const SESSION_EXITED_MESSAGE =
@@ -104,13 +109,48 @@ const TERMINAL_REPLAY_MAX_CHARS = 600_000;
 const TERMINAL_REPLAY_CHUNK_CHARS = 16_000;
 /** SGR reset, then a marker: truncation can cut mid-escape and mid-line, so start clean. */
 const TERMINAL_REPLAY_TRUNCATED_MARKER = "\x1b[0m[earlier output truncated]\r\n";
-const EXEC_STATES: readonly SessionExecState[] = [
+/**
+ * Truncation of a session that is inside a full-screen app (alternate screen) must not
+ * start the replay on the main screen, or the app's cursor-addressed frames land on the
+ * shell's scrollback. Replay re-enters the alternate screen first.
+ */
+const TERMINAL_REPLAY_ALT_PREFIX = "\x1b[0m\x1b[?1049h";
+const ALT_SCREEN_SEQ = /\x1b\[\?(?:1049|1047|47)([hl])/g;
+const ALT_SCREEN_TAIL_CHARS = 12;
+/** A hand-typed command is running ("userRunning"); widened here until the shared type carries it. */
+type ExecState = SessionExecState | "userRunning";
+const EXEC_STATES: readonly ExecState[] = [
   "booting",
   "ready",
   "running",
   "interrupting",
   "desynced",
+  "userRunning",
 ];
+const APP_NOTES_MAX = 200;
+const APP_NOTES_SHOWN = 6;
+
+function execStateOf(sessionId: string): ExecState | undefined {
+  return useExecutionStore.getState().sessionExecStates[sessionId] as ExecState | undefined;
+}
+
+function execIsBusy(exec: ExecState | undefined): boolean {
+  return exec === "running" || exec === "interrupting" || exec === "userRunning";
+}
+
+function busyMessage(sessionId: string): string {
+  return execStateOf(sessionId) === "userRunning" ? SESSION_USER_RUNNING_MESSAGE : SESSION_BUSY_MESSAGE;
+}
+
+function isReplayPrefix(entry: string): boolean {
+  return entry === TERMINAL_REPLAY_TRUNCATED_MARKER || entry === TERMINAL_REPLAY_ALT_PREFIX;
+}
+
+function altScreenAfter(previous: boolean, text: string): boolean {
+  let state = previous;
+  for (const match of text.matchAll(ALT_SCREEN_SEQ)) state = match[1] === "h";
+  return state;
+}
 
 type SessionSummaryWithState = SessionSummary & { execState?: string | null };
 
@@ -188,6 +228,11 @@ export function AppShell() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [exitedSessions, setExitedSessions] = useState<ReadonlySet<string>>(new Set());
   const [planNotice, setPlanNotice] = useState<string | null>(null);
+  // Lines the app itself writes ([approved], [plan], Welcome...) live here, outside xterm: the
+  // shell's absolute cursor moves know nothing about them and would overwrite them.
+  const [appNotes, setAppNotes] = useState<Record<string, string[]>>({});
+  const [stalledBoot, setStalledBoot] = useState<ReadonlySet<string>>(new Set());
+  const [bootTimerNonce, setBootTimerNonce] = useState(0);
 
   const [browserPreview] = useState(() => !isTauriRuntime());
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -226,6 +271,8 @@ export function AppShell() {
   const terminalIoFailedRef = useRef(new Set<string>());
   const exitedSessionsRef = useRef(new Set<string>());
   const replayCharsRef = useRef<Record<string, number>>({});
+  const altScreenRef = useRef<Record<string, boolean>>({});
+  const altTailRef = useRef<Record<string, string>>({});
   /** Suggestion ids the database already holds as accepted or dismissed (when the API reports them). */
   const settledSuggestionIdsRef = useRef(new Set<string>());
 
@@ -245,15 +292,19 @@ export function AppShell() {
   const session =
     sessions.find((s) => s.id === activeSessionId) ?? null;
 
-  const activeExecState: SessionExecState =
-    (activeSessionId ? sessionExecStates[activeSessionId] : undefined) ?? "booting";
+  const activeExecState: ExecState =
+    ((activeSessionId ? sessionExecStates[activeSessionId] : undefined) as ExecState | undefined) ?? "booting";
+  const activeBootStalled =
+    activeExecState === "booting" && activeSessionId !== null && stalledBoot.has(activeSessionId);
+  const activeNotes = activeSessionId ? appNotes[activeSessionId] ?? [] : [];
   const activeExited = activeSessionId ? exitedSessions.has(activeSessionId) : false;
   const activeBadge: SessionBadgeStatus =
     (activeSessionId && sessionBadge[activeSessionId]) || "idle";
   const isRunning =
     activeBadge === "running" ||
     activeExecState === "running" ||
-    activeExecState === "interrupting";
+    activeExecState === "interrupting" ||
+    activeExecState === "userRunning";
   const visibleExecutionStatus: "idle" | "running" | "success" | "failure" | "interrupted" =
     isRunning ? "running" : activeBadge;
   const composerBusy = activeSessionId ? busySessions.has(activeSessionId) : false;
@@ -271,8 +322,7 @@ export function AppShell() {
     if (!sessionId) return false;
     if (inFlightExecRef.current.has(sessionId)) return true;
     if (sessionBadgeRef.current[sessionId] === "running") return true;
-    const exec = useExecutionStore.getState().sessionExecStates[sessionId];
-    return exec === "running" || exec === "interrupting";
+    return execIsBusy(execStateOf(sessionId));
   }
 
   function lockSession(sessionId: string) {
@@ -305,13 +355,24 @@ export function AppShell() {
   // --- Helpers ---
   function clearTerminalView() {
     const sid = activeSessionIdRef.current;
-    if (sid) delete terminalLinesBySessionRef.current[sid];
+    if (sid) {
+      delete terminalLinesBySessionRef.current[sid];
+      // The total must go with the buffer, or truncation starts early on stale counts.
+      delete replayCharsRef.current[sid];
+      delete altScreenRef.current[sid];
+      delete altTailRef.current[sid];
+      setAppNotes((prev) => {
+        if (!(sid in prev)) return prev;
+        const { [sid]: _removed, ...rest } = prev;
+        return rest;
+      });
+    }
     terminalPaneRef.current?.clear();
   }
 
   function sessionNotReady(sessionId: string): boolean {
     if (exitedSessionsRef.current.has(sessionId)) return true;
-    const exec = useExecutionStore.getState().sessionExecStates[sessionId] ?? "booting";
+    const exec = execStateOf(sessionId) ?? "booting";
     return exec === "booting" || exec === "desynced";
   }
 
@@ -330,6 +391,19 @@ export function AppShell() {
   function forgetSession(sessionId: string) {
     terminalIoFailedRef.current.delete(sessionId);
     delete replayCharsRef.current[sessionId];
+    delete altScreenRef.current[sessionId];
+    delete altTailRef.current[sessionId];
+    setAppNotes((prev) => {
+      if (!(sessionId in prev)) return prev;
+      const { [sessionId]: _removed, ...rest } = prev;
+      return rest;
+    });
+    setStalledBoot((prev) => {
+      if (!prev.has(sessionId)) return prev;
+      const next = new Set(prev);
+      next.delete(sessionId);
+      return next;
+    });
     if (!exitedSessionsRef.current.has(sessionId)) return;
     const next = new Set(exitedSessionsRef.current);
     next.delete(sessionId);
@@ -350,9 +424,17 @@ export function AppShell() {
   }
 
   /** Every exec-state change goes through here so the I/O failure latch and exit tracking stay in step. */
-  function noteExecState(sessionId: string, state: SessionExecState) {
-    setSessionExecState(sessionId, state);
-    if (state === "ready" || state === "running") {
+  function noteExecState(sessionId: string, state: ExecState) {
+    setSessionExecState(sessionId, state as SessionExecState);
+    if (state !== "booting") {
+      setStalledBoot((prev) => {
+        if (!prev.has(sessionId)) return prev;
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
+    }
+    if (state === "ready" || state === "running" || state === "userRunning") {
       // The session is accepting input again: a later failure is a new failure.
       terminalIoFailedRef.current.delete(sessionId);
     }
@@ -371,11 +453,46 @@ export function AppShell() {
     }
     const exec = EXEC_STATES.find((e) => e === s.execState);
     if (exec) {
-      setSessionExecState(s.id, exec);
-      if (exec === "running" || exec === "interrupting") publishBadge(s.id, "running");
+      setSessionExecState(s.id, exec as SessionExecState);
+      if (execIsBusy(exec)) publishBadge(s.id, "running");
     } else if (!browserPreview) {
       // State unknown (older backend): offer Resync rather than a dead composer.
       setSessionExecState(s.id, "desynced");
+    }
+  }
+
+  /** A line the app wrote itself. Shown beside the terminal, never in the xterm stream. */
+  function appendAppNote(sessionId: string, text: string) {
+    const line = text.replace(/[\r\n]+$/, "");
+    if (line.length === 0) return;
+    setAppNotes((prev) => {
+      const list = [...(prev[sessionId] ?? []), line];
+      return { ...prev, [sessionId]: list.length > APP_NOTES_MAX ? list.slice(-APP_NOTES_MAX) : list };
+    });
+  }
+
+  /**
+   * Adopt the backend's exec state for sessions this window still shows as booting (a
+   * session:ready emitted before the listeners attached, or a missed event, would otherwise
+   * leave a dead composer). Never overrides a state an event already delivered.
+   */
+  async function reconcileSessionStates() {
+    try {
+      const res = await listSessions();
+      for (const s of res.sessions ?? []) {
+        if ((s.status as string) === "exited") {
+          markSessionExited(s.id);
+          continue;
+        }
+        const exec = EXEC_STATES.find((e) => e === (s as SessionSummaryWithState).execState);
+        const current = execStateOf(s.id);
+        if (exec && exec !== "booting" && (current === undefined || current === "booting")) {
+          setSessionExecState(s.id, exec as SessionExecState);
+          if (execIsBusy(exec)) publishBadge(s.id, "running");
+        }
+      }
+    } catch {
+      // best-effort: the stall banner still offers Resync
     }
   }
 
@@ -387,21 +504,37 @@ export function AppShell() {
     const buffers = terminalLinesBySessionRef.current;
     const buffer = buffers[sessionId] ?? (buffers[sessionId] = []);
     const last = buffer.length - 1;
-    if (last >= 0 && buffer[last].length < TERMINAL_REPLAY_CHUNK_CHARS && buffer[last] !== TERMINAL_REPLAY_TRUNCATED_MARKER) {
+    if (last >= 0 && buffer[last].length < TERMINAL_REPLAY_CHUNK_CHARS && !isReplayPrefix(buffer[last])) {
       buffer[last] += line;
     } else {
       buffer.push(line);
     }
+    // Track whether the app is in the alternate screen (vim, less, htop), scanning a short
+    // tail too so a sequence split across two reads is still seen.
+    const tail = altTailRef.current[sessionId] ?? "";
+    const scanned = tail + line;
+    altScreenRef.current[sessionId] = altScreenAfter(altScreenRef.current[sessionId] ?? false, scanned);
+    altTailRef.current[sessionId] = scanned.slice(-ALT_SCREEN_TAIL_CHARS);
+
     let total = (replayCharsRef.current[sessionId] ?? 0) + line.length;
     if (total > TERMINAL_REPLAY_MAX_CHARS) {
-      // Drop whole chunks from the front, then cut the first kept chunk at a line
-      // boundary so replay never starts inside an escape sequence or a line.
+      // Drop whole chunks from the front.
       while (buffer.length > 1 && total > TERMINAL_REPLAY_MAX_CHARS) {
         total -= buffer[0].length;
         buffer.shift();
       }
       const first = buffer[0];
-      if (first !== undefined && first !== TERMINAL_REPLAY_TRUNCATED_MARKER) {
+      if (altScreenRef.current[sessionId]) {
+        // Mid full-screen app: a main-screen marker or a line cut would replay the app's
+        // cursor-addressed frames onto the shell screen. Re-enter the alternate screen
+        // instead and let the app's next frames repaint it.
+        if (first !== undefined && first !== TERMINAL_REPLAY_ALT_PREFIX) {
+          buffer.unshift(TERMINAL_REPLAY_ALT_PREFIX);
+          total += TERMINAL_REPLAY_ALT_PREFIX.length;
+        }
+      } else if (first !== undefined && first !== TERMINAL_REPLAY_TRUNCATED_MARKER) {
+        // Cut the first kept chunk at a line boundary so replay never starts inside an
+        // escape sequence or a line.
         const nl = first.indexOf("\n");
         if (nl >= 0) {
           total -= nl + 1;
@@ -458,10 +591,12 @@ export function AppShell() {
         } else {
           const res = await createSession({ label: "Session 1" });
           addSession(res.session);
-          appendTerminalLine(
+          appendAppNote(
             res.session.id,
             `Welcome to CommandUI — ${escapeForTerminal(res.session.label)}\r\n`,
           );
+          // The ready event may have fired before this window listened for it.
+          void reconcileSessionStates();
         }
 
         // History
@@ -492,6 +627,14 @@ export function AppShell() {
           }
         } catch {
           // memory not critical
+        }
+        try {
+          // The dedicated command is the source of truth for settled ids (an older memory_list
+          // does not carry them); a dismissed suggestion must not come back after a restart.
+          const resolved = await memoryListResolvedSuggestions();
+          for (const r of resolved.resolved ?? []) settledSuggestionIdsRef.current.add(r.id);
+        } catch {
+          // best-effort
         }
 
         // Run pattern detectors on boot
@@ -658,6 +801,10 @@ export function AppShell() {
     remember(subscribeToExecStateChanged((event) => {
       noteExecState(event.sessionId, event.execState);
     }));
+    // Listeners are live: adopt any state that changed before they attached.
+    void Promise.all(pending).then(() => {
+      if (!disposed) void reconcileSessionStates();
+    });
 
     return () => {
       disposed = true;
@@ -678,12 +825,25 @@ export function AppShell() {
     const pane = terminalPaneRef.current;
     if (!pane) return;
 
-    pane.clear();
-    const buffer = terminalLinesBySessionRef.current[activeSessionId] ?? [];
-    for (const line of buffer) {
-      pane.write(line);
-    }
+    // replay() clears the terminal and mutes xterm's onData while the stored stream is
+    // parsed, so a stale terminal query in it cannot type a reply into the live shell.
+    pane.replay(terminalLinesBySessionRef.current[activeSessionId] ?? []);
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- A session stuck in "booting" gets a way out ---
+  useEffect(() => {
+    if (browserPreview || !activeSessionId || activeExited) return;
+    if (activeExecState !== "booting") return;
+    const sid = activeSessionId;
+    const timer = setTimeout(() => {
+      void reconcileSessionStates().then(() => {
+        if ((execStateOf(sid) ?? "booting") !== "booting") return;
+        setStalledBoot((prev) => (prev.has(sid) ? prev : new Set(prev).add(sid)));
+      });
+    }, BOOT_STALL_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browserPreview, activeSessionId, activeExecState, activeExited, bootTimerNonce]);
 
   // --- Settings persistence ---
   useEffect(() => {
@@ -838,13 +998,17 @@ export function AppShell() {
       actions.push({ id: "interrupt", label: "Interrupt Command", action: handleInterrupt });
     }
     // A dead shell cannot be resynced; New Session (above) is its way forward.
-    if (activeExecState === "desynced" && !activeExited) {
+    if ((activeExecState === "desynced" || activeBootStalled) && !activeExited) {
       actions.push({ id: "resync", label: "Resync Terminal", action: handleResync });
+    }
+    if (activeBootStalled && activeSessionId) {
+      const stuckId = activeSessionId;
+      actions.push({ id: "close-stuck-session", label: "Close Session", action: () => requestCloseSession(stuckId) });
     }
 
     return actions;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions, isRunning, activeExecState, activeExited]);
+  }, [sessions, isRunning, activeExecState, activeExited, activeBootStalled]);
 
   // execute() rejected before any ExecutionFinished event: close the row out.
   function failRejectedExecution(historyId: string, err: unknown) {
@@ -860,7 +1024,7 @@ export function AppShell() {
     if (!session) return false;
     if (busySessionsRef.current.has(session.id)) return false;
     if (inputMode === "command" && sessionIsRunning(session.id)) {
-      setError(SESSION_BUSY_MESSAGE);
+      setError(busyMessage(session.id));
       return false;
     }
     const sessionId = session.id;
@@ -885,7 +1049,7 @@ export function AppShell() {
       if (inputMode === "command") {
         // --- Raw command flow ---
         if (sessionIsRunning(sessionId)) {
-          setError(SESSION_BUSY_MESSAGE);
+          setError(busyMessage(sessionId));
           accepted = false;
           return false;
         }
@@ -969,8 +1133,8 @@ export function AppShell() {
 
         // Lines the app writes itself are escaped: model text must not move the cursor
         // or hide characters in the transcript.
-        appendTerminalLine(session.id, `? ${escapeForTerminal(value)}\r\n`);
-        appendTerminalLine(session.id, `[plan] ${escapeForTerminal(res.plan.command)}\r\n`);
+        appendAppNote(session.id, `? ${escapeForTerminal(value)}\r\n`);
+        appendAppNote(session.id, `[plan] ${escapeForTerminal(res.plan.command)}\r\n`);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -998,7 +1162,7 @@ export function AppShell() {
     }
     if (approveInFlightRef.current) return;
     if (sessionIsRunning(session.id) || busySessionsRef.current.has(session.id)) {
-      setError(SESSION_BUSY_MESSAGE);
+      setError(busyMessage(session.id));
       return;
     }
     if (sessionNotReady(session.id)) {
@@ -1034,7 +1198,7 @@ export function AppShell() {
 
     try {
       if (sessionIsRunning(sessionId)) {
-        setError(SESSION_BUSY_MESSAGE);
+        setError(busyMessage(sessionId));
         return;
       }
       inFlightExecRef.current.add(sessionId);
@@ -1103,7 +1267,7 @@ export function AppShell() {
         }
       }
 
-      appendTerminalLine(session.id, `[approved] ${escapeForTerminal(trimmed)}\r\n`);
+      appendAppNote(session.id, `[approved] ${escapeForTerminal(trimmed)}\r\n`);
 
       try {
         await executeCommand({
@@ -1177,7 +1341,7 @@ export function AppShell() {
     // Works with no session open, or when the plan's session is gone.
     const noteSessionId =
       planSessionId && sessions.some((s) => s.id === planSessionId) ? planSessionId : session?.id;
-    if (noteSessionId) appendTerminalLine(noteSessionId, "[rejected]\r\n");
+    if (noteSessionId) appendAppNote(noteSessionId, "[rejected]\r\n");
     setPlan(null);
     setPlanNotice(null);
     setCurrentPlanHistoryId(null);
@@ -1220,7 +1384,7 @@ export function AppShell() {
       return;
     }
     addWorkflow(workflow);
-    appendTerminalLine(session.id, `[workflow:saved] ${escapeForTerminal(workflow.label)}\r\n`);
+    appendAppNote(session.id, `[workflow:saved] ${escapeForTerminal(workflow.label)}\r\n`);
   }
 
   // --- Terminal handlers ---
@@ -1283,6 +1447,14 @@ export function AppShell() {
   // --- Resync handler ---
   async function handleResync() {
     if (!activeSessionId) return;
+    // Re-arm the boot timer: a resync restarts the wait for the ready marker.
+    setStalledBoot((prev) => {
+      if (!prev.has(activeSessionId)) return prev;
+      const next = new Set(prev);
+      next.delete(activeSessionId);
+      return next;
+    });
+    setBootTimerNonce((n) => n + 1);
     try {
       await resyncTerminal({ sessionId: activeSessionId });
     } catch (e: unknown) {
@@ -1303,7 +1475,8 @@ export function AppShell() {
       const res = await createSession({ label });
       addSession(res.session);
       setActiveSessionId(res.session.id);
-      appendTerminalLine(res.session.id, `[session] ${escapeForTerminal(res.session.label)}\r\n`);
+      void reconcileSessionStates();
+      appendAppNote(res.session.id, `[session] ${escapeForTerminal(res.session.label)}\r\n`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -1359,8 +1532,13 @@ export function AppShell() {
     if (!session) return;
     const command = item.executedCommand ?? item.generatedCommand;
     if (!command) return;
+    if (item.status === "rejected") {
+      // A rejected plan never ran; running it from here would skip the plan panel's risk gate.
+      setError("That plan was rejected. Use View Plan to review it and run it through the risk check.");
+      return;
+    }
     if (sessionIsRunning(session.id) || busySessionsRef.current.has(session.id)) {
-      setError(SESSION_BUSY_MESSAGE);
+      setError(busyMessage(session.id));
       return;
     }
 
@@ -1390,7 +1568,7 @@ export function AppShell() {
     lockSession(sessionId);
     try {
       if (sessionIsRunning(sessionId)) {
-        setError(SESSION_BUSY_MESSAGE);
+        setError(busyMessage(sessionId));
         return;
       }
       inFlightExecRef.current.add(sessionId);
@@ -1510,7 +1688,7 @@ export function AppShell() {
       return;
     }
     addWorkflow(workflow);
-    appendTerminalLine(session.id, `[workflow:saved] ${escapeForTerminal(workflow.label)}\r\n`);
+    appendAppNote(session.id, `[workflow:saved] ${escapeForTerminal(workflow.label)}\r\n`);
     setHistoryOpen(false);
   }
 
@@ -1536,14 +1714,14 @@ export function AppShell() {
     const durSuffix = duration ? ` (${duration})` : "";
 
     if (finalStatus === "success") {
-      appendTerminalLine(sessionId, `[workflow:done] ${escapeForTerminal(run.workflowName)} — ${succeeded}/${total} succeeded${durSuffix}\r\n`);
+      appendAppNote(sessionId, `[workflow:done] ${escapeForTerminal(run.workflowName)} — ${succeeded}/${total} succeeded${durSuffix}\r\n`);
     } else if (finalStatus === "failed") {
       const failedStep = run.steps.find((s) => s.status === "failed");
-      appendTerminalLine(sessionId, `[workflow:failed] ${escapeForTerminal(run.workflowName)} — ${succeeded}/${total} succeeded, failed on step ${(failedStep?.index ?? 0) + 1}${durSuffix}\r\n`);
+      appendAppNote(sessionId, `[workflow:failed] ${escapeForTerminal(run.workflowName)} — ${succeeded}/${total} succeeded, failed on step ${(failedStep?.index ?? 0) + 1}${durSuffix}\r\n`);
     } else {
       const skipped = run.steps.filter((s) => s.status === "skipped").length;
       const interruptedStep = run.steps.find((s) => s.status === "interrupted");
-      appendTerminalLine(sessionId, `[workflow:interrupted] ${escapeForTerminal(run.workflowName)} — interrupted during step ${(interruptedStep?.index ?? 0) + 1}; ${skipped} skipped${durSuffix}\r\n`);
+      appendAppNote(sessionId, `[workflow:interrupted] ${escapeForTerminal(run.workflowName)} — interrupted during step ${(interruptedStep?.index ?? 0) + 1}; ${skipped} skipped${durSuffix}\r\n`);
     }
   }
 
@@ -1552,7 +1730,7 @@ export function AppShell() {
     if (!session) return;
     const runSessionId = session.id;
     if (sessionIsRunning(runSessionId) || busySessionsRef.current.has(runSessionId)) {
-      setError(SESSION_BUSY_MESSAGE);
+      setError(busyMessage(runSessionId));
       return;
     }
     if (sessionNotReady(runSessionId)) {
@@ -1625,7 +1803,7 @@ export function AppShell() {
           if (latestRun) {
             writeRunSummary(runSessionId, { ...latestRun, finishedAt: Date.now() }, "failed");
           }
-          setError(SESSION_BUSY_MESSAGE);
+          setError(busyMessage(runSessionId));
           return;
         }
 
@@ -1659,7 +1837,21 @@ export function AppShell() {
           inFlightExecRef.current.delete(runSessionId);
         }
 
-        const waited = await waitForStepCompletion(executionId, controller.signal);
+        let waited = await waitForStepCompletion(executionId, controller.signal);
+        // A long step (npm install, a build, a test suite) is not a failure. While the
+        // terminal still reports the command running, keep waiting; only an explicit
+        // Interrupt stops it.
+        while (
+          !waited.ok &&
+          waited.reason === "timeout" &&
+          execIsBusy(execStateOf(runSessionId))
+        ) {
+          appendAppNote(
+            runSessionId,
+            `[workflow:waiting] step ${i + 1}/${commands.length} is still running. Use Interrupt to stop it.`,
+          );
+          waited = await waitForStepCompletion(executionId, controller.signal);
+        }
         if (!waited.ok) {
           updateActiveRunStep(i, {
             status: "failed",
@@ -1674,19 +1866,13 @@ export function AppShell() {
           if (latestRun) {
             writeRunSummary(runSessionId, { ...latestRun, finishedAt: Date.now() }, "failed");
           }
+          // Reached only when the terminal is no longer running the step (a lost finish event)
+          // or the run was aborted: nothing is interrupted here.
+          clearSessionRunning(runSessionId);
           if (waited.reason === "timeout") {
-            // The command may still be running in the PTY. Stop it and leave the
-            // local running state to execution_finished instead of writing Ready.
-            try {
-              await interruptTerminal({ sessionId: runSessionId });
-            } catch {
-              // surfaced through the error below
-            }
             setError(
-              "Workflow step timed out; the running command was interrupted. The session stays busy until the terminal reports it finished.",
+              "A workflow step never reported a result, but the terminal is idle. The run was stopped; check the terminal output.",
             );
-          } else {
-            clearSessionRunning(runSessionId);
           }
           return;
         }
@@ -1863,7 +2049,7 @@ export function AppShell() {
       addWorkflow(workflow);
       setWorkflowEditorData(null);
       if (session) {
-        appendTerminalLine(session.id, `[workflow:promoted] ${escapeForTerminal(workflow.label)}\r\n`);
+        appendAppNote(session.id, `[workflow:promoted] ${escapeForTerminal(workflow.label)}\r\n`);
       }
 
       // 2. Accept the memory suggestion. A failure here is partial success: the
@@ -2098,6 +2284,21 @@ export function AppShell() {
             </div>
           )}
 
+          {activeBootStalled && !activeExited && activeSessionId && (
+            <div className="desync-banner" role="status">
+              <span>
+                The {session?.shell ?? "shell"} in this session has not reported ready.
+                A shell profile that errors or replaces the prompt can cause this.
+              </span>
+              <button type="button" onClick={handleResync}>
+                Resync
+              </button>
+              <button type="button" onClick={() => requestCloseSession(activeSessionId)}>
+                Close Session
+              </button>
+            </div>
+          )}
+
           <WorkflowRunBanner />
 
           {bootPhase === "booting" && (
@@ -2108,10 +2309,24 @@ export function AppShell() {
             ref={terminalPaneRef}
             sessionId={activeSessionId}
             executionStatus={visibleExecutionStatus}
+            statusLabel={activeExecState === "userRunning" ? "running (typed)" : undefined}
             onResize={handleTerminalResize}
             onData={handleTerminalData}
             autoFocus
           />
+
+          {activeNotes.length > 0 && (
+            <div className="app-notes" role="log" aria-label="CommandUI activity">
+              {activeNotes.slice(-APP_NOTES_SHOWN).map((note, i) => (
+                <div key={activeNotes.length - APP_NOTES_SHOWN + i} className="app-note">
+                  {note}
+                </div>
+              ))}
+              <button type="button" className="link-btn" onClick={clearTerminalView}>
+                Clear
+              </button>
+            </div>
+          )}
 
           {error && (
             <div className="error-box">
@@ -2146,9 +2361,13 @@ export function AppShell() {
                 ? "Shell exited — open a new session."
                 : activeExecState === "desynced"
                   ? "Terminal out of sync — use Resync."
-                  : activeExecState === "booting"
-                    ? "Terminal starting…"
-                    : undefined
+                  : activeBootStalled
+                    ? "Terminal not ready — use Resync or close the session."
+                    : activeExecState === "booting"
+                      ? "Terminal starting…"
+                      : activeExecState === "userRunning"
+                        ? "A command you typed is running — wait for the prompt."
+                        : undefined
             }
           />
         </section>

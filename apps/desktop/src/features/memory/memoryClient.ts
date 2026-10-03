@@ -17,6 +17,13 @@ export function memoryList(): Promise<MemoryListResponse> {
   return tauriInvoke("memory_list", {});
 }
 
+/** Ids and final status of every accepted or dismissed suggestion (not part of the shared contract yet). */
+export function memoryListResolvedSuggestions(): Promise<{
+  resolved: Array<{ id: string; status: string }>;
+}> {
+  return tauriInvoke("memory_list_resolved_suggestions", {});
+}
+
 export function memoryAdd(
   request: MemoryAddRequest,
 ): Promise<MemoryAddResponse> {

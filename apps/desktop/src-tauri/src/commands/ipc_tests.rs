@@ -46,6 +46,7 @@ fn test_app() -> (tauri::App<MockRuntime>, WebviewWindow<MockRuntime>) {
             super::memory::memory_dismiss_suggestion,
             super::memory::memory_delete,
             super::memory::memory_store_suggestion,
+            super::memory::memory_list_resolved_suggestions,
             super::workflow::workflow_add,
             super::workflow::workflow_list,
             super::workflow::workflow_delete,

@@ -74,8 +74,30 @@ pub struct TerminalResyncResponse {
     pub ok: bool,
 }
 
+// These commands are async so Tauri runs them on its async runtime instead of the main
+// thread: a PTY write that blocks on a slow-draining shell must not freeze the webview.
+
+/// Largest piece of a paste handed to the PTY in one write.
+const WRITE_CHUNK_BYTES: usize = 4096;
+
+/// Split at char boundaries so no chunk cuts a UTF-8 sequence.
+fn write_chunks(data: &str) -> Vec<&str> {
+    let mut chunks = Vec::new();
+    let mut rest = data;
+    while !rest.is_empty() {
+        let mut end = rest.len().min(WRITE_CHUNK_BYTES);
+        while !rest.is_char_boundary(end) {
+            end -= 1;
+        }
+        let (head, tail) = rest.split_at(end);
+        chunks.push(head);
+        rest = tail;
+    }
+    chunks
+}
+
 #[tauri::command]
-pub fn terminal_execute(
+pub async fn terminal_execute(
     request: TerminalExecuteRequest,
     state: State<'_, AppState>,
 ) -> Result<TerminalExecuteResponse, ApiError> {
@@ -94,7 +116,7 @@ pub fn terminal_execute(
 }
 
 #[tauri::command]
-pub fn terminal_interrupt(
+pub async fn terminal_interrupt(
     request: TerminalInterruptRequest,
     state: State<'_, AppState>,
 ) -> Result<TerminalInterruptResponse, ApiError> {
@@ -107,7 +129,7 @@ pub fn terminal_interrupt(
 }
 
 #[tauri::command]
-pub fn terminal_resync(
+pub async fn terminal_resync(
     request: TerminalResyncRequest,
     state: State<'_, AppState>,
 ) -> Result<TerminalResyncResponse, ApiError> {
@@ -120,7 +142,7 @@ pub fn terminal_resync(
 }
 
 #[tauri::command]
-pub fn terminal_resize(
+pub async fn terminal_resize(
     request: TerminalResizeRequest,
     state: State<'_, AppState>,
 ) -> Result<TerminalResizeResponse, ApiError> {
@@ -133,14 +155,31 @@ pub fn terminal_resize(
 }
 
 #[tauri::command]
-pub fn terminal_write(
+pub async fn terminal_write(
     request: TerminalWriteRequest,
     state: State<'_, AppState>,
 ) -> Result<TerminalWriteResponse, ApiError> {
-    state
-        .terminal_service
-        .write(&request.session_id, &request.data)
-        .map_err(ApiError::execution)?;
+    for chunk in write_chunks(&request.data) {
+        state
+            .terminal_service
+            .write(&request.session_id, chunk)
+            .map_err(ApiError::execution)?;
+    }
 
     Ok(TerminalWriteResponse { ok: true })
+}
+
+#[cfg(test)]
+mod chunk_tests {
+    use super::*;
+
+    #[test]
+    fn chunks_rejoin_and_respect_char_boundaries() {
+        let data = "é".repeat(WRITE_CHUNK_BYTES);
+        let chunks = write_chunks(&data);
+        assert!(chunks.len() > 1);
+        assert!(chunks.iter().all(|c| c.len() <= WRITE_CHUNK_BYTES));
+        assert_eq!(chunks.concat(), data);
+        assert!(write_chunks("").is_empty());
+    }
 }

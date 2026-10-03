@@ -6,6 +6,8 @@ import "@xterm/xterm/css/xterm.css";
 
 export type TerminalPaneHandle = {
   write: (data: string) => void;
+  /** Clear the terminal and write a stored stream with onData muted (queries in it get no reply). */
+  replay: (chunks: readonly string[]) => void;
   clear: () => void;
   focus: () => void;
 };
@@ -13,6 +15,8 @@ export type TerminalPaneHandle = {
 type Props = {
   sessionId?: string | null;
   executionStatus?: "idle" | "running" | "success" | "failure" | "interrupted";
+  /** Text for the status badge when it should differ from the status itself. */
+  statusLabel?: string;
   onResize?: (cols: number, rows: number) => void;
   onData?: (data: string) => void;
   autoFocus?: boolean;
@@ -23,6 +27,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
     {
       sessionId,
       executionStatus = "idle",
+      statusLabel,
       onResize,
       onData,
       autoFocus = false,
@@ -32,6 +37,9 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
     const containerRef = useRef<HTMLDivElement | null>(null);
     const terminalRef = useRef<Terminal | null>(null);
     const fitRef = useRef<FitAddon | null>(null);
+    // True while a stored stream is replayed: xterm answers the queries inside it (cursor
+    // position, device attributes) through onData, and those replies must not reach the shell.
+    const replayingRef = useRef(false);
 
     const setFocusZone = useFocusStore((s) => s.setFocusZone);
 
@@ -49,6 +57,25 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
       () => ({
         write(data: string) {
           terminalRef.current?.write(data);
+        },
+        replay(chunks: readonly string[]) {
+          const term = terminalRef.current;
+          if (!term) return;
+          term.clear();
+          term.reset();
+          if (chunks.length === 0) return;
+          replayingRef.current = true;
+          const last = chunks.length - 1;
+          chunks.forEach((chunk, i) => {
+            if (i === last) {
+              // The callback runs once xterm has parsed (and answered) everything before it.
+              term.write(chunk, () => {
+                replayingRef.current = false;
+              });
+            } else {
+              term.write(chunk);
+            }
+          });
         },
         clear() {
           const term = terminalRef.current;
@@ -112,7 +139,16 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
       });
 
       const disposable = term.onData((data) => {
+        if (replayingRef.current) return;
         onDataRef.current?.(data);
+      });
+
+      // convertEol turns a bare LF into CR LF, which the main screen needs (the runtime emits
+      // bare LF there) but a full-screen app does not: it uses LF to step down a row and keep the
+      // column. Follow the active buffer.
+      // Optional chaining: test doubles for xterm may not model buffers.
+      const bufferDisposable = term.buffer?.onBufferChange?.((buffer) => {
+        term.options.convertEol = buffer.type !== "alternate";
       });
 
       // Track focus zone for shortcut context
@@ -124,6 +160,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
 
       return () => {
         disposable.dispose();
+        bufferDisposable?.dispose();
         if (textarea) {
           textarea.removeEventListener("focus", handleFocus);
         }
@@ -169,7 +206,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
       <div className="terminal-shell">
         <div className="terminal-meta">
           <span className={`exec-badge exec-${executionStatus}`}>
-            {executionStatus}
+            {statusLabel ?? executionStatus}
           </span>
         </div>
         <div ref={containerRef} className="terminal-xterm-host" />

@@ -19,6 +19,8 @@ const BIDI = "bidirectional control";
 const INVISIBLE = "zero-width or invisible";
 const SEPARATOR = "line or paragraph separator";
 
+const FORMAT_CHAR = /^\p{Cf}$/u;
+
 function classify(cp: number): string | null {
   if (cp >= 0x202a && cp <= 0x202e) return BIDI;
   if (cp >= 0x2066 && cp <= 0x2069) return BIDI;
@@ -28,6 +30,17 @@ function classify(cp: number): string | null {
   if (cp >= 0x206a && cp <= 0x206f) return INVISIBLE;
   if (cp === 0xfeff || cp === 0x00ad || cp === 0x180e) return INVISIBLE;
   if (cp === 0x2028 || cp === 0x2029) return SEPARATOR;
+  // Characters that render as nothing but are still passed to the shell: tag characters,
+  // variation selectors, the grapheme joiner, Hangul and halfwidth fillers, the braille
+  // blank, and interlinear annotation marks.
+  if (cp >= 0xe0000 && cp <= 0xe007f) return INVISIBLE;
+  if (cp >= 0xfe00 && cp <= 0xfe0f) return INVISIBLE;
+  if (cp >= 0xe0100 && cp <= 0xe01ef) return INVISIBLE;
+  if (cp === 0x034f || cp === 0x115f || cp === 0x1160 || cp === 0x3164 || cp === 0xffa0) return INVISIBLE;
+  if (cp === 0x2800) return INVISIBLE;
+  if (cp >= 0xfff9 && cp <= 0xfffb) return INVISIBLE;
+  // Any other format character (Unicode category Cf) draws nothing either.
+  if (FORMAT_CHAR.test(String.fromCodePoint(cp))) return INVISIBLE;
   return null;
 }
 

@@ -1265,3 +1265,27 @@ select {
   border-radius: var(--radius-sm);
   font-size: 13px;
 }
+
+.app-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #2a323c);
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.app-note {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.app-notes .link-btn {
+  align-self: flex-end;
+}

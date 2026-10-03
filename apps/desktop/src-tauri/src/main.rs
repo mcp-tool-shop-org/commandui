@@ -72,6 +72,7 @@ fn main() {
             commandui_desktop::commands::memory::memory_dismiss_suggestion,
             commandui_desktop::commands::memory::memory_delete,
             commandui_desktop::commands::memory::memory_store_suggestion,
+            commandui_desktop::commands::memory::memory_list_resolved_suggestions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running CommandUI");

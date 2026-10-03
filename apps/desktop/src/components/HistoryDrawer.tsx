@@ -231,7 +231,12 @@ export function HistoryDrawer({
                     <div className="history-actions">
                       <button
                         type="button"
-                        disabled={!command}
+                        disabled={!command || item.status === "rejected"}
+                        title={
+                          item.status === "rejected"
+                            ? "This plan was rejected. Use View Plan to run it through the risk check."
+                            : undefined
+                        }
                         onClick={() => onRerun(item)}
                       >
                         Rerun

@@ -374,7 +374,17 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     if (!exists) {
       mockMemorySuggestions.push(suggestion);
     }
-    return { ok: true };
+    return { ok: true, inserted: !exists };
+  },
+
+  memory_list_resolved_suggestions() {
+    const resolved = mockMemorySuggestions
+      .filter((s) => (s as Record<string, unknown>).status !== "pending")
+      .map((s) => ({
+        id: (s as Record<string, unknown>).id as string,
+        status: (s as Record<string, unknown>).status as string,
+      }));
+    return { resolved };
   },
 
   memory_accept_suggestion(args) {

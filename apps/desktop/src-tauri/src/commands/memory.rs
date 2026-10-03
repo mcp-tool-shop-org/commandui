@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use crate::types::errors::ApiError;
 use commandui_runtime_persistence::db::open_database;
-use commandui_runtime_persistence::memory::{self, MemoryItem, MemorySuggestion};
+use commandui_runtime_persistence::memory::{self, MemoryItem, MemorySuggestion, ResolvedSuggestion};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -10,6 +10,16 @@ use tauri::State;
 pub struct MemoryListResponse {
     pub items: Vec<MemoryItem>,
     pub suggestions: Vec<MemorySuggestion>,
+    /// Ids of suggestions already dismissed, so the detectors do not propose them again.
+    pub dismissed_suggestion_ids: Vec<String>,
+    /// Ids of suggestions already accepted.
+    pub accepted_suggestion_ids: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryListResolvedResponse {
+    pub resolved: Vec<ResolvedSuggestion>,
 }
 
 #[derive(Deserialize)]
@@ -59,6 +69,8 @@ pub struct MemoryStoreSuggestionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct MemoryStoreSuggestionResponse {
     pub ok: bool,
+    /// False when the id already existed (accepted or dismissed earlier): nothing was stored.
+    pub inserted: bool,
 }
 
 #[derive(Deserialize)]
@@ -86,7 +98,32 @@ pub fn memory_list(state: State<'_, AppState>) -> Result<MemoryListResponse, Api
     let conn = get_conn(&state)?;
     let items = memory::list_items(&conn).map_err(ApiError::database)?;
     let suggestions = memory::list_pending_suggestions(&conn).map_err(ApiError::database)?;
-    Ok(MemoryListResponse { items, suggestions })
+    let resolved = memory::list_resolved_suggestions(&conn).map_err(ApiError::database)?;
+    let mut dismissed_suggestion_ids = Vec::new();
+    let mut accepted_suggestion_ids = Vec::new();
+    for r in resolved {
+        if r.status == "accepted" {
+            accepted_suggestion_ids.push(r.id);
+        } else {
+            dismissed_suggestion_ids.push(r.id);
+        }
+    }
+    Ok(MemoryListResponse {
+        items,
+        suggestions,
+        dismissed_suggestion_ids,
+        accepted_suggestion_ids,
+    })
+}
+
+/// Id and final status of every accepted or dismissed suggestion.
+#[tauri::command]
+pub fn memory_list_resolved_suggestions(
+    state: State<'_, AppState>,
+) -> Result<MemoryListResolvedResponse, ApiError> {
+    let conn = get_conn(&state)?;
+    let resolved = memory::list_resolved_suggestions(&conn).map_err(ApiError::database)?;
+    Ok(MemoryListResolvedResponse { resolved })
 }
 
 #[tauri::command]
@@ -139,6 +176,7 @@ pub fn memory_store_suggestion(
     state: State<'_, AppState>,
 ) -> Result<MemoryStoreSuggestionResponse, ApiError> {
     let conn = get_conn(&state)?;
-    memory::store_suggestion(&conn, &request.suggestion).map_err(ApiError::database)?;
-    Ok(MemoryStoreSuggestionResponse { ok: true })
+    let inserted =
+        memory::store_suggestion(&conn, &request.suggestion).map_err(ApiError::database)?;
+    Ok(MemoryStoreSuggestionResponse { ok: true, inserted })
 }

@@ -84,7 +84,7 @@ fn to_payload(s: SessionSummary, state: &AppState) -> SessionSummaryPayload {
 }
 
 #[tauri::command]
-pub fn session_create(
+pub async fn session_create(
     request: SessionCreateRequest,
     state: State<'_, AppState>,
 ) -> Result<SessionCreateResponse, ApiError> {
