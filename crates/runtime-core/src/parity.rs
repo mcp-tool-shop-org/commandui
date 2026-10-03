@@ -52,6 +52,7 @@ mod tests {
             exec_state: SessionExecState::Booting,
             boot_prompt_received: false,
             command_sent_at: None,
+            marker_nonce: "parity-nonce".to_string(),
             read_buffer: String::new(),
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -76,6 +77,7 @@ mod tests {
             exec_state: SessionExecState::Running,
             boot_prompt_received: true,
             command_sent_at: None,
+            marker_nonce: "parity-nonce".to_string(),
             read_buffer: String::new(),
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -100,6 +102,7 @@ mod tests {
             exec_state: SessionExecState::Interrupting,
             boot_prompt_received: true,
             command_sent_at: None,
+            marker_nonce: "parity-nonce".to_string(),
             read_buffer: String::new(),
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -119,7 +122,7 @@ mod tests {
         let sessions = make_sessions();
         insert_booting_session(&sessions, "s1");
 
-        let marker = format!("{}|/home/user|0\n", prompt_marker());
+        let marker = format!("{}|parity-nonce|/home/user|0\n", prompt_marker());
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
 
         let events = sink.events();
@@ -139,7 +142,7 @@ mod tests {
         let sessions = make_sessions();
         insert_running_session(&sessions, "s1", "exec-1");
 
-        let marker = format!("{}|/tmp|0\n", prompt_marker());
+        let marker = format!("{}|parity-nonce|/tmp|0\n", prompt_marker());
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
 
         let events = sink.events();
@@ -160,7 +163,7 @@ mod tests {
         let sessions = make_sessions();
         insert_running_session(&sessions, "s1", "exec-2");
 
-        let marker = format!("{}|/tmp|1\n", prompt_marker());
+        let marker = format!("{}|parity-nonce|/tmp|1\n", prompt_marker());
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
 
         let events = sink.events();
@@ -182,7 +185,7 @@ mod tests {
         let sessions = make_sessions();
         insert_interrupting_session(&sessions, "s1", "exec-3");
 
-        let marker = format!("{}|/home/user|130\n", prompt_marker());
+        let marker = format!("{}|parity-nonce|/home/user|130\n", prompt_marker());
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
 
         let events = sink.events();
@@ -204,7 +207,7 @@ mod tests {
         let sessions = make_sessions();
         insert_running_session(&sessions, "s1", "exec-4");
 
-        let marker = format!("{}|/new/dir|0\n", prompt_marker());
+        let marker = format!("{}|parity-nonce|/new/dir|0\n", prompt_marker());
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
 
         let events = sink.events();

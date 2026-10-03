@@ -105,7 +105,7 @@ mod tests {
         assert_eq!(p.source, "ollama");
         assert_eq!(p.risk, "low");
         assert_eq!(p.confidence, 0.95);
-        assert_eq!(p.user_intent, "List files in current directory");
+        assert_eq!(p.user_intent, "list files");
         assert!(p.touches_files);
         assert!(!p.destructive);
         assert!(!p.requires_confirmation);

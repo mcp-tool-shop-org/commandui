@@ -106,18 +106,16 @@ pub(crate) struct LlmPlanResponse {
     pub explanation: String,
     #[serde(default)]
     pub assumptions: Vec<String>,
-    #[serde(default)]
     pub requires_approval: bool,
-    #[serde(default)]
     pub destructive: bool,
     #[serde(default)]
     pub touches_files: bool,
     #[serde(default)]
     pub touches_network: bool,
-    #[serde(default)]
     pub escalates_privileges: bool,
     #[serde(default = "default_confidence")]
     pub confidence: f64,
+    #[serde(default)]
     pub expected_output: Option<String>,
 }
 

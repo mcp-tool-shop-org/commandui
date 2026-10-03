@@ -7,7 +7,7 @@ use crate::prompt::build_planner_prompt;
 use crate::types::{
     CommandProposal, LlmPlanResponse, OllamaConfig, PlanContext, PlanReview,
 };
-use crate::validate::validate_llm_response;
+use crate::validate::{accept_llm_plan, command_floor};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -82,7 +82,7 @@ pub(crate) async fn try_ollama(
         .await
         .map_err(|e| format!("envelope parse: {e}"))?;
 
-    let llm: LlmPlanResponse = serde_json::from_str(&envelope.response).map_err(|e| {
+    let mut llm: LlmPlanResponse = serde_json::from_str(&envelope.response).map_err(|e| {
         let preview = if envelope.response.len() > 200 {
             format!("{}...", &envelope.response[..200])
         } else {
@@ -91,8 +91,8 @@ pub(crate) async fn try_ollama(
         format!("plan parse: {e} | raw: {preview}")
     })?;
 
-    // Validate before converting — fail closed
-    validate_llm_response(&llm)?;
+    // Floor then validate — fail closed. Flags the model omitted cannot pass.
+    accept_llm_plan(&mut llm)?;
 
     Ok(llm_to_proposal(&llm, context, user_intent, "ollama"))
 }
@@ -101,7 +101,7 @@ pub(crate) async fn try_ollama(
 pub(crate) fn llm_to_proposal(
     llm: &LlmPlanResponse,
     context: &PlanContext,
-    _user_intent: &str,
+    user_intent: &str,
     source: &str,
 ) -> CommandProposal {
     let plan_id = uuid::Uuid::new_v4().to_string();
@@ -111,7 +111,7 @@ pub(crate) fn llm_to_proposal(
         id: plan_id,
         session_id: context.session_id.clone(),
         source: source.to_string(),
-        user_intent: llm.intent_summary.clone(),
+        user_intent: user_intent.to_string(),
         command: llm.command.clone(),
         cwd: Some(context.cwd.clone()),
         explanation: llm.explanation.clone(),
@@ -130,11 +130,12 @@ pub(crate) fn llm_to_proposal(
 
 /// Build a PlanReview from a proposal and context.
 pub fn build_review(proposal: &CommandProposal, context: &PlanContext) -> PlanReview {
+    let floor = command_floor(&proposal.command);
     let mut safety_flags = vec![];
-    if proposal.destructive {
+    if proposal.destructive || floor.destructive {
         safety_flags.push("DESTRUCTIVE_OPERATION".to_string());
     }
-    if proposal.escalates_privileges {
+    if proposal.escalates_privileges || floor.escalates_privileges {
         safety_flags.push("PRIVILEGE_ESCALATION".to_string());
     }
     if proposal.touches_network {
@@ -194,6 +195,8 @@ mod tests {
 
         let proposal = llm_to_proposal(&llm, &ctx, "list files", "ollama");
         assert_eq!(proposal.command, "ls -la");
+        assert_eq!(proposal.user_intent, "list files");
+        assert_ne!(proposal.user_intent, llm.intent_summary);
         assert_eq!(proposal.source, "ollama");
         assert_eq!(proposal.risk, "low");
         assert_eq!(proposal.confidence, 0.95);
@@ -232,6 +235,41 @@ mod tests {
         let review = build_review(&proposal, &ctx);
         assert!(review.safety_flags.contains(&"DESTRUCTIVE_OPERATION".to_string()));
         assert!(review.safety_flags.contains(&"PRIVILEGE_ESCALATION".to_string()));
+        assert_eq!(
+            review
+                .safety_flags
+                .iter()
+                .filter(|f| *f == "DESTRUCTIVE_OPERATION")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_build_review_flags_command_text_when_model_booleans_are_false() {
+        let proposal = CommandProposal {
+            id: "p1".to_string(),
+            session_id: "s1".to_string(),
+            source: "ollama".to_string(),
+            user_intent: "clean up".to_string(),
+            command: "sudo rm -rf /tmp/old".to_string(),
+            cwd: Some("/tmp".to_string()),
+            explanation: "Cleans a directory".to_string(),
+            assumptions: vec![],
+            confidence: 0.7,
+            risk: "low".to_string(),
+            destructive: false,
+            requires_confirmation: false,
+            touches_files: false,
+            touches_network: false,
+            escalates_privileges: false,
+            expected_output: None,
+            generated_at: "2026-01-01T00:00:00Z".to_string(),
+        };
+        let ctx = PlanContext::default();
+        let review = build_review(&proposal, &ctx);
+        assert!(review.safety_flags.contains(&"DESTRUCTIVE_OPERATION".to_string()));
+        assert!(review.safety_flags.contains(&"PRIVILEGE_ESCALATION".to_string()));
     }
 
     #[test]
@@ -256,16 +294,38 @@ mod tests {
     }
 
     #[test]
-    fn test_deserialize_minimal_response() {
+    fn test_deserialize_minimal_response_requires_safety_booleans() {
         let json = r#"{
             "intent_summary": "List files",
             "command": "ls",
             "risk": "low",
             "explanation": "Lists files"
         }"#;
+        let err = serde_json::from_str::<LlmPlanResponse>(json).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("requires_approval")
+                || msg.contains("destructive")
+                || msg.contains("escalates_privileges"),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn test_deserialize_omitted_touches_still_parses() {
+        let json = r#"{
+            "intent_summary": "List files",
+            "command": "ls",
+            "risk": "low",
+            "explanation": "Lists files",
+            "requires_approval": false,
+            "destructive": false,
+            "escalates_privileges": false
+        }"#;
         let plan: LlmPlanResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(plan.command, "ls");
-        assert!(!plan.destructive);
-        assert_eq!(plan.confidence, 0.8); // default
+        assert!(!plan.touches_files);
+        assert!(!plan.touches_network);
+        assert!(plan.expected_output.is_none());
+        assert_eq!(plan.confidence, 0.8);
     }
 }

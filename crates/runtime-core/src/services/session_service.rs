@@ -11,7 +11,8 @@ use crate::events::{
     SessionExecStateChangedEvent, SessionReadyEvent, TerminalLineEvent,
 };
 use crate::pty::{
-    bootstrap_prompt, clone_reader, default_shell, spawn_reader, spawn_shell, write_raw, PROMPT_MARKER,
+    bootstrap_prompt, clone_reader, default_shell, new_marker_nonce, spawn_reader, spawn_shell,
+    write_raw, PtyHandle, PROMPT_MARKER,
 };
 use crate::session::{SessionExecState, SessionRecord, SessionRegistry};
 use std::sync::{Arc, Mutex};
@@ -60,11 +61,15 @@ impl SessionService {
             .cwd
             .unwrap_or_else(|| std::env::current_dir().unwrap().to_string_lossy().to_string());
         let now = chrono::Utc::now().to_rfc3339();
+        let nonce = new_marker_nonce();
+        let Some(prompt_cmd) = bootstrap_prompt(&shell, &nonce) else {
+            eprintln!("[session] refused unsupported shell: {shell}");
+            return Err(format!("unsupported shell: {shell}"));
+        };
 
         let (pair, writer) = spawn_shell(&shell, Some(&cwd))?;
         let reader = clone_reader(&pair)?;
         let bootstrap_writer = writer.clone();
-        let prompt_cmd = bootstrap_prompt(&shell);
 
         let record = SessionRecord {
             id: id.clone(),
@@ -78,6 +83,7 @@ impl SessionService {
             exec_state: SessionExecState::Booting,
             boot_prompt_received: false,
             command_sent_at: None,
+            marker_nonce: nonce,
             read_buffer: String::new(),
             created_at: now.clone(),
             last_active_at: now.clone(),
@@ -87,7 +93,7 @@ impl SessionService {
             id: id.clone(),
             label,
             cwd,
-            shell,
+            shell: shell.clone(),
             status: "active".to_string(),
             created_at: now.clone(),
             last_active_at: now,
@@ -112,9 +118,13 @@ impl SessionService {
             );
         });
 
-        if let Some(prompt_cmd) = prompt_cmd {
-            write_raw(&bootstrap_writer, &prompt_cmd).ok();
-        }
+        persist_bootstrap(
+            &self.sessions,
+            &id,
+            &bootstrap_writer,
+            &prompt_cmd,
+            &shell,
+        )?;
 
         Ok(summary)
     }
@@ -176,28 +186,33 @@ impl SessionService {
         let mut display_text = String::new();
 
         // Carry a trailing partial line on the session. Chunks are not lines.
-        let (current_exec_id, complete) = match sessions.lock() {
+        let (current_exec_id, complete, nonce) = match sessions.lock() {
             Ok(mut reg) => {
                 if let Some(record) = reg.get_mut(session_id) {
                     record.read_buffer.push_str(text);
                     let exec_id = record.pending_execution_id.clone();
+                    let nonce = record.marker_nonce.clone();
                     let complete = drain_complete_lines(&mut record.read_buffer);
-                    (exec_id, complete)
+                    (exec_id, complete, Some(nonce))
                 } else {
                     let mut scratch = text.to_string();
                     let complete = drain_complete_lines(&mut scratch);
-                    (None, complete)
+                    (None, complete, None)
                 }
             }
             Err(_) => {
                 let mut scratch = text.to_string();
                 let complete = drain_complete_lines(&mut scratch);
-                (None, complete)
+                (None, complete, None)
             }
         };
 
         for line in complete.split_inclusive('\n') {
-            let Some(prompt) = parse_prompt_line(line) else {
+            let Some(nonce) = nonce.as_deref() else {
+                display_text.push_str(line);
+                continue;
+            };
+            let Some(prompt) = parse_prompt_line(line, nonce) else {
                 display_text.push_str(line);
                 continue;
             };
@@ -208,7 +223,8 @@ impl SessionService {
                     record.cwd = prompt.cwd.clone();
                     let was_boot = !record.boot_prompt_received;
                     let was_int = record.exec_state == SessionExecState::Interrupting;
-                    let pending = record.pending_execution_id.clone();
+                    // Same lock as Ready. take() drops only the id that just finished.
+                    let pending = record.pending_execution_id.take();
                     if was_boot {
                         record.boot_prompt_received = true;
                     }
@@ -256,10 +272,6 @@ impl SessionService {
                     finished_at: chrono::Utc::now().to_rfc3339(),
                     status: status.to_string(),
                 }));
-
-                if let Ok(mut reg) = sessions.lock() {
-                    let _ = reg.set_pending_execution(session_id, None);
-                }
             }
 
             sink.emit(RuntimeEvent::SessionExecStateChanged(
@@ -289,20 +301,42 @@ struct ParsedPrompt {
     exit_code: i32,
 }
 
-/// Marker|cwd|exit, and only when the trimmed line starts with the marker.
-/// A missing or non-integer exit code is not a prompt.
-fn parse_prompt_line(line: &str) -> Option<ParsedPrompt> {
+fn persist_bootstrap(
+    sessions: &Arc<Mutex<SessionRegistry>>,
+    session_id: &str,
+    writer: &PtyHandle,
+    prompt_cmd: &str,
+    shell: &str,
+) -> Result<(), String> {
+    if let Err(e) = write_raw(writer, prompt_cmd) {
+        if let Ok(mut registry) = sessions.lock() {
+            registry.remove(session_id);
+        }
+        eprintln!("[session] bootstrap write failed for shell {shell}: {e}");
+        return Err(format!("bootstrap write failed: {e}"));
+    }
+    Ok(())
+}
+
+/// Marker|nonce|cwd|exit. The nonce must match this session.
+/// A missing exit code is not a prompt, and it is not treated as 0.
+/// A literal ~ cwd is not stored.
+fn parse_prompt_line(line: &str, nonce: &str) -> Option<ParsedPrompt> {
     let trimmed = line.trim();
     if !trimmed.starts_with(PROMPT_MARKER) {
         return None;
     }
     let parts: Vec<&str> = trimmed.split('|').collect();
-    if parts.len() != 3 || parts[0] != PROMPT_MARKER {
+    if parts.len() != 4 || parts[0] != PROMPT_MARKER || parts[1] != nonce {
         return None;
     }
-    let exit_code = parts[2].trim().parse::<i32>().ok()?;
+    let cwd = parts[2].trim();
+    if cwd.is_empty() || cwd == "~" || cwd.starts_with("~/") || cwd.starts_with("~\\") {
+        return None;
+    }
+    let exit_code = parts[3].trim().parse::<i32>().ok()?;
     Some(ParsedPrompt {
-        cwd: parts[1].to_string(),
+        cwd: cwd.to_string(),
         exit_code,
     })
 }
@@ -367,6 +401,7 @@ mod tests {
                 exec_state: SessionExecState::Booting,
                 boot_prompt_received: false,
                 command_sent_at: None,
+            marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -374,7 +409,7 @@ mod tests {
         }
 
         // Simulate prompt marker arrival
-        let marker_line = format!("{}|/home/user|0\n", PROMPT_MARKER);
+        let marker_line = format!("{}|test-nonce|/home/user|0\n", PROMPT_MARKER);
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker_line);
 
         let events = sink.events();
@@ -413,14 +448,15 @@ mod tests {
                 exec_state: SessionExecState::Running,
                 boot_prompt_received: true,
                 command_sent_at: Some("2026-01-01T00:00:00Z".to_string()),
-                read_buffer: String::new(),
+                marker_nonce: "test-nonce".to_string(),
+            read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
         }
 
         // Simulate prompt marker with exit code 0 (success)
-        let marker_line = format!("{}|/tmp|0\n", PROMPT_MARKER);
+        let marker_line = format!("{}|test-nonce|/tmp|0\n", PROMPT_MARKER);
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker_line);
 
         let events = sink.events();
@@ -464,13 +500,14 @@ mod tests {
                 exec_state: SessionExecState::Running,
                 boot_prompt_received: true,
                 command_sent_at: Some("2026-01-01T00:00:00Z".to_string()),
-                read_buffer: String::new(),
+                marker_nonce: "test-nonce".to_string(),
+            read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
         }
 
-        let marker_line = format!("{}|/tmp|1\n", PROMPT_MARKER);
+        let marker_line = format!("{}|test-nonce|/tmp|1\n", PROMPT_MARKER);
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker_line);
 
         let events = sink.events();
@@ -503,13 +540,14 @@ mod tests {
                 exec_state: SessionExecState::Interrupting,
                 boot_prompt_received: true,
                 command_sent_at: Some("2026-01-01T00:00:00Z".to_string()),
-                read_buffer: String::new(),
+                marker_nonce: "test-nonce".to_string(),
+            read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
             });
         }
 
-        let marker_line = format!("{}|/tmp|130\n", PROMPT_MARKER);
+        let marker_line = format!("{}|test-nonce|/tmp|130\n", PROMPT_MARKER);
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker_line);
 
         let events = sink.events();
@@ -541,6 +579,7 @@ mod tests {
                 exec_state: SessionExecState::Ready,
                 boot_prompt_received: true,
                 command_sent_at: None,
+            marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -548,7 +587,7 @@ mod tests {
         }
 
         // Chunk with output text followed by a prompt marker
-        let chunk = format!("some output\n{}|/home|0\n", PROMPT_MARKER);
+        let chunk = format!("some output\n{}|test-nonce|/home|0\n", PROMPT_MARKER);
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &chunk);
 
         let events = sink.events();
@@ -573,7 +612,7 @@ mod tests {
         let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
         insert_session(&sessions, "s1", SessionExecState::Booting, false, None);
 
-        let marker = format!("{}|/home/user|0\n", PROMPT_MARKER);
+        let marker = format!("{}|test-nonce|/home/user|0\n", PROMPT_MARKER);
         let (head, tail) = marker.split_at(PROMPT_MARKER.len() + 2);
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", head);
 
@@ -612,9 +651,9 @@ mod tests {
             Some("exec-1".to_string()),
         );
 
-        let missing = format!("{}|/tmp\n", PROMPT_MARKER);
+        let missing = format!("{}|test-nonce|/tmp|\n", PROMPT_MARKER);
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &missing);
-        let not_int = format!("{}|/tmp|nope\n", PROMPT_MARKER);
+        let not_int = format!("{}|test-nonce|/tmp|nope\n", PROMPT_MARKER);
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &not_int);
 
         let events = sink.events();
@@ -643,8 +682,8 @@ mod tests {
             Some("exec-9".to_string()),
         );
 
-        let embedded = format!("output {}|/tmp|0\n", PROMPT_MARKER);
-        let echoed = format!("export PS1='{}|\\w|$?\\n\\$ '\n", PROMPT_MARKER);
+        let embedded = format!("output {}|test-nonce|/tmp|0\n", PROMPT_MARKER);
+        let echoed = bootstrap_prompt("bash", "test-nonce").unwrap();
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &embedded);
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &echoed);
 
@@ -664,7 +703,7 @@ mod tests {
         let sink = Arc::new(CollectingSink::new());
         let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
         let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
-        let marker = format!("{}|/home/user|0\n", PROMPT_MARKER);
+        let marker = format!("{}|test-nonce|/home/user|0\n", PROMPT_MARKER);
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "missing", &marker);
 
         let events = sink.events();
@@ -672,6 +711,197 @@ mod tests {
             e,
             RuntimeEvent::SessionReady(_) | RuntimeEvent::SessionExecStateChanged(_)
         )));
+    }
+
+    #[test]
+    fn public_marker_line_does_not_finish_execution() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Running,
+            true,
+            Some("exec-1".to_string()),
+        );
+
+        let public_shape = format!("{}|/tmp|0\n", PROMPT_MARKER);
+        let wrong_nonce = format!("{}|not-the-nonce|/tmp|0\n", PROMPT_MARKER);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &public_shape);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &wrong_nonce);
+
+        assert!(sink.events().iter().all(|e| !matches!(
+            e,
+            RuntimeEvent::ExecutionFinished(_) | RuntimeEvent::SessionExecStateChanged(_)
+        )));
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.pending_execution_id.as_deref(), Some("exec-1"));
+        assert_eq!(record.exec_state, SessionExecState::Running);
+        assert_eq!(record.cwd, "/tmp");
+    }
+
+    #[test]
+    fn tilde_cwd_is_not_stored_and_does_not_finish() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Running,
+            true,
+            Some("exec-1".to_string()),
+        );
+
+        for cwd in ["~", "~/work", "~\\work"] {
+            let line = format!("{}|test-nonce|{cwd}|0\n", PROMPT_MARKER);
+            SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &line);
+        }
+
+        assert!(sink.events().iter().all(|e| !matches!(e, RuntimeEvent::ExecutionFinished(_))));
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.cwd, "/tmp");
+        assert_eq!(record.pending_execution_id.as_deref(), Some("exec-1"));
+        assert_eq!(record.exec_state, SessionExecState::Running);
+    }
+
+    #[test]
+    fn matching_nonce_finishes_with_real_exit_and_cwd() {
+        let sink = Arc::new(CollectingSink::new());
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Running,
+            true,
+            Some("exec-1".to_string()),
+        );
+
+        let line = format!("{}|test-nonce|/var/work|7\n", PROMPT_MARKER);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &line);
+
+        let finished = sink.events().into_iter().find_map(|e| match e {
+            RuntimeEvent::ExecutionFinished(fin) => Some(fin),
+            _ => None,
+        });
+        let finished = finished.expect("execution should finish");
+        assert_eq!(finished.exit_code, 7);
+        assert_eq!(finished.status, "failure");
+        assert_eq!(finished.execution_id, "exec-1");
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.cwd, "/var/work");
+        assert!(record.pending_execution_id.is_none());
+        assert_eq!(record.exec_state, SessionExecState::Ready);
+    }
+
+    #[test]
+    fn prompt_clear_does_not_wipe_a_newer_pending_id() {
+        let inner = Arc::new(CollectingSink::new());
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Running,
+            true,
+            Some("exec-old".to_string()),
+        );
+        let sink = ReenterOnFinish {
+            inner: inner.clone(),
+            sessions: sessions.clone(),
+        };
+        let sink_dyn: Arc<dyn RuntimeEventSink> = Arc::new(sink);
+        let line = format!("{}|test-nonce|/var/work|0\n", PROMPT_MARKER);
+        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &line);
+
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.pending_execution_id.as_deref(), Some("exec-new"));
+        assert_eq!(record.exec_state, SessionExecState::Running);
+    }
+
+    #[test]
+    fn create_rejects_unsupported_shell_without_inserting() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink: Arc<dyn RuntimeEventSink> = Arc::new(CollectingSink::new());
+        let svc = SessionService::new(sessions.clone(), sink);
+        let err = svc
+            .create(CreateSessionRequest {
+                label: Some("nope".to_string()),
+                cwd: Some("/tmp".to_string()),
+                shell: Some("fish".to_string()),
+            })
+            .unwrap_err();
+        assert!(err.contains("unsupported"), "{err}");
+        assert!(sessions.lock().unwrap().list().is_empty());
+    }
+
+    #[test]
+    fn bootstrap_write_failure_removes_session() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Booting,
+            false,
+            None,
+        );
+        let writer = Arc::new(Mutex::new(
+            Box::new(FailWrite) as Box<dyn std::io::Write + Send>,
+        ));
+        let err = persist_bootstrap(&sessions, "s1", &writer, "echo hi\n", "bash").unwrap_err();
+        assert!(err.contains("bootstrap write failed"), "{err}");
+        assert!(sessions.lock().unwrap().get("s1").is_none());
+    }
+
+    #[test]
+    fn bootstrap_write_success_keeps_session() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        insert_session(
+            &sessions,
+            "s1",
+            SessionExecState::Booting,
+            false,
+            None,
+        );
+        let writer = Arc::new(Mutex::new(
+            Box::new(std::io::sink()) as Box<dyn std::io::Write + Send>,
+        ));
+        persist_bootstrap(&sessions, "s1", &writer, "echo hi\n", "bash").unwrap();
+        assert!(sessions.lock().unwrap().get("s1").is_some());
+    }
+
+    struct ReenterOnFinish {
+        inner: Arc<CollectingSink>,
+        sessions: Arc<Mutex<SessionRegistry>>,
+    }
+
+    impl RuntimeEventSink for ReenterOnFinish {
+        fn emit(&self, event: RuntimeEvent) {
+            if let RuntimeEvent::ExecutionFinished(fin) = &event {
+                assert_eq!(fin.execution_id, "exec-old");
+                let mut reg = self.sessions.lock().unwrap();
+                let record = reg.get_mut("s1").unwrap();
+                record.pending_execution_id = Some("exec-new".to_string());
+                record.exec_state = SessionExecState::Running;
+            }
+            self.inner.emit(event);
+        }
+    }
+
+    struct FailWrite;
+
+    impl std::io::Write for FailWrite {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("write failed"))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
     }
 
     // --- Test helpers ---
@@ -696,6 +926,7 @@ mod tests {
             exec_state,
             boot_prompt_received: booted,
             command_sent_at: None,
+            marker_nonce: "test-nonce".to_string(),
             read_buffer: String::new(),
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),

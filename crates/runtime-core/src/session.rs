@@ -34,6 +34,8 @@ pub struct SessionRecord {
     pub pty_pair: PtyPair,
     pub writer: PtyHandle,
     pub pending_execution_id: Option<String>,
+    /// Secret the shell prompt echoes. Command output cannot know it.
+    pub marker_nonce: String,
     pub exec_state: SessionExecState,
     pub boot_prompt_received: bool,
     pub command_sent_at: Option<String>,

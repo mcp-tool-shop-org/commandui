@@ -32,6 +32,7 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
             source TEXT NOT NULL DEFAULT 'raw',
             original_intent TEXT,
             command TEXT NOT NULL,
+            steps_json TEXT,
             project_root TEXT,
             created_at TEXT NOT NULL
         );
@@ -76,8 +77,8 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| format!("Schema init failed: {e}"))?;
 
-    // Migration: add columns for existing databases that lack them.
-    // SQLite errors on duplicate columns, so we ignore failures.
+    // Old databases lack columns that CREATE TABLE now includes.
+    // Duplicate-column is the only error that means "already migrated".
     let migrations = [
         "ALTER TABLE history_items ADD COLUMN finished_at TEXT",
         "ALTER TABLE history_items ADD COLUMN duration_ms INTEGER",
@@ -86,10 +87,58 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
         "ALTER TABLE workflows ADD COLUMN steps_json TEXT",
     ];
     for sql in migrations {
-        let _ = conn.execute(sql, []);
+        exec_migration(conn, sql)?;
+    }
+
+    for (table, column) in REQUIRED_COLUMNS {
+        require_column(conn, table, column)?;
     }
 
     Ok(())
+}
+
+const REQUIRED_COLUMNS: &[(&str, &str)] = &[
+    ("history_items", "finished_at"),
+    ("history_items", "duration_ms"),
+    ("history_items", "cwd"),
+    ("history_items", "planner_source"),
+    ("workflows", "steps_json"),
+];
+
+fn is_duplicate_column(err: &rusqlite::Error) -> bool {
+    match err {
+        rusqlite::Error::SqliteFailure(_, Some(msg)) => {
+            msg.to_ascii_lowercase().contains("duplicate column")
+        }
+        _ => false,
+    }
+}
+
+fn exec_migration(conn: &Connection, sql: &str) -> Result<(), String> {
+    match conn.execute(sql, []) {
+        Ok(_) => Ok(()),
+        Err(e) if is_duplicate_column(&e) => Ok(()),
+        Err(e) => Err(format!("Schema migration failed: {e}")),
+    }
+}
+
+fn require_column(conn: &Connection, table: &str, column: &str) -> Result<(), String> {
+    let pragma = format!("PRAGMA table_info({table})");
+    let mut stmt = conn
+        .prepare(&pragma)
+        .map_err(|e| format!("Schema init failed: {e}"))?;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| format!("Schema init failed: {e}"))?;
+    while let Some(row) = rows.next().map_err(|e| format!("Schema init failed: {e}"))? {
+        let name: String = row
+            .get(1)
+            .map_err(|e| format!("Schema init failed: {e}"))?;
+        if name == column {
+            return Ok(());
+        }
+    }
+    Err(format!("Schema init failed: missing column {table}.{column}"))
 }
 
 #[cfg(test)]
@@ -118,5 +167,86 @@ mod tests {
         init_schema(&conn).unwrap();
         // Running again should not fail
         init_schema(&conn).unwrap();
+    }
+
+    #[test]
+    fn fresh_database_creates_steps_json() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_schema(&conn).unwrap();
+        let sql: String = conn
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE name = 'workflows'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(sql.contains("steps_json"), "{sql}");
+        require_column(&conn, "workflows", "steps_json").unwrap();
+        require_column(&conn, "history_items", "finished_at").unwrap();
+    }
+
+    #[test]
+    fn old_database_gains_missing_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE history_items (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                user_input TEXT NOT NULL,
+                generated_command TEXT,
+                executed_command TEXT,
+                linked_plan_id TEXT,
+                planner_request_id TEXT,
+                status TEXT NOT NULL,
+                exit_code INTEGER,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE workflows (
+                id TEXT PRIMARY KEY,
+                label TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'raw',
+                original_intent TEXT,
+                command TEXT NOT NULL,
+                project_root TEXT,
+                created_at TEXT NOT NULL
+            );
+            ",
+        )
+        .unwrap();
+        init_schema(&conn).unwrap();
+        require_column(&conn, "workflows", "steps_json").unwrap();
+        require_column(&conn, "history_items", "finished_at").unwrap();
+        require_column(&conn, "history_items", "duration_ms").unwrap();
+        require_column(&conn, "history_items", "cwd").unwrap();
+        require_column(&conn, "history_items", "planner_source").unwrap();
+    }
+
+    #[test]
+    fn migration_returns_non_duplicate_errors() {
+        let conn = Connection::open_in_memory().unwrap();
+        let err = exec_migration(&conn, "ALTER TABLE missing_table ADD COLUMN steps_json TEXT")
+            .unwrap_err();
+        assert!(err.contains("Schema migration failed"), "{err}");
+        assert!(err.to_lowercase().contains("no such table"), "{err}");
+    }
+
+    #[test]
+    fn duplicate_column_migration_is_ok() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE sample (id TEXT);")
+            .unwrap();
+        exec_migration(&conn, "ALTER TABLE sample ADD COLUMN extra TEXT").unwrap();
+        exec_migration(&conn, "ALTER TABLE sample ADD COLUMN extra TEXT").unwrap();
+    }
+
+    #[test]
+    fn missing_required_column_fails_check() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE workflows (id TEXT);")
+            .unwrap();
+        let err = require_column(&conn, "workflows", "steps_json").unwrap_err();
+        assert!(err.contains("workflows.steps_json"), "{err}");
     }
 }

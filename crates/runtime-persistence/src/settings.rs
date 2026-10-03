@@ -4,15 +4,25 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsSnapshot {
+    #[serde(default)]
     pub product_mode: Option<String>,
+    #[serde(default)]
     pub theme: Option<String>,
+    #[serde(default)]
     pub font_size: Option<String>,
+    #[serde(default)]
     pub density: Option<String>,
+    #[serde(default)]
     pub default_input_mode: Option<String>,
+    #[serde(default)]
     pub auto_open_plan_panel: Option<bool>,
+    #[serde(default)]
     pub confirm_medium_risk: Option<bool>,
+    #[serde(default)]
     pub explanation_verbosity: Option<String>,
+    #[serde(default)]
     pub reduced_clutter: Option<bool>,
+    #[serde(default)]
     pub simplified_summaries: Option<bool>,
 }
 
@@ -31,6 +41,24 @@ pub fn default_settings() -> SettingsSnapshot {
     }
 }
 
+fn fill_defaults(settings: SettingsSnapshot) -> SettingsSnapshot {
+    let defaults = default_settings();
+    SettingsSnapshot {
+        product_mode: settings.product_mode.or(defaults.product_mode),
+        theme: settings.theme.or(defaults.theme),
+        font_size: settings.font_size.or(defaults.font_size),
+        density: settings.density.or(defaults.density),
+        default_input_mode: settings.default_input_mode.or(defaults.default_input_mode),
+        auto_open_plan_panel: settings.auto_open_plan_panel.or(defaults.auto_open_plan_panel),
+        confirm_medium_risk: settings.confirm_medium_risk.or(defaults.confirm_medium_risk),
+        explanation_verbosity: settings
+            .explanation_verbosity
+            .or(defaults.explanation_verbosity),
+        reduced_clutter: settings.reduced_clutter.or(defaults.reduced_clutter),
+        simplified_summaries: settings.simplified_summaries.or(defaults.simplified_summaries),
+    }
+}
+
 pub fn get(conn: &Connection) -> Result<SettingsSnapshot, String> {
     let result: Result<String, _> = conn.query_row(
         "SELECT value_json FROM settings WHERE key = 'app'",
@@ -39,7 +67,9 @@ pub fn get(conn: &Connection) -> Result<SettingsSnapshot, String> {
     );
 
     let settings = match result {
-        Ok(json) => serde_json::from_str(&json).unwrap_or_else(|_| default_settings()),
+        Ok(json) => serde_json::from_str(&json)
+            .map(fill_defaults)
+            .unwrap_or_else(|_| default_settings()),
         Err(_) => default_settings(),
     };
 
@@ -47,25 +77,17 @@ pub fn get(conn: &Connection) -> Result<SettingsSnapshot, String> {
 }
 
 pub fn update(conn: &Connection, patch: &SettingsSnapshot) -> Result<(), String> {
-    // Read current
-    let current_json: String = conn
-        .query_row(
-            "SELECT value_json FROM settings WHERE key = 'app'",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap_or_else(|_| {
-            serde_json::to_string(&default_settings()).unwrap_or_else(|_| "{}".to_string())
-        });
+    let current = get(conn)?;
+    let current_value =
+        serde_json::to_value(&current).map_err(|e| format!("settings update: {e}"))?;
+    let patch_value =
+        serde_json::to_value(patch).map_err(|e| format!("settings update: {e}"))?;
 
-    let current: serde_json::Value =
-        serde_json::from_str(&current_json).unwrap_or(serde_json::Value::Object(Default::default()));
-    let patch_value: serde_json::Value =
-        serde_json::to_value(patch).unwrap_or(serde_json::Value::Object(Default::default()));
-
-    let merged = merge_json(current, patch_value);
+    let merged = merge_json(current_value, patch_value);
+    let parsed: SettingsSnapshot = serde_json::from_value(merged).unwrap_or_else(|_| default_settings());
+    let filled = fill_defaults(parsed);
     let merged_str =
-        serde_json::to_string(&merged).map_err(|e| format!("settings update: {e}"))?;
+        serde_json::to_string(&filled).map_err(|e| format!("settings update: {e}"))?;
 
     conn.execute(
         "INSERT OR REPLACE INTO settings (key, value_json) VALUES ('app', ?1)",
@@ -88,5 +110,121 @@ fn merge_json(base: serde_json::Value, patch: serde_json::Value) -> serde_json::
             serde_json::Value::Object(base_map)
         }
         (_, patch) => patch,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schema::init_schema;
+    use rusqlite::Connection;
+
+    fn open() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        init_schema(&conn).unwrap();
+        conn
+    }
+
+    fn raw_json(conn: &Connection) -> String {
+        conn.query_row(
+            "SELECT value_json FROM settings WHERE key = 'app'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn missing_row_loads_confirm_medium_risk_true() {
+        let conn = open();
+        let settings = get(&conn).unwrap();
+        assert_eq!(settings.confirm_medium_risk, Some(true));
+        assert_eq!(settings.theme.as_deref(), Some("dark"));
+    }
+
+    #[test]
+    fn older_object_missing_confirm_medium_risk_stays_true() {
+        let conn = open();
+        conn.execute(
+            "INSERT INTO settings (key, value_json) VALUES ('app', ?1)",
+            [r#"{"theme":"light"}"#],
+        )
+        .unwrap();
+        let settings = get(&conn).unwrap();
+        assert_eq!(settings.theme.as_deref(), Some("light"));
+        assert_eq!(settings.confirm_medium_risk, Some(true));
+        let json = serde_json::to_string(&settings).unwrap();
+        assert!(json.contains("\"confirmMediumRisk\":true"), "{json}");
+        assert!(!json.contains("null"), "{json}");
+    }
+
+    #[test]
+    fn null_confirm_medium_risk_is_filled_true() {
+        let conn = open();
+        conn.execute(
+            "INSERT INTO settings (key, value_json) VALUES ('app', ?1)",
+            [r#"{"theme":"light","confirmMediumRisk":null}"#],
+        )
+        .unwrap();
+        let settings = get(&conn).unwrap();
+        assert_eq!(settings.confirm_medium_risk, Some(true));
+        assert_eq!(settings.theme.as_deref(), Some("light"));
+    }
+
+    #[test]
+    fn explicit_false_confirm_medium_risk_is_kept() {
+        let conn = open();
+        conn.execute(
+            "INSERT INTO settings (key, value_json) VALUES ('app', ?1)",
+            [r#"{"confirmMediumRisk":false}"#],
+        )
+        .unwrap();
+        let settings = get(&conn).unwrap();
+        assert_eq!(settings.confirm_medium_risk, Some(false));
+    }
+
+    #[test]
+    fn invalid_json_falls_back_to_defaults() {
+        let conn = open();
+        conn.execute(
+            "INSERT INTO settings (key, value_json) VALUES ('app', ?1)",
+            ["{"],
+        )
+        .unwrap();
+        let settings = get(&conn).unwrap();
+        assert_eq!(settings.confirm_medium_risk, Some(true));
+        assert_eq!(settings.theme.as_deref(), Some("dark"));
+    }
+
+    #[test]
+    fn update_backfills_partial_object_without_nulls() {
+        let conn = open();
+        conn.execute(
+            "INSERT INTO settings (key, value_json) VALUES ('app', ?1)",
+            [r#"{"theme":"light"}"#],
+        )
+        .unwrap();
+        let patch = SettingsSnapshot {
+            font_size: Some("lg".to_string()),
+            ..SettingsSnapshot {
+                product_mode: None,
+                theme: None,
+                font_size: None,
+                density: None,
+                default_input_mode: None,
+                auto_open_plan_panel: None,
+                confirm_medium_risk: None,
+                explanation_verbosity: None,
+                reduced_clutter: None,
+                simplified_summaries: None,
+            }
+        };
+        update(&conn, &patch).unwrap();
+        let stored = raw_json(&conn);
+        assert!(!stored.contains("null"), "{stored}");
+        assert!(stored.contains("\"confirmMediumRisk\":true"), "{stored}");
+        assert!(stored.contains("\"theme\":\"light\""), "{stored}");
+        assert!(stored.contains("\"fontSize\":\"lg\""), "{stored}");
+        assert_eq!(get(&conn).unwrap().confirm_medium_risk, Some(true));
     }
 }
