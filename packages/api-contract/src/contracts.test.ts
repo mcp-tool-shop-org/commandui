@@ -5,8 +5,9 @@ import type {
   TerminalExecuteRequest,
 } from "./index";
 
-// Type-level checks are enforced by vitest typecheck mode (see vitest.config.ts).
-// A change to the contract that breaks these fails `vitest run`.
+// These are compile-time checks. vitest erases expectTypeOf and
+// @ts-expect-error at runtime, so `vitest run` cannot fail on contract drift.
+// The enforcement is the `tsc --noEmit` typecheck step (pnpm typecheck).
 
 describe("API Contract shapes", () => {
   it("PlannerGeneratePlanRequest keeps its required keys and unions", () => {

@@ -436,3 +436,78 @@ describe("runDetectors", () => {
     expect(result).toHaveLength(0);
   });
 });
+
+// --- Suggestion ids, scope and projectRoot ---
+
+describe("suggestion scope, projectRoot and ids", () => {
+  function scopedHistory(): HistoryItem[] {
+    const items: HistoryItem[] = [];
+    for (const sessionId of ["s1", "s2"]) {
+      for (let i = 0; i < 6; i++) {
+        items.push(
+          makeHistory({
+            id: `${sessionId}-${i}`,
+            sessionId,
+            executedCommand: i % 2 === 0 ? "git status" : "git diff",
+            cwd: "/work/app",
+            createdAt: `2026-03-13T10:0${i}:00Z`,
+          }),
+        );
+      }
+    }
+    return items;
+  }
+
+  const detectors = [
+    ["preferred_cwd", detectPreferredCwd],
+    ["recurring_command", detectRecurringCommands],
+    ["workflow_pattern", detectWorkflowPatterns],
+  ] as const;
+
+  it.each(detectors)("%s sets scope and projectRoot from input.projectRoot", (_kind, detect) => {
+    const history = scopedHistory();
+
+    const global = detect(emptyInput(history));
+    expect(global.length).toBeGreaterThan(0);
+    for (const s of global) {
+      expect(s.scope).toBe("global");
+      expect(s.projectRoot).toBeUndefined();
+    }
+
+    const project = detect(emptyInput(history, { projectRoot: "/p" }));
+    expect(project.length).toBe(global.length);
+    for (const s of project) {
+      expect(s.scope).toBe("project");
+      expect(s.projectRoot).toBe("/p");
+    }
+  });
+
+  it.each(detectors)("%s ids differ by scope and project root and are stable", (_kind, detect) => {
+    const history = scopedHistory();
+    const idsFor = (projectRoot?: string) =>
+      detect(emptyInput(history, { projectRoot })).map((s) => s.id).sort();
+
+    const g = idsFor(undefined);
+    const p = idsFor("/p");
+    const q = idsFor("/q");
+
+    expect(g.length).toBeGreaterThan(0);
+    // Same value, different scope: no id may collide (INSERT OR IGNORE key).
+    for (const id of g) {
+      expect(p).not.toContain(id);
+      expect(q).not.toContain(id);
+    }
+    for (const id of p) expect(q).not.toContain(id);
+
+    // Stable across repeated runs.
+    expect(idsFor(undefined)).toEqual(g);
+    expect(idsFor("/p")).toEqual(p);
+    expect(idsFor("/q")).toEqual(q);
+  });
+
+  it("the three detectors never share an id for the same history", () => {
+    const all = runDetectors(emptyInput(scopedHistory(), { projectRoot: "/p" }));
+    const ids = all.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});

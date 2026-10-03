@@ -389,7 +389,7 @@ describe("WorkflowStore", () => {
     expect(useWorkflowStore.getState().items[0].id).toBe("w1");
   });
 
-  it("puts the later workflow first and ignores a repeated id", () => {
+  it("replaces a repeated id in place", () => {
     useWorkflowStore.setState({ items: [] });
     const wf = (id: string) => ({
       id,
@@ -398,11 +398,23 @@ describe("WorkflowStore", () => {
       command: "ls",
       createdAt: "2025-01-01",
     });
-    useWorkflowStore.getState().addWorkflow(wf("w1"));
-    useWorkflowStore.getState().addWorkflow(wf("w2"));
-    expect(useWorkflowStore.getState().items.map((w) => w.id)).toEqual(["w2", "w1"]);
+    const add = useWorkflowStore.getState().addWorkflow;
+    add(wf("w1"));
+    add(wf("w2"));
+    add(wf("w3"));
+    expect(useWorkflowStore.getState().items.map((w) => w.id)).toEqual(["w3", "w2", "w1"]);
 
-    useWorkflowStore.getState().addWorkflow(wf("w1"));
-    expect(useWorkflowStore.getState().items.map((w) => w.id)).toEqual(["w2", "w1"]);
+    add({
+      ...wf("w2"),
+      label: "edited",
+      command: "pwd",
+      steps: [{ command: "pwd", label: "where" }],
+    });
+    const items = useWorkflowStore.getState().items;
+    expect(items.map((w) => w.id)).toEqual(["w3", "w2", "w1"]);
+    expect(items).toHaveLength(3);
+    expect(items[1].label).toBe("edited");
+    expect(items[1].command).toBe("pwd");
+    expect(items[1].steps).toEqual([{ command: "pwd", label: "where" }]);
   });
 });
