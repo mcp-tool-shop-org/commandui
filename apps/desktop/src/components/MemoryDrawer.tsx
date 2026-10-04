@@ -5,9 +5,10 @@ type Props = {
   items: MemoryItem[];
   onClose: () => void;
   onDelete: (memoryId: string) => void;
+  loading?: boolean;
 };
 
-export function MemoryDrawer({ isOpen, items, onClose, onDelete }: Props) {
+export function MemoryDrawer({ isOpen, items, onClose, onDelete, loading = false }: Props) {
   if (!isOpen) return null;
 
   return (
@@ -20,7 +21,16 @@ export function MemoryDrawer({ isOpen, items, onClose, onDelete }: Props) {
           </button>
         </div>
 
-        {items.length === 0 ? (
+        {loading ? (
+          <>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="skeleton-item">
+                <div className="skeleton skeleton-text short" />
+                <div className="skeleton skeleton-text" style={{ width: "40%" }} />
+              </div>
+            ))}
+          </>
+        ) : items.length === 0 ? (
           <p className="muted">No saved memory yet.</p>
         ) : (
           items.map((item) => (
@@ -30,7 +40,7 @@ export function MemoryDrawer({ isOpen, items, onClose, onDelete }: Props) {
                 <span className="muted">{item.scope}</span>
               </div>
               <div className="history-main">
-                {item.key} → {item.value}
+                {item.key} <span aria-hidden="true">→</span> {item.value}
               </div>
               {item.projectRoot && (
                 <div className="history-sub muted">{item.projectRoot}</div>

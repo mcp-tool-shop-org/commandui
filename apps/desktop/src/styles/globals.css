@@ -9,6 +9,7 @@
 
 /* === Root === */
 :root {
+  color-scheme: dark light;
   --bg-primary: #111317;
   --bg-secondary: #14181d;
   --bg-card: #171c22;
@@ -22,6 +23,21 @@
   --radius-lg: 12px;
   --radius-md: 10px;
   --radius-sm: 6px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f3f4f6;
+    --bg-card: #ffffff;
+    --border: #e5e7eb;
+    --text-primary: #111827;
+    --text-muted: #6b7280;
+    --accent: #2563eb;
+    --success: #059669;
+    --failure: #dc2626;
+    --info: #2563eb;
+  }
 }
 
 body {
@@ -72,6 +88,11 @@ button:disabled {
 button.active {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 select {
@@ -686,6 +707,19 @@ select {
   flex-shrink: 0;
 }
 
+.desync-banner {
+  background: #1a1e2e;
+  border: 1px solid #2d3555;
+  color: var(--info);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
 /* === Error Box === */
 .error-box {
   background: #24181b;
@@ -829,6 +863,16 @@ select {
 }
 
 .btn-danger:hover {
+  background: rgba(255, 180, 192, 0.1);
+}
+
+.btn-stop {
+  background: #2e1a1a;
+  color: var(--failure);
+  border-color: var(--failure);
+}
+
+.btn-stop:hover {
   background: rgba(255, 180, 192, 0.1);
 }
 
@@ -1288,4 +1332,34 @@ select {
 
 .app-notes .link-btn {
   align-self: flex-end;
+}
+
+/* === Skeleton Loading === */
+.skeleton {
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-text {
+  height: 14px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.skeleton-text.short {
+  width: 60%;
+}
+
+.skeleton-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }

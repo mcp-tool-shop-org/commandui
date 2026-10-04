@@ -205,6 +205,10 @@ impl App {
                 // or Ctrl+C could never be read. The rest waits for the next frame.
                 self.drain_events(EVENTS_PER_FRAME);
 
+                // Transition booting sessions that have timed out so the user sees
+                // a clear error instead of a permanently stuck pane.
+                self.model.check_boot_timeouts();
+
                 // 2. Drain planner results — proposals are session-bound
                 while let Ok(result) = self.planner_rx.try_recv() {
                     let epoch = match &result {

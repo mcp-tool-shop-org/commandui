@@ -459,15 +459,15 @@
             {
               "in": "raw_write_result",
               "kind": "match-err",
-              "line": 420
+              "line": 424
             },
             {
               "in": "apply_execute_result",
               "kind": "match-err",
-              "line": 898
+              "line": 902
             }
           ],
-          "hash": "b6c3b4e14f534cb6db1918f90b7b24f4c62dec267c724163ba7c960b34d185fb",
+          "hash": "a7d95ec02b792fc6574a6e97106c1af4185a0efc935bcf3fdf5f1028c583213f",
           "importOrder": [
             "apps/console/src/input.rs",
             "apps/console/src/model.rs",
@@ -611,10 +611,10 @@
             {
               "in": "surface_session_result",
               "kind": "match-err",
-              "line": 844
+              "line": 854
             }
           ],
-          "hash": "397ff39704e97aa813f6078ff4713e9b6fcd131fc1492edb3debcbe22dd1ce05",
+          "hash": "3c3146e2cc75d09df615e139e3a75392600d4d374658671533ab3e2e202f2fd4",
           "importsFiles": [
             "crates/runtime-core/src/events.rs",
             "crates/runtime-planner/src/lib.rs"
@@ -664,7 +664,7 @@
             "widest_line",
             "wrap_rows"
           ],
-          "hash": "ec94ee518defb51d9e176910c470780740ef072d877b31c7ee5ed3d870004bcc",
+          "hash": "6ccda826a430ff03594f23729289f9eebed5ff89a0a165949a99c4b37f88a0c7",
           "importsFiles": [
             "apps/console/src/model.rs",
             "crates/runtime-core/src/events.rs"
@@ -1296,145 +1296,145 @@
             {
               "in": "handleSubmit",
               "kind": "catch",
-              "line": 1200
+              "line": 1230
             },
             {
               "in": "handleSubmit",
               "kind": "throw",
-              "line": 1202
+              "line": 1232
             },
             {
               "in": "handleSubmit",
               "kind": "catch",
-              "line": 1259
+              "line": 1289
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1400
+              "line": 1430
             },
             {
               "in": "handleApprovePlan",
               "kind": "throw",
-              "line": 1410
+              "line": 1440
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1424
+              "line": 1454
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1434
+              "line": 1464
             },
             {
               "in": "handleSaveWorkflow",
               "kind": "catch",
-              "line": 1502
+              "line": 1532
             },
             {
               "in": "handleInterrupt",
               "kind": "catch",
-              "line": 1571
+              "line": 1601
             },
             {
               "in": "handleResync",
               "kind": "catch",
-              "line": 1593
+              "line": 1623
             },
             {
               "in": "handleCreateSession",
               "kind": "catch",
-              "line": 1613
+              "line": 1643
             },
             {
               "in": "handleCloseSession",
               "kind": "catch",
-              "line": 1658
+              "line": 1688
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "catch",
-              "line": 1733
+              "line": 1763
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "throw",
-              "line": 1735
+              "line": 1765
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "catch",
-              "line": 1741
+              "line": 1771
             },
             {
               "in": "handleSaveWorkflowFromHistory",
               "kind": "catch",
-              "line": 1819
+              "line": 1849
             },
             {
               "in": "handleRunWorkflow",
               "kind": "catch",
-              "line": 1966
+              "line": 1996
             },
             {
               "in": "handleRunWorkflow",
               "kind": "throw",
-              "line": 1968
+              "line": 1998
             },
             {
               "in": "handleRunWorkflow",
               "kind": "catch",
-              "line": 2044
+              "line": 2074
             },
             {
               "in": "handleDeleteWorkflow",
               "kind": "catch",
-              "line": 2069
+              "line": 2099
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "throw",
-              "line": 2116
+              "line": 2146
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "catch",
-              "line": 2127
+              "line": 2157
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "catch",
-              "line": 2144
+              "line": 2174
             },
             {
               "in": "handleWorkflowEditorConfirm",
               "kind": "catch",
-              "line": 2200
+              "line": 2230
             },
             {
               "in": "handleWorkflowEditorConfirm",
               "kind": "catch",
-              "line": 2213
+              "line": 2243
             },
             {
               "in": "handleDismissSuggestion",
               "kind": "catch",
-              "line": 2227
+              "line": 2257
             },
             {
               "in": "handleDeleteMemory",
               "kind": "catch",
-              "line": 2246
+              "line": 2276
             },
             {
               "in": "generateSuggestions",
               "kind": "catch",
-              "line": 2293
+              "line": 2323
             }
           ],
-          "hash": "0cd3b9d9d3cbfd6ac8ed012d42fd2cf0bc8c7f760e3444b1931658b492646946",
+          "hash": "eefcf7a67610810db0dda82280e5786eb08d30ed16fbae7d74eb0f4a1e772662",
           "importOrder": [
             "packages/domain/src/index.ts",
             "packages/api-contract/src/index.ts",
@@ -1544,7 +1544,7 @@
           "path": "apps/desktop/src/components/CommandPalette.tsx"
         },
         {
-          "hash": "bd61e8fc763eed763b905c211505a55b4b593f87e7876c3ef07ef96c9c3f2a64",
+          "hash": "0a642c091daf9dae4edb27dae24acd00fdaf31af5d6d078d93cc615195dbe24d",
           "path": "apps/desktop/src/components/ErrorBoundary.tsx"
         },
         {
@@ -1564,7 +1564,7 @@
           "exports": [
             "HistoryDrawer"
           ],
-          "hash": "c9d925fe5e003115ef634e507bdc3d56a25a67f4f053d87aeac7cbf1810f65f0",
+          "hash": "d0b0fa4197cd8a2adc5c62e9546a56f06a4d37c1081aaa75a7735e3b36d95764",
           "importsFiles": [
             "packages/domain/src/index.ts"
           ],
@@ -1589,7 +1589,7 @@
           "exports": [
             "MemoryDrawer"
           ],
-          "hash": "9d95b9fd41590c6d3013e5f062d392fa8ceb302cbe6d5ddecacaab18ff25b77a",
+          "hash": "e05d1ffba4683832ca3a4644e5f6933f384c905e8a0a11ad91b4930811773fb8",
           "importsFiles": [
             "packages/domain/src/index.ts"
           ],
@@ -1634,7 +1634,7 @@
           "exports": [
             "SessionTabs"
           ],
-          "hash": "48cf3ecb68c6b07edd219bd8adc3f7967469bbf7242615c32aca959ecfeff8cb",
+          "hash": "885832e9b12ee54611080f3c4e4aac207dda9cd89cfa9788af0dcaa81e07e023",
           "importsFiles": [
             "packages/domain/src/index.ts"
           ],
@@ -1669,7 +1669,7 @@
           "exports": [
             "WorkflowDrawer"
           ],
-          "hash": "3882c57bdc89b5cb5ed2433175e8791b6e5999d6de54eb06b512875ed61b6b54",
+          "hash": "93b97d5683b04536bb2a5153a8aafccc54871afab05db317ca9a72817cba74f0",
           "importsFiles": [
             "packages/domain/src/index.ts"
           ],
@@ -1679,7 +1679,7 @@
           "exports": [
             "WorkflowEditor"
           ],
-          "hash": "07c334ad0020fdeef4e17ae0e39979f9494caf2a3d676f7374e2edd8e0c40bd3",
+          "hash": "9f4061f10bb52e0446234b1b1da65b2efdbf5814be6fd8e5f7af697309836723",
           "path": "apps/desktop/src/components/WorkflowEditor.tsx"
         },
         {
@@ -1832,7 +1832,7 @@
           "path": "apps/desktop/src/lib/mockBridge.ts"
         },
         {
-          "hash": "18a9e3505cb26895c4b9d4f388c99cc7e9130ddaad092006cf6dceaa1c3dc11d",
+          "hash": "ec5df8053bc41e4666e54961b03be712c984efe64e97ddf297242536ef2e53f1",
           "importsFiles": [
             "apps/desktop/src/lib/persistInBackground.ts"
           ],
@@ -1843,7 +1843,7 @@
           "exports": [
             "persistInBackground"
           ],
-          "hash": "11a198e54bf918756b03df643cbe3978f1fcca5a617e7ee15e8d6ce4073b7bd7",
+          "hash": "639b6966e6fad9ebbaa8bca9f9a5bfce7daa7c7781a616f6e7f5f223b3f85c28",
           "path": "apps/desktop/src/lib/persistInBackground.ts"
         },
         {
@@ -1873,7 +1873,19 @@
             "isTauriRuntime",
             "tauriInvoke"
           ],
-          "hash": "46d0b1c8fe6712956be285292341be9c239c4470b37048bfc8d51b7cb9abe1b4",
+          "failurePaths": [
+            {
+              "in": "tauriInvoke",
+              "kind": "catch",
+              "line": 32
+            },
+            {
+              "in": "tauriInvoke",
+              "kind": "throw",
+              "line": 40
+            }
+          ],
+          "hash": "4cf97592ffe680735cfc2ea3c9362b41e904e04f5426111cd8edb87c731a66d8",
           "importsFiles": [
             "apps/desktop/src/lib/mockBridge.ts"
           ],
@@ -1894,7 +1906,7 @@
           "path": "apps/desktop/src/main.tsx"
         },
         {
-          "hash": "593021ccf3b93c0c4b00c4c076e555678ef4712b432b9f036271cebbdb658193",
+          "hash": "790d4c5095bf2d276310abdb29a2fdcf9f1ca83e98b3ffbac9cfd479a55423dc",
           "path": "apps/desktop/src/styles/globals.css"
         },
         {
@@ -2208,7 +2220,7 @@
           "path": "packages/domain/src/plan.ts"
         },
         {
-          "hash": "4dd9b2f9bade706c61b70c6b45a1a1e546b7a41bca06f663441a69064e07372e",
+          "hash": "98d25cf01d9772b98dd37698a7f9c0394c060a0f04d21ce725ce8a6618e3cae4",
           "path": "packages/domain/src/session.ts"
         },
         {
@@ -4953,7 +4965,7 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "334a5b3d74c9cd3aa3c05bf049819fcdc455368c",
+    "commit": "042eaae94dd4edb0fcf727f1853715a8e9165baf",
     "tracked": 385
   },
   "landings": [

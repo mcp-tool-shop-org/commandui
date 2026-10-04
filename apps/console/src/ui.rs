@@ -477,6 +477,13 @@ fn render_shell_footer(frame: &mut Frame, area: Rect, model: &Model) {
                 format!("  {err}"),
                 Style::default().fg(Color::Red),
             ));
+        } else if let Some(err) = model.service_errors.last() {
+            let text = if model.service_errors.len() > 1 {
+                format!("  [{} errors] {}", model.service_errors.len(), err)
+            } else {
+                format!("  {err}")
+            };
+            spans.push(Span::styled(text, Style::default().fg(Color::Red)));
         }
     }
 
@@ -657,6 +664,13 @@ fn render_review_footer(frame: &mut Frame, area: Rect, model: &Model) {
                 format!("  {err}"),
                 Style::default().fg(Color::Red),
             ));
+        } else if let Some(err) = model.service_errors.last() {
+            let text = if model.service_errors.len() > 1 {
+                format!("  [{} errors] {}", model.service_errors.len(), err)
+            } else {
+                format!("  {err}")
+            };
+            spans.push(Span::styled(text, Style::default().fg(Color::Red)));
         }
     }
 

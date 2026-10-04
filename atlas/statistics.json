@@ -84,7 +84,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "desktop",
-      "qualifyingSourceCommits": 16,
+      "qualifyingSourceCommits": 17,
       "rebaseline": null
     },
     {
@@ -601,6 +601,21 @@
         "path": ".prettierignore"
       },
       {
+        "commits": 1,
+        "lines": 6,
+        "path": "1.0.2}/mcp-tool-shop.CommandUI.installer.yaml"
+      },
+      {
+        "commits": 1,
+        "lines": 2,
+        "path": "1.0.2}/mcp-tool-shop.CommandUI.locale.en-US.yaml"
+      },
+      {
+        "commits": 1,
+        "lines": 2,
+        "path": "1.0.2}/mcp-tool-shop.CommandUI.yaml"
+      },
+      {
         "commits": 2,
         "lines": 44,
         "path": "CHANGELOG.md"
@@ -991,8 +1006,8 @@
         "path": "apps/desktop/src-tauri/src/lib.rs"
       },
       {
-        "commits": 3,
-        "lines": 79,
+        "commits": 4,
+        "lines": 92,
         "path": "apps/desktop/src-tauri/src/main.rs"
       },
       {
@@ -1256,8 +1271,8 @@
         "path": "apps/desktop/vite.config.ts"
       },
       {
-        "commits": 3,
-        "lines": 207,
+        "commits": 4,
+        "lines": 226,
         "path": "atlas/README.md"
       },
       {
@@ -1266,18 +1281,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 3,
-        "lines": 1078,
+        "commits": 4,
+        "lines": 1185,
         "path": "atlas/page.json"
       },
       {
-        "commits": 3,
-        "lines": 2868,
+        "commits": 4,
+        "lines": 2904,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 3,
-        "lines": 6065,
+        "commits": 4,
+        "lines": 6098,
         "path": "atlas/structure.json"
       },
       {
@@ -2246,9 +2261,9 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-10-04T08:09:20.836Z",
+  "generatedAt": "2026-10-04T15:27:29.067Z",
   "generatedFrom": {
-    "commit": "334a5b3d74c9cd3aa3c05bf049819fcdc455368c"
+    "commit": "042eaae94dd4edb0fcf727f1853715a8e9165baf"
   },
   "pairs": [
     {
@@ -2381,16 +2396,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-10-04T03:22:39-04:00",
+    "headDate": "2026-10-04T04:09:24-04:00",
     "inScopeFiles": 390,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 58,
+    "qualifyingCommits": 59,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-07T07:22:39.000Z",
+    "since": "2026-04-07T08:09:24.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

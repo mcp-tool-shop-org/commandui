@@ -12,6 +12,7 @@ type Props = {
   onRetryStep: (command: string) => void;
   onCopyCommand: (command: string) => void;
   onViewHistoryItem: (historyItemId: string) => void;
+  loading?: boolean;
 };
 
 function formatTimeAgo(ts: number): string {
@@ -76,6 +77,7 @@ export function WorkflowDrawer({
   onRetryStep,
   onCopyCommand,
   onViewHistoryItem,
+  loading = false,
 }: Props) {
   if (!isOpen) return null;
 
@@ -89,7 +91,16 @@ export function WorkflowDrawer({
           </button>
         </div>
 
-        {workflows.length === 0 ? (
+        {loading ? (
+          <>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="skeleton-item">
+                <div className="skeleton skeleton-text short" />
+                <div className="skeleton skeleton-text" style={{ width: "40%" }} />
+              </div>
+            ))}
+          </>
+        ) : workflows.length === 0 ? (
           <p className="muted">No saved workflows yet.</p>
         ) : (
           workflows.map((wf) => {
@@ -126,9 +137,18 @@ export function WorkflowDrawer({
                     className="workflow-last-run"
                     data-expandable=""
                     onClick={() => onExpandRun(isExpanded ? null : wf.id)}
+                    tabIndex={0}
+                    role="button"
+                    aria-expanded={isExpanded}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onExpandRun(isExpanded ? null : wf.id);
+                      }
+                    }}
                   >
                     <span className={`workflow-last-run-dot workflow-last-run-dot--${lastRun.status}`} />
-                    {isExpanded ? "▼" : "▶"} Last run: {formatRunSummary(lastRun)} — {formatTimeAgo(lastRun.finishedAt)}
+                    <span aria-hidden="true">{isExpanded ? "▼" : "▶"}</span> Last run: {formatRunSummary(lastRun)} — {formatTimeAgo(lastRun.finishedAt)}
                   </div>
                 )}
 

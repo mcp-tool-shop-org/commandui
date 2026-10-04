@@ -40,15 +40,16 @@ export function SessionTabs({
               type="button"
               className="session-close"
               onClick={() => onClose(session.id)}
+              aria-label="Close session"
             >
-              ×
+              <span aria-hidden="true">×</span>
             </button>
           </div>
           );
         })}
       </div>
-      <button type="button" className="session-new" onClick={onCreate}>
-        + New Session
+      <button type="button" className="session-new" onClick={onCreate} aria-label="New session">
+        <span aria-hidden="true">+</span> New Session
       </button>
     </div>
   );

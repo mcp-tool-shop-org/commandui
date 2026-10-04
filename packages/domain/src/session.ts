@@ -3,7 +3,7 @@ export type SessionSummary = {
   label: string;
   cwd: string;
   shell: string;
-  status: "active" | "idle" | "disconnected";
+  status: "active" | "idle" | "disconnected" | "exited";
   createdAt: string;
   lastActiveAt: string;
 };

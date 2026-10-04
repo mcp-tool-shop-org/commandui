@@ -15,6 +15,7 @@ type Props = {
   onCopyCommand: (command: string) => void;
   onViewWorkflowRun?: (workflowRunId: string) => void;
   initialExpandedId?: string | null;
+  loading?: boolean;
 };
 
 function formatDuration(ms: number | undefined): string {
@@ -47,6 +48,7 @@ export function HistoryDrawer({
   onCopyCommand,
   onViewWorkflowRun,
   initialExpandedId,
+  loading = false,
 }: Props) {
   const [search, setSearch] = useState("");
   const [sessionFilter, setSessionFilter] = useState<string>("current");
@@ -114,7 +116,16 @@ export function HistoryDrawer({
           </select>
         </div>
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="skeleton-item">
+                <div className="skeleton skeleton-text short" />
+                <div className="skeleton skeleton-text" style={{ width: "40%" }} />
+              </div>
+            ))}
+          </>
+        ) : filtered.length === 0 ? (
           <p className="muted">No history yet.</p>
         ) : (
           filtered.map((item) => {
@@ -131,10 +142,19 @@ export function HistoryDrawer({
                 key={item.id}
                 className={`history-item${isExpanded ? " history-item-expanded" : ""}`}
                 onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                tabIndex={0}
+                role="button"
+                aria-expanded={isExpanded}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setExpandedId(isExpanded ? null : item.id);
+                  }
+                }}
               >
                 <div className="history-row">
                   <span className="history-main">
-                    {isExpanded ? "▼" : "▶"} {item.userInput}
+                    <span aria-hidden="true">{isExpanded ? "▼" : "▶"}</span> {item.userInput}
                   </span>
                   <span className={`history-status history-status--${item.status}`}>
                     {item.status}
@@ -170,7 +190,8 @@ export function HistoryDrawer({
 
                 {item.generatedCommand && !isExpanded && (
                   <div className="history-sub">
-                    → {item.generatedCommand}
+                    <span aria-hidden="true">→ </span>
+                    {item.generatedCommand}
                   </div>
                 )}
 

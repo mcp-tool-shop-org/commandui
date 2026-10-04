@@ -881,16 +881,27 @@ export function AppShell() {
       noteExecState(event.sessionId, event.execState);
     }));
     // Listeners are live: adopt any state that changed before they attached.
-    void Promise.all(pending).then(() => {
-      if (!disposed) void reconcileSessionStates();
-    });
+    void Promise.all(pending)
+      .then(() => {
+        if (!disposed) void reconcileSessionStates();
+      })
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[AppShell] Listener setup failed:", msg);
+        setError(`A background initialization step failed: ${msg}. Some features may not work correctly.`);
+      });
 
     return () => {
       disposed = true;
       for (const subscription of pending) {
-        void subscription.then((unlisten) => {
-          unlisten();
-        });
+        void subscription
+          .then((unlisten) => {
+            unlisten();
+          })
+          .catch((e: unknown) => {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.warn("[AppShell] Unsubscribe failed:", msg);
+          });
       }
     };
     // Subscriptions live for the whole shell: appendTerminalLine reads reducedClutter from
@@ -948,10 +959,16 @@ export function AppShell() {
       for (const [sid, { state, at }] of Object.entries(execSinceRef.current)) {
         if (exitedSessionsRef.current.has(sid)) continue;
         if (state === "booting" && now - at >= BOOT_STALL_MS && !stalledBootRef.current.has(sid)) {
-          void reconcileSessionStates().then(() => {
-            if ((execStateOf(sid) ?? "booting") !== "booting") return;
-            setStalledBoot((prev) => (prev.has(sid) ? prev : new Set(prev).add(sid)));
-          });
+          void reconcileSessionStates()
+            .then(() => {
+              if ((execStateOf(sid) ?? "booting") !== "booting") return;
+              setStalledBoot((prev) => (prev.has(sid) ? prev : new Set(prev).add(sid)));
+            })
+            .catch((e: unknown) => {
+              const msg = e instanceof Error ? e.message : String(e);
+              console.error("[AppShell] Reconcile session states failed during stall check:", msg);
+              setError(`Session sync failed: ${msg}. Click Resync if a session appears stuck.`);
+            });
         } else if (
           execIsForeground(state) &&
           now - at >= FOREGROUND_STUCK_MS &&
@@ -979,6 +996,19 @@ export function AppShell() {
       },
     }));
   }, [browserPreview, productMode, reducedClutter, simplifiedSummaries, confirmMediumRisk, defaultInputMode]);
+
+  // --- Background persistence failure banner ---
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        what: string;
+        message: string;
+      };
+      setError(`Background save failed (${detail.what}): ${detail.message}. Your data may not be persisted.`);
+    };
+    window.addEventListener("commandui:persist-failed", handler);
+    return () => window.removeEventListener("commandui:persist-failed", handler);
+  }, []);
 
   // --- Centralized keyboard shortcuts ---
   const overlayRef = useRef({
@@ -2582,6 +2612,7 @@ export function AppShell() {
         onCopyCommand={(cmd) => { void navigator.clipboard.writeText(cmd); }}
         onViewWorkflowRun={handleViewWorkflowRun}
         initialExpandedId={historyInitialExpandedId}
+        loading={bootPhase === "booting"}
       />
 
       <WorkflowDrawer
@@ -2600,6 +2631,7 @@ export function AppShell() {
         onRetryStep={handleRetryFailedStep}
         onCopyCommand={(cmd) => void navigator.clipboard.writeText(cmd)}
         onViewHistoryItem={handleViewHistoryItemFromRun}
+        loading={bootPhase === "booting"}
       />
 
       <MemoryDrawer
@@ -2610,6 +2642,7 @@ export function AppShell() {
           requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         onDelete={handleDeleteMemory}
+        loading={bootPhase === "booting"}
       />
 
       <CommandPalette

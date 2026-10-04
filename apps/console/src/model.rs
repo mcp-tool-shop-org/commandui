@@ -75,6 +75,10 @@ pub struct SessionModel {
 /// A session that has not become ready after this long gets a footer hint.
 pub const BOOT_HINT_AFTER: std::time::Duration = std::time::Duration::from_secs(4);
 
+/// A session still in Booting after this long is marked failed so the user is
+/// not left with a permanently stuck pane.
+pub const BOOT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// What the runtime says when it refuses to run a command while the user's own
 /// typed command holds the foreground.
 pub const USER_RUNNING_MESSAGE: &str =
@@ -576,6 +580,10 @@ pub struct Model {
     /// Why the last session create failed. Shown in the empty pane and the footer.
     pub create_error: Option<String>,
 
+    /// Recent runtime service errors (write, resize, close, etc.) that stay
+    /// visible even after subsequent events overwrite `status_line`.
+    pub service_errors: Vec<String>,
+
     /// Whether the help overlay is visible.
     pub show_help: bool,
 
@@ -623,6 +631,7 @@ impl Model {
             switcher_start: 0,
             switcher_rows: 0,
             create_error: None,
+            service_errors: Vec::new(),
             show_help: false,
             pending_confirm: None,
         }
@@ -837,11 +846,34 @@ impl Model {
     }
 
     /// Record a session write, interrupt, resync, resize, or close result.
-    /// Ok clears a stale status. Err replaces it with the error string.
+    /// Ok clears a stale status. Err replaces it with the error string and
+    /// appends the error to `service_errors` so it survives later events.
     pub fn surface_session_result(&mut self, result: Result<(), String>) {
         match result {
             Ok(()) => self.status_line = None,
-            Err(err) => self.status_line = Some(err),
+            Err(err) => {
+                self.status_line = Some(err.clone());
+                self.service_errors.push(err);
+                const MAX_ERRORS: usize = 10;
+                if self.service_errors.len() > MAX_ERRORS {
+                    self.service_errors.remove(0);
+                }
+            }
+        }
+    }
+
+    /// Transition any Booting sessions that have exceeded `BOOT_TIMEOUT` to Error.
+    /// This prevents a stuck runtime from leaving the user with a permanent dead pane.
+    pub fn check_boot_timeouts(&mut self) {
+        for session in &mut self.sessions {
+            if session.session_state == SessionState::Booting
+                && session.created_at.elapsed() >= BOOT_TIMEOUT
+            {
+                session.session_state = SessionState::Error(
+                    "Session failed to start within 30 seconds. The shell may be misconfigured, the PTY may have hung, or the system is under heavy load. Close this session with ^W, then press ^N to try again.".to_string()
+                );
+                session.exec_state = "failed".to_string();
+            }
         }
     }
 
@@ -1933,5 +1965,62 @@ mod tests {
         assert!(model.any_session_running());
         assert_eq!(model.sessions[0].state_badge(), "FOREGROUND");
         assert_eq!(model.sessions[0].busy_message(), Some(USER_RUNNING_MESSAGE));
+    }
+
+    #[test]
+    fn boot_timeout_transitions_to_error() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        assert_eq!(model.sessions[0].session_state, SessionState::Booting);
+        // Simulate the session being created long ago
+        model.sessions[0].created_at = std::time::Instant::now() - BOOT_TIMEOUT - std::time::Duration::from_secs(1);
+        model.check_boot_timeouts();
+        assert!(matches!(model.sessions[0].session_state, SessionState::Error(_)));
+        assert!(model.sessions[0].exec_state == "failed");
+        let msg = match &model.sessions[0].session_state {
+            SessionState::Error(m) => m,
+            _ => panic!("expected error"),
+        };
+        assert!(msg.contains("30 seconds"));
+        assert!(msg.contains("^W"));
+        assert!(msg.contains("^N"));
+    }
+
+    #[test]
+    fn boot_timeout_does_not_affect_fresh_sessions() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        model.check_boot_timeouts();
+        assert_eq!(model.sessions[0].session_state, SessionState::Booting);
+    }
+
+    #[test]
+    fn surface_session_result_accumulates_errors() {
+        let mut model = Model::new();
+        model.surface_session_result(Err("first".into()));
+        model.surface_session_result(Err("second".into()));
+        assert_eq!(model.service_errors, vec!["first", "second"]);
+        assert_eq!(model.status_line, Some("second".into()));
+    }
+
+    #[test]
+    fn surface_session_result_caps_error_log() {
+        let mut model = Model::new();
+        for i in 0..12 {
+            model.surface_session_result(Err(format!("err{i}")));
+        }
+        assert_eq!(model.service_errors.len(), 10);
+        assert_eq!(model.service_errors[0], "err2");
+        assert_eq!(model.service_errors[9], "err11");
+    }
+
+    #[test]
+    fn surface_session_result_ok_clears_status_but_keeps_errors() {
+        let mut model = Model::new();
+        model.surface_session_result(Err("persist me".into()));
+        assert_eq!(model.status_line, Some("persist me".into()));
+        model.surface_session_result(Ok(()));
+        assert_eq!(model.status_line, None);
+        assert_eq!(model.service_errors, vec!["persist me"]);
     }
 }

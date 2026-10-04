@@ -93,22 +93,22 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 3,
-      "changed": 2,
+      "added": 0,
+      "changed": 15,
       "moved": 0,
       "parts": 3,
-      "removed": 3
+      "removed": 0
     },
     "items": [
       {
         "kind": "counts",
-        "sentence": "Nothing structural changed since 2026-10-04; 3 files added, 3 removed and 2 changed content.",
+        "sentence": "Nothing structural changed since 2026-10-04; 15 files changed content.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "7f9a89e7d114a54e07f5c3d81da430fda3c34ef4",
-      "generatedAt": "2026-10-04T06:57:30.858Z"
+      "commit": "334a5b3d74c9cd3aa3c05bf049819fcdc455368c",
+      "generatedAt": "2026-10-04T08:09:20.836Z"
     },
     "unchanged": true
   },
@@ -194,7 +194,7 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 3 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "334a5b3d74c9cd3aa3c05bf049819fcdc455368c",
+  "commit": "042eaae94dd4edb0fcf727f1853715a8e9165baf",
   "defaultBranch": "main",
   "derived": "16 parts, mostly TypeScript (68 files), Rust (57), CSS (3), Astro (2), JavaScript (2), HTML (1) and PowerShell (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
@@ -595,7 +595,7 @@
       ]
     }
   ],
-  "generatedAt": "2026-10-04T08:09:20.836Z",
+  "generatedAt": "2026-10-04T15:27:29.067Z",
   "limits": [
     "2 writes and 3 reads use paths built at run time and are not named here.",
     "2 writes and 1 read go to a path their caller passes, not to this repository.",

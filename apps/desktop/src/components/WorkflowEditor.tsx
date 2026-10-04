@@ -109,16 +109,18 @@ export function WorkflowEditor({
                   disabled={i === 0}
                   onClick={() => moveUp(i)}
                   title="Move up"
+                  aria-label="Move up"
                 >
-                  ↑
+                  <span aria-hidden="true">↑</span>
                 </button>
                 <button
                   type="button"
                   disabled={i === steps.length - 1}
                   onClick={() => moveDown(i)}
                   title="Move down"
+                  aria-label="Move down"
                 >
-                  ↓
+                  <span aria-hidden="true">↓</span>
                 </button>
                 <button
                   type="button"
@@ -126,8 +128,9 @@ export function WorkflowEditor({
                   disabled={steps.length <= 1}
                   onClick={() => removeStep(i)}
                   title="Remove step"
+                  aria-label="Remove step"
                 >
-                  ×
+                  <span aria-hidden="true">×</span>
                 </button>
               </div>
             ))}
