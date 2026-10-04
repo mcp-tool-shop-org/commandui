@@ -84,7 +84,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "desktop",
-      "qualifyingSourceCommits": 26,
+      "qualifyingSourceCommits": 27,
       "rebaseline": null
     },
     {
@@ -1084,8 +1084,8 @@
         "path": "apps/desktop/src/app/AppShell.result.test.tsx"
       },
       {
-        "commits": 18,
-        "lines": 4564,
+        "commits": 19,
+        "lines": 4573,
         "path": "apps/desktop/src/app/AppShell.tsx"
       },
       {
@@ -1189,13 +1189,13 @@
         "path": "apps/desktop/src/components/OutputView.tsx"
       },
       {
-        "commits": 3,
-        "lines": 191,
+        "commits": 4,
+        "lines": 212,
         "path": "apps/desktop/src/components/PlanPanel.test.tsx"
       },
       {
-        "commits": 7,
-        "lines": 517,
+        "commits": 8,
+        "lines": 520,
         "path": "apps/desktop/src/components/PlanPanel.tsx"
       },
       {
@@ -1324,13 +1324,13 @@
         "path": "apps/desktop/src/lib/commandError.ts"
       },
       {
-        "commits": 1,
-        "lines": 219,
+        "commits": 2,
+        "lines": 314,
         "path": "apps/desktop/src/lib/commandResult.test.ts"
       },
       {
-        "commits": 1,
-        "lines": 298,
+        "commits": 2,
+        "lines": 573,
         "path": "apps/desktop/src/lib/commandResult.ts"
       },
       {
@@ -1374,13 +1374,13 @@
         "path": "apps/desktop/src/lib/persistInBackground.ts"
       },
       {
-        "commits": 1,
-        "lines": 48,
+        "commits": 2,
+        "lines": 93,
         "path": "apps/desktop/src/lib/planLanguage.test.ts"
       },
       {
-        "commits": 1,
-        "lines": 150,
+        "commits": 2,
+        "lines": 640,
         "path": "apps/desktop/src/lib/planLanguage.ts"
       },
       {
@@ -1484,8 +1484,8 @@
         "path": "apps/desktop/vite.config.ts"
       },
       {
-        "commits": 12,
-        "lines": 357,
+        "commits": 13,
+        "lines": 363,
         "path": "atlas/README.md"
       },
       {
@@ -1494,18 +1494,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 12,
-        "lines": 1726,
+        "commits": 13,
+        "lines": 1742,
         "path": "atlas/page.json"
       },
       {
-        "commits": 12,
-        "lines": 4459,
+        "commits": 13,
+        "lines": 4658,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 12,
-        "lines": 8125,
+        "commits": 13,
+        "lines": 8203,
         "path": "atlas/structure.json"
       },
       {
@@ -2499,9 +2499,9 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-10-04T22:13:27.898Z",
+  "generatedAt": "2026-10-04T22:50:10.327Z",
   "generatedFrom": {
-    "commit": "d5391dcff59e069ac3ca64f5f4c5e5e13d329209"
+    "commit": "c0a587bd3606644802142595fe97ceeab72804e0"
   },
   "pairs": [
     {
@@ -2556,16 +2556,16 @@
     {
       "a": "apps/desktop/src/app/AppShell.tsx",
       "b": "apps/desktop/src/components/HistoryDrawer.tsx",
-      "either": 15,
+      "either": 16,
       "shared": 8,
-      "strength": 0.533333
+      "strength": 0.5
     },
     {
       "a": "apps/desktop/src/app/AppShell.tsx",
       "b": "apps/desktop/src/styles/globals.css",
-      "either": 15,
+      "either": 16,
       "shared": 10,
-      "strength": 0.666667
+      "strength": 0.625
     },
     {
       "a": "apps/desktop/src/components/HistoryDrawer.tsx",
@@ -2577,43 +2577,43 @@
     {
       "a": "atlas/README.md",
       "b": "atlas/page.json",
-      "either": 11,
-      "shared": 11,
+      "either": 12,
+      "shared": 12,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/statistics.json",
-      "either": 11,
-      "shared": 11,
+      "either": 12,
+      "shared": 12,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/structure.json",
-      "either": 11,
-      "shared": 11,
+      "either": 12,
+      "shared": 12,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/statistics.json",
-      "either": 11,
-      "shared": 11,
+      "either": 12,
+      "shared": 12,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/structure.json",
-      "either": 11,
-      "shared": 11,
+      "either": 12,
+      "shared": 12,
       "strength": 1
     },
     {
       "a": "atlas/statistics.json",
       "b": "atlas/structure.json",
-      "either": 11,
-      "shared": 11,
+      "either": 12,
+      "shared": 12,
       "strength": 1
     },
     {
@@ -2697,16 +2697,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-10-04T18:13:21-04:00",
+    "headDate": "2026-10-04T18:50:01-04:00",
     "inScopeFiles": 433,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 77,
+    "qualifyingCommits": 79,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-07T22:13:21.000Z",
+    "since": "2026-04-07T22:50:01.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

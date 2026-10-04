@@ -1330,140 +1330,140 @@
             {
               "in": "handleSubmit",
               "kind": "catch",
-              "line": 1495
+              "line": 1496
             },
             {
               "in": "handleSubmit",
               "kind": "throw",
-              "line": 1497
+              "line": 1498
             },
             {
               "in": "handleSubmit",
               "kind": "catch",
-              "line": 1563
+              "line": 1564
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1703
+              "line": 1704
             },
             {
               "in": "handleApprovePlan",
               "kind": "throw",
-              "line": 1713
+              "line": 1714
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1727
+              "line": 1728
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1737
+              "line": 1738
             },
             {
               "in": "handleSaveWorkflow",
               "kind": "catch",
-              "line": 1806
+              "line": 1807
             },
             {
               "in": "handleInterrupt",
               "kind": "catch",
-              "line": 1875
+              "line": 1876
             },
             {
               "in": "handleResync",
               "kind": "catch",
-              "line": 1897
+              "line": 1898
             },
             {
               "in": "handleCreateSession",
               "kind": "catch",
-              "line": 1915
+              "line": 1916
             },
             {
               "in": "handleCloseSession",
               "kind": "catch",
-              "line": 1962
+              "line": 1963
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "catch",
-              "line": 2038
+              "line": 2039
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "throw",
-              "line": 2040
+              "line": 2041
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "catch",
-              "line": 2046
+              "line": 2047
             },
             {
               "in": "handleSaveWorkflowFromHistory",
               "kind": "catch",
-              "line": 2134
+              "line": 2135
             },
             {
               "in": "handleRunWorkflow",
               "kind": "catch",
-              "line": 2322
+              "line": 2323
             },
             {
               "in": "handleRunWorkflow",
               "kind": "throw",
-              "line": 2324
+              "line": 2325
             },
             {
               "in": "handleRunWorkflow",
               "kind": "catch",
-              "line": 2400
+              "line": 2401
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "throw",
-              "line": 2480
+              "line": 2481
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "catch",
-              "line": 2492
+              "line": 2493
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "catch",
-              "line": 2509
+              "line": 2510
             },
             {
               "in": "handleWorkflowEditorConfirm",
               "kind": "catch",
-              "line": 2573
+              "line": 2574
             },
             {
               "in": "handleWorkflowEditorConfirm",
               "kind": "catch",
-              "line": 2586
+              "line": 2587
             },
             {
               "in": "handleDismissSuggestion",
               "kind": "catch",
-              "line": 2600
+              "line": 2601
             },
             {
               "in": "generateSuggestions",
               "kind": "catch",
-              "line": 2670
+              "line": 2671
             },
             {
               "in": "refreshPlannerStatus",
               "kind": "catch",
-              "line": 2781
+              "line": 2782
             }
           ],
-          "hash": "5cd780d058d51e7753cc7a1941fbdc4fd8684ec96ecf0cd751a71f2fc9fe03c3",
+          "hash": "2a7eda34842f0daa8a6ccaeb21591a76771c2eb6c20add8036e59b5d10fdb522",
           "importOrder": [
             "packages/domain/src/index.ts",
             "packages/api-contract/src/index.ts",
@@ -1797,7 +1797,7 @@
           "path": "apps/desktop/src/components/OutputView.tsx"
         },
         {
-          "hash": "f4257f15ca987c0873d1f03311c5cb2973467cd6d06141ca1ce8ff76280fb218",
+          "hash": "eb66475554d8b2b85254bbdd8297c04bc1e2b26e1e0b21adfbd9750d96864cfe",
           "importsFiles": [
             "apps/desktop/src/components/PlanPanel.tsx"
           ],
@@ -1810,7 +1810,7 @@
             "planCanRun",
             "planNeedsConfirmation"
           ],
-          "hash": "583b442dbdc9088acf1b604f3a6ff808938e8b42cfeb1b22a6f44b93ea609f4e",
+          "hash": "51884dd4839ddd6f8f3bd9247bdb52442dbeb1c4cb3192893a8812f65e0a0c5b",
           "importOrder": [
             "apps/desktop/src/lib/displayPath.ts",
             "apps/desktop/src/lib/planLanguage.ts",
@@ -2155,7 +2155,7 @@
           "path": "apps/desktop/src/lib/commandError.ts"
         },
         {
-          "hash": "5bf88d109a18b081b0203c956fe5a062b60fd8b510531e075a99ec7c61583e1a",
+          "hash": "8e155e616b69b13da791d40699891a8275f1a377c87b3a749367e493d25bf5b8",
           "importsFiles": [
             "apps/desktop/src/lib/commandResult.ts"
           ],
@@ -2172,7 +2172,7 @@
             "looksLikeRequest",
             "resultText"
           ],
-          "hash": "24a92589ab7781bea0b2e0da9bd802dc01ca02da60b10be7b664ab32e1fd6f9a",
+          "hash": "5d686fa1cb1130c4c6c55da0eeb12e43551b1bd5970a13b6307a0cbaeb431642",
           "path": "apps/desktop/src/lib/commandResult.ts"
         },
         {
@@ -2249,7 +2249,7 @@
           "path": "apps/desktop/src/lib/persistInBackground.ts"
         },
         {
-          "hash": "3e9b7d518cd5860c8b41e1f82b6b1acd96ee94d2533800d49e2708d07bed4933",
+          "hash": "50bd30e81f68ab187a8991eb9bbdebe5fb846c065d5e3d48c70baa046ef59b87",
           "importsFiles": [
             "apps/desktop/src/lib/planLanguage.ts"
           ],
@@ -2264,7 +2264,7 @@
             "flagInWords",
             "riskInWords"
           ],
-          "hash": "9b26c9e0a265449c9448817fa5c310bbe79d71d581637e2b518736bf16c03954",
+          "hash": "89408fd6826acc1300be8def03ea2f956a3fd549176bea46769aacd88493adf2",
           "path": "apps/desktop/src/lib/planLanguage.ts"
         },
         {
@@ -5735,7 +5735,7 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "d5391dcff59e069ac3ca64f5f4c5e5e13d329209",
+    "commit": "c0a587bd3606644802142595fe97ceeab72804e0",
     "tracked": 428
   },
   "landings": [
