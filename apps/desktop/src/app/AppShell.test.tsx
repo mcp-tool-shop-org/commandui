@@ -311,6 +311,12 @@ describe("AppShell on the mock bridge", () => {
     await user.type(screen.getByPlaceholderText("Describe what you want to do…"), "list the files{Enter}");
     await user.click(await screen.findByRole("button", { name: "Run Plan" }));
     expect(await screen.findByText(/\[approved]/)).toBeInTheDocument();
+    // Run is enabled in the few milliseconds before the mock marks the command
+    // running, and a second Run Plan in that window is refused as busy.
+    // The badge flips to success only after the command finishes.
+    await waitFor(() => {
+      expect(document.querySelector(".exec-badge")).toHaveTextContent("success");
+    });
 
     await user.click(screen.getByRole("button", { name: "History" }));
     await user.click(await screen.findByRole("button", { name: /list the files/ }));
@@ -321,7 +327,11 @@ describe("AppShell on the mock bridge", () => {
     await user.click(screen.getByRole("checkbox", { name: /I understand the risks of this high-risk command/ }));
     expect(run).toBeEnabled();
     await user.click(run);
-    expect(await screen.findByText(/\[approved] echo "mock plan for: list the files"/)).toBeInTheDocument();
+    // The first approve already left this note. The reopen has to add a second one.
+    // findByText throws when both are already on screen.
+    await waitFor(() => {
+      expect(screen.getAllByText(/\[approved] echo "mock plan for: list the files"/)).toHaveLength(2);
+    });
   });
 
   it("saves a history row as a workflow and then deletes that workflow", async () => {
