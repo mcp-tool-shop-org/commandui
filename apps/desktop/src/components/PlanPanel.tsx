@@ -17,6 +17,47 @@ import {
 
 export type PlanRisk = "low" | "medium" | "high";
 
+/**
+ * Plain words for the plan footer. The planner's context lines use field
+ * names a person should not have to read.
+ */
+export function contextInWords(sources: string[] | undefined): string {
+  if (!sources || sources.length === 0) return "";
+  let working: string | null = null;
+  let project: string | null = null;
+  const extra: string[] = [];
+  for (const source of sources) {
+    const trimmed = source.trim();
+    const cwd = /^cwd:\s*(.*)$/i.exec(trimmed);
+    if (cwd) {
+      const folder = displayPath(cwd[1].trim());
+      if (folder) working = folder;
+      continue;
+    }
+    const root = /^projectRoot:\s*(.*)$/i.exec(trimmed);
+    if (root) {
+      const folder = displayPath(root[1].trim());
+      if (folder) project = folder;
+      continue;
+    }
+    const fact = /^([A-Za-z][\w-]*):(.*)$/.exec(trimmed);
+    if (fact) {
+      const label = fact[2].trim();
+      if (!label) continue;
+      extra.push(fact[1].toLowerCase() === "workflow" ? `Workflow ${label}` : label);
+      continue;
+    }
+    if (trimmed && !/\bcwd\b|\bprojectRoot\b/i.test(trimmed)) extra.push(trimmed);
+  }
+  const parts: string[] = [];
+  if (working) parts.push(`Working folder ${working}`);
+  if (project && project !== working) parts.push(`Project folder ${project}`);
+  for (const item of extra) {
+    if (!parts.includes(item)) parts.push(item);
+  }
+  return parts.join(", ");
+}
+
 /** Latest edited command and whether the high-risk phrase was typed. */
 export type PlanRunGate = {
   command: string;
@@ -177,6 +218,7 @@ export function PlanPanel({
       flags,
     });
   const explained = explainCommand(editedCommand);
+  const lookedAt = contextInWords(contextSources);
   const riskWords = riskInWords(risk, flags?.destructive === true, flags?.escalatesPrivileges === true);
   const flagWords = uniqueWords([
     ...(safetyFlags ?? []).map((code) => flagInWords(code)),
@@ -336,9 +378,9 @@ export function PlanPanel({
         </button>
       </div>
 
-      {contextSources && contextSources.length > 0 && (
+      {lookedAt && (
         <div className="plan-context-sources">
-          Context: {contextSources.join(", ")}
+          Looked at: {lookedAt}
         </div>
       )}
     </div>

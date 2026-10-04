@@ -1,5 +1,6 @@
 import type { CommandResult, ResultAction } from "../lib/commandResult";
 import { collapseRedraws, resultText } from "../lib/commandResult";
+import { scrollRegionKeyDown } from "../lib/scrollRegion";
 
 const ACTION_LABEL: Record<ResultAction, string> = {
   "show-output": "Show output",
@@ -20,7 +21,15 @@ export function ResultLine({ result, outputOpen = false, outputText = "", onActi
   if (!result) return null;
   const text = resultText(result);
   return (
-    <div className="result-line" data-cause={result.cause} data-testid="result-line">
+    <div
+      id="result-line"
+      className="result-line"
+      data-cause={result.cause}
+      data-testid="result-line"
+      tabIndex={0}
+      role="region"
+      aria-label="Command result"
+    >
       <p className="result-line-text">{text}</p>
       {result.actions.length > 0 && (
         <div className="result-line-actions">
@@ -37,7 +46,15 @@ export function ResultLine({ result, outputOpen = false, outputText = "", onActi
         </div>
       )}
       {outputOpen && outputText && (
-        <pre className="result-output">{collapseRedraws(outputText)}</pre>
+        <pre
+          className="result-output"
+          tabIndex={0}
+          role="region"
+          aria-label="Command output"
+          onKeyDown={scrollRegionKeyDown}
+        >
+          {collapseRedraws(outputText)}
+        </pre>
       )}
     </div>
   );

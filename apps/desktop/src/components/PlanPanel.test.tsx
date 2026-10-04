@@ -155,4 +155,28 @@ describe("PlanPanel", () => {
     render(<PlanPanel {...defaultProps} command="" />);
     expect(screen.getByText(/no plan yet/i)).toBeDefined();
   });
+
+  it("describes the folders it looked at without field names", () => {
+    render(
+      <PlanPanel
+        {...defaultProps}
+        contextSources={["cwd: C:\\Work\\demo", "projectRoot: C:\\Work\\demo", "workflow:build"]}
+      />,
+    );
+    const footer = screen.getByText(/Looked at:/);
+    expect(footer).toHaveTextContent("Working folder C:\\Work\\demo");
+    expect(footer).toHaveTextContent("Workflow build");
+    expect(footer).not.toHaveTextContent("projectRoot");
+    expect(footer.textContent).not.toMatch(/\bcwd\b/);
+  });
+
+  it("names a different project folder", () => {
+    render(
+      <PlanPanel
+        {...defaultProps}
+        contextSources={["cwd: C:\\Work\\demo", "projectRoot: C:\\Work\\other"]}
+      />,
+    );
+    expect(screen.getByText(/Looked at:/)).toHaveTextContent("Project folder C:\\Work\\other");
+  });
 });

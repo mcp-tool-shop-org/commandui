@@ -356,6 +356,7 @@ describe("Workstream 2 accessibility", () => {
     fireEvent.keyDown(window, { key: "F1" });
     const help = await screen.findByRole("dialog", { name: "Keyboard and reading help" });
     expect(help).toHaveTextContent("Ctrl+J");
+    expect(help).toHaveTextContent("Ctrl+Shift+R");
     expect(help).toHaveTextContent("Output view");
     await user.keyboard("{Escape}");
 
@@ -403,5 +404,35 @@ describe("Workstream 2 accessibility", () => {
       expect(document.activeElement).toHaveClass("plan-panel");
       expect(document.querySelector("[role='status']")).toHaveTextContent(/A plan is ready to review/);
     });
+  });
+
+  it("moves focus from the command box to the result line", async () => {
+    const user = userEvent.setup();
+    await renderReadyShell();
+    const box = screen.getByRole("textbox", { name: "Command" });
+    box.focus();
+    fireEvent.keyDown(window, { key: "A", ctrlKey: true, shiftKey: true });
+    await user.type(box, "echo hello{Enter}");
+    expect(await screen.findByText(/Finished\./)).toBeInTheDocument();
+    box.focus();
+    fireEvent.keyDown(window, { key: "R", ctrlKey: true, shiftKey: true });
+    expect(document.activeElement).toBe(screen.getByTestId("result-line"));
+  });
+
+  it("shows Ask line breaks in the activity log", async () => {
+    await renderReadyShell();
+    const box = screen.getByRole("textbox", { name: "Command" });
+    fireEvent.change(box, { target: { value: "list the files\nin this folder" } });
+    await waitFor(() => expect(box).toHaveValue("list the files\nin this folder"));
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(await screen.findByRole("button", { name: "Reject" })).toBeInTheDocument();
+    const log = screen.getByRole("log", { name: "CommandUI activity" });
+    const ask = Array.from(log.querySelectorAll(".app-note")).find((note) =>
+      note.textContent?.includes("list the files"),
+    );
+    expect(ask?.textContent).toContain("in this folder");
+    expect(ask?.textContent).toContain("\n");
+    expect(ask?.textContent).not.toContain("\\n");
+    expect(log).toHaveAttribute("tabindex", "0");
   });
 });

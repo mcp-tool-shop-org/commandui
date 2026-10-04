@@ -292,6 +292,40 @@ describe("collapseRedraws and history labels", () => {
     expect(countOutputLines(listing)).toBe(5);
   });
 
+  it("starts a block after this command's own echo", () => {
+    const raw = [
+      "> cd C:\\Work\\demo",
+      "",
+      "> Get-ChildItem logs",
+      "",
+      "Directory: C:\\Work\\demo\\logs",
+      "Mode  Name",
+      "-a--- a.log",
+    ].join("\n");
+    const shown = [
+      "Directory: C:\\Work\\demo\\logs",
+      "Mode  Name",
+      "-a--- a.log",
+    ].join("\n");
+    expect(collapseRedraws(raw, "Get-ChildItem logs")).toBe(shown);
+    expect(collapseRedraws(shown)).toBe(shown);
+    expect(collapseRedraws(shown, "Get-ChildItem logs")).toBe(shown);
+  });
+
+  it("drops a leftover earlier echo when this command's echo is already gone", () => {
+    const raw = ["> cd C:\\Work\\demo", "", "Directory: C:\\Work\\demo\\logs", "a.log"].join("\n");
+    const shown = ["Directory: C:\\Work\\demo\\logs", "a.log"].join("\n");
+    expect(collapseRedraws(raw, "Get-ChildItem logs")).toBe(shown);
+    expect(collapseRedraws(shown)).toBe(shown);
+  });
+
+  it("keeps a line that starts with > once real output has begun", () => {
+    const raw = ["> type readme", "", "> quoted line", "next"].join("\n");
+    const shown = "> quoted line\nnext";
+    expect(collapseRedraws(raw, "type readme")).toBe(shown);
+    expect(collapseRedraws(shown)).toBe(shown);
+  });
+
   it("does not count a prompt redraw as output", () => {
     const redraw = "\u001b[?25l\u001b[32m\u001b[1m\u001b[m> cd\r\n";
     expect(countOutputLines(redraw, "cd")).toBe(0);

@@ -96,20 +96,49 @@ export function describeHiddenChars(text: string): string | null {
  * shown as ^[ / \n style markers and hidden characters as <U+XXXX>, so a model- or
  * user-supplied string cannot move the cursor or recolour the transcript.
  */
-export function escapeForTerminal(text: string): string {
+function escapeControls(text: string, keepBreaks: boolean): string {
   let out = "";
-  for (const char of text) {
-    const cp = char.codePointAt(0) as number;
-    if (cp === 0x0a) out += "\\n";
-    else if (cp === 0x0d) out += "\\r";
-    else if (cp === 0x09) out += "\\t";
-    else if (cp < 0x20) out += `^${String.fromCharCode(cp + 0x40)}`;
-    else if (cp === 0x7f) out += "^?";
-    else if (cp >= 0x80 && cp <= 0x9f) out += `\\x${cp.toString(16)}`;
-    else if (classify(cp)) out += formatCodePoint(cp);
-    else out += char;
+  for (let i = 0; i < text.length; ) {
+    const cp = text.codePointAt(i) as number;
+    const width = cp > 0xffff ? 2 : 1;
+    if (cp === 0x0d) {
+      const next = text.codePointAt(i + width);
+      if (keepBreaks && next === 0x0a) {
+        out += "\n";
+        i += width + 1;
+        continue;
+      }
+      out += keepBreaks ? "\n" : "\\r";
+    } else if (cp === 0x0a) {
+      out += keepBreaks ? "\n" : "\\n";
+    } else if (cp === 0x09) {
+      out += keepBreaks ? "\t" : "\\t";
+    } else if (cp < 0x20) {
+      out += `^${String.fromCharCode(cp + 0x40)}`;
+    } else if (cp === 0x7f) {
+      out += "^?";
+    } else if (cp >= 0x80 && cp <= 0x9f) {
+      out += `\\x${cp.toString(16)}`;
+    } else if (classify(cp)) {
+      out += formatCodePoint(cp);
+    } else {
+      out += text.slice(i, i + width);
+    }
+    i += width;
   }
   return out;
+}
+
+export function escapeForTerminal(text: string): string {
+  return escapeControls(text, false);
+}
+
+/**
+ * The activity log is ordinary text, not a terminal. Line breaks stay line
+ * breaks. Other controls are still written out so they cannot hide characters.
+ */
+export function escapeForNote(text: string): string {
+  return escapeControls(text, true);
 }
 
 /** True for ASCII control characters (including newline, CR and TAB) and DEL. */

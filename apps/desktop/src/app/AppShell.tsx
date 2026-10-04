@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type {
   CommandPlan,
@@ -75,7 +75,8 @@ import { InputComposer } from "../components/InputComposer";
 import type { InputComposerHandle } from "../components/InputComposer";
 import { PlanPanel, planCanRun } from "../components/PlanPanel";
 import { PlannerStatusCard } from "../components/PlannerStatusCard";
-import { commandProblem, escapeForTerminal } from "../lib/displaySafe";
+import { commandProblem, escapeForNote, escapeForTerminal } from "../lib/displaySafe";
+import { layoutIsNarrow, layoutWidth } from "../lib/layoutWidth";
 import {
   askFixPrompt,
   collapseRedraws,
@@ -373,6 +374,8 @@ export function AppShell() {
   const workflowAbortBySessionRef = useRef(new Map<string, AbortController>());
   const terminalPaneRef = useRef<TerminalPaneHandle>(null);
   const composerRef = useRef<InputComposerHandle>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [narrowLayout, setNarrowLayout] = useState(false);
   const activeSessionIdRef = useRef<string | null>(null);
   const planGateRef = useRef<PlanRunGate>({ command: "", confirmed: false });
   const approvePlanRef = useRef<(command: string) => void>(() => {});
@@ -1302,6 +1305,10 @@ export function AppShell() {
     composerRef.current?.focus();
   }
 
+  function focusResultLine() {
+    document.getElementById("result-line")?.focus();
+  }
+
   const shortcuts = useMemo<ShortcutDef[]>(() => {
     const defs: ShortcutDef[] = [
       { id: "palette",       combo: "ctrl+k",       context: ["global"], action: () => setOverlay("palette") },
@@ -1322,6 +1329,7 @@ export function AppShell() {
       { id: "settings",      combo: "ctrl+,",        context: ["global"], action: () => toggleOverlay("settings") },
       { id: "help",          combo: "f1",           context: ["global"], action: () => toggleOverlay("help") },
       { id: "output",        combo: "ctrl+shift+o", context: ["global"], action: () => toggleOverlay("output") },
+      { id: "focus-result",  combo: "ctrl+shift+r", context: ["global"], action: focusResultLine },
       { id: "toggle-mode",   combo: "ctrl+shift+a", context: ["global"], action: () => {
         const mode = useComposerStore.getState().inputMode;
         setInputMode(mode === "command" ? "ask" : "command");
@@ -1389,6 +1397,7 @@ export function AppShell() {
       { id: "open-memory",     label: "Open Memory",      shortcut: "Ctrl+M",       action: () => setOverlay("memory") },
       { id: "open-settings",   label: "Open Settings",    shortcut: "Ctrl+,",       action: () => setOverlay("settings") },
       { id: "open-output",     label: "Open Output",      shortcut: "Ctrl+Shift+O", action: () => setOverlay("output") },
+      { id: "focus-result",    label: "Focus the result", shortcut: "Ctrl+Shift+R", action: focusResultLine },
       { id: "open-help",       label: "Keyboard help",    shortcut: "F1",           action: () => setOverlay("help") },
       ...sessions.map((s, i) => ({
         id: `switch-session-${s.id}`,
@@ -1558,7 +1567,7 @@ export function AppShell() {
 
         // Lines the app writes itself are escaped: model text must not move the cursor
         // or hide characters in the transcript.
-        appendAppNote(session.id, `? ${escapeForTerminal(value)}\r\n`);
+        appendAppNote(session.id, `? ${escapeForNote(value)}\n`);
         appendAppNote(session.id, `Drafted: ${escapeForTerminal(res.plan.command)}\r\n`);
       }
     } catch (e: unknown) {
@@ -2834,13 +2843,27 @@ export function AppShell() {
   }, [settingsOpen]);
 
   const shellStyle = { "--ui-scale": String(fontScale(fontSize)) } as CSSProperties;
+  const shellClass = narrowLayout ? "app-shell layout-narrow" : "app-shell";
+
+  useLayoutEffect(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    const apply = () => {
+      setNarrowLayout(layoutIsNarrow(layoutWidth(el.clientWidth, el.getBoundingClientRect().width)));
+    };
+    apply();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(apply);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fontSize, bootPhase]);
 
   // --- Boot failure screen ---
   if (bootPhase === "failed") {
     return (
-      <div className="app-shell" style={shellStyle}>
+      <div ref={shellRef} className={shellClass} style={shellStyle}>
         <header className="topbar">
-          <div>
+          <div className="topbar-title">
             <strong>CommandUI</strong>
           </div>
           <div className="topbar-actions">
@@ -2876,13 +2899,13 @@ export function AppShell() {
 
   // --- Render ---
   return (
-    <div className="app-shell" style={shellStyle}>
+    <div ref={shellRef} className={shellClass} style={shellStyle}>
       <header className="topbar">
         <h1 className="visually-hidden">CommandUI</h1>
         <div className="visually-hidden" role="status" aria-atomic="true">
           {liveMessage}
         </div>
-        <div>
+        <div className="topbar-title">
           <strong>CommandUI</strong>
           <span className="muted"> v{APP_VERSION}</span>
           {session && (
@@ -3012,7 +3035,7 @@ export function AppShell() {
           />
 
           {activeNotes.length > 0 && (
-            <div className="app-notes" role="log" aria-label="CommandUI activity">
+            <div className="app-notes" role="log" aria-label="CommandUI activity" tabIndex={0}>
               {activeNotes.slice(-APP_NOTES_SHOWN).map((note, i) => (
                 <div key={activeNotes.length - APP_NOTES_SHOWN + i} className="app-note">
                   {note}

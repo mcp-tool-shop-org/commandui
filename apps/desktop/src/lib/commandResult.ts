@@ -93,19 +93,39 @@ export function countOutputLines(text: string, command?: string): number {
     .filter(Boolean).length;
 }
 
+function isOwnEcho(trimmed: string, echo: string): boolean {
+  return echo !== "" && (trimmed === `> ${echo}` || trimmed === `>${echo}`);
+}
+
+/**
+ * Drop shell chrome from the front of a block. The block starts after this
+ * command's own prompt echo, so a previous command's echo and the blank lines
+ * under it are not part of the output. A `>` line that follows real output
+ * stays. A second pass, including one that does not know the command, leaves
+ * that text alone.
+ */
 function stripChrome(lines: string[], command?: string): string[] {
   const echo = command?.trim() ?? "";
-  let droppedEcho = false;
-  const kept = lines.filter((line) => {
-    const trimmed = line.trim();
-    // The shell prompt is `>`. A line that is only that prompt is not output.
-    if (trimmed === ">") return false;
-    if (!droppedEcho && echo && (trimmed === `> ${echo}` || trimmed === `>${echo}`)) {
-      droppedEcho = true;
-      return false;
+  let start = 0;
+  if (echo) {
+    const at = lines.findIndex((line) => isOwnEcho(line.trim(), echo));
+    if (at >= 0) start = at + 1;
+  }
+  const foundEcho = echo !== "" && start > 0;
+  while (start < lines.length) {
+    const trimmed = lines[start].trim();
+    if (trimmed === "" || trimmed === ">") {
+      start += 1;
+      continue;
     }
-    return true;
-  });
+    // No echo of our own: a leading "> some earlier command" is still chrome.
+    if (!foundEcho && echo && trimmed.startsWith("> ")) {
+      start += 1;
+      continue;
+    }
+    break;
+  }
+  const kept = lines.slice(start).filter((line) => line.trim() !== ">");
   while (kept.length > 0 && kept[kept.length - 1] === "") kept.pop();
   return kept;
 }

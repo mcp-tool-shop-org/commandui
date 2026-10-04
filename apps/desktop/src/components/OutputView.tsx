@@ -1,3 +1,4 @@
+import { scrollRegionKeyDown } from "../lib/scrollRegion";
 import { useModalDialog } from "../lib/useModalDialog";
 
 export type OutputBlock = {
@@ -37,7 +38,17 @@ export function OutputView({ blocks, onClose }: Props) {
               <li key={block.id} className="output-block">
                 <p className="output-command">{block.command || "(typed in the terminal)"}</p>
                 <p>{block.headline}</p>
-                {block.output && <pre className="result-output">{block.output}</pre>}
+                {block.output && (
+                  <pre
+                    className="result-output"
+                    tabIndex={0}
+                    role="region"
+                    aria-label={`Output of ${block.command || "a command typed in the terminal"}`}
+                    onKeyDown={scrollRegionKeyDown}
+                  >
+                    {block.output}
+                  </pre>
+                )}
               </li>
             ))}
           </ol>

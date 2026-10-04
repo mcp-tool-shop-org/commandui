@@ -7,6 +7,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Ctrl+Shift+A", "Switch between Command and Ask"],
   ["Ctrl+K", "Open the command palette"],
   ["Ctrl+Shift+O", "Open the output view"],
+  ["Ctrl+Shift+R", "Move focus to the result line. Tab then reaches Show output, Ask how to fix it, and Run again."],
   ["Ctrl+T", "New session"],
   ["Ctrl+Enter", "Approve the plan"],
   ["Escape", "Close the top dialog"],
