@@ -990,7 +990,7 @@ mod tests {
         let bytes = captured.lock().unwrap();
         let text = String::from_utf8_lossy(&bytes);
         // One line: the marker is chained after the command, not typed ahead.
-        assert_eq!(text, "\x1b[1;5F\x1b[1;5Hdir & %__cui%\r");
+        assert_eq!(text, "\x1b[1;5F\x1b[1;5H%__cuz% & dir & %__cui%\r");
     }
 
     #[test]

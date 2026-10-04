@@ -569,6 +569,22 @@ fn exercise(shell: &str, kind: Kind, tag: &str) {
     let (exit, _) = live.run("echo after-typed-interrupt");
     assert_eq!(exit, 0, "{shell}: execute after interrupting a typed command");
 
+    // A built-in that does not touch ERRORLEVEL (cmd's echo) must not report
+    // the code the command before it left behind.
+    let (exit, _) = live.run(exit_seven(kind));
+    assert_eq!(exit, 7, "{shell}: a failing command before the built-in");
+    let (exit, lines) = live.run("echo after-failure");
+    assert_eq!(exit, 0, "{shell}: a built-in after a failure reported the old code; {lines:?}");
+    let from = live.event_count();
+    live.terminal.write(&live.id, &format!("{}\r", live.long_command())).expect("type a command");
+    live.wait_state(from, "userRunning");
+    std::thread::sleep(Duration::from_millis(1000));
+    live.terminal.interrupt(&live.id).expect("interrupt a typed command");
+    live.wait_state(from, "ready");
+    std::thread::sleep(Duration::from_millis(500));
+    let (exit, lines) = live.run("echo after-second-interrupt");
+    assert_eq!(exit, 0, "{shell}: a built-in after Ctrl+C reported the interrupt code; {lines:?}");
+
     // Editing modes: the approved command must replace whatever is typed,
     // whichever mode the line editor is in.
     match kind {

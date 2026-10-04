@@ -13,7 +13,7 @@ use crate::events::{
 use crate::pty::{
     bootstrap_prompt, clone_reader, default_shell, new_marker_nonce, spawn_reader_with_exit,
     spawn_shell,
-    write_raw, PtyHandle, CMD_MARKER_VAR_ECHO, CMD_PLUMBING_ECHO, PROMPT_MARKER, PROMPT_ONLY_EXIT, PROMPT_ONLY_FIELD,
+    write_raw, PtyHandle, CMD_MARKER_VAR_ECHO, CMD_PLUMBING_ECHO, CMD_RESET_ECHO, PROMPT_MARKER, PROMPT_ONLY_EXIT, PROMPT_ONLY_FIELD,
 };
 use crate::session::{SessionExecState, SessionRecord, SessionRegistry};
 use std::sync::{Arc, Mutex};
@@ -480,7 +480,7 @@ impl SessionService {
 /// marker echo that follows an executed command, and window-title escapes
 /// (cmd's one-shot child retitles the console on every command).
 fn sanitize_display(text: &str) -> String {
-    let mut text = text.replace(CMD_PLUMBING_ECHO, "").replace(CMD_MARKER_VAR_ECHO, "");
+    let mut text = text.replace(CMD_RESET_ECHO, "").replace(CMD_PLUMBING_ECHO, "").replace(CMD_MARKER_VAR_ECHO, "");
     let mut from = 0;
     while let Some(pos) = text[from..].find("\x1b]") {
         let start = from + pos;
@@ -758,6 +758,8 @@ mod tests {
     #[test]
     fn sanitize_display_drops_cmd_plumbing_and_window_titles() {
         assert_eq!(sanitize_display("C:\\w>echo hi & %__cui%\r\n"), "C:\\w>echo hi\r\n");
+        assert_eq!(sanitize_display("C:\\w>%__cuz% & echo hi & %__cui%\r\n"), "C:\\w>echo hi\r\n");
+        assert_eq!(sanitize_display("C:\\w>%__cuz% & echo hi\r\n%__cui%\r\n"), "C:\\w>echo hi\r\n\r\n");
         assert_eq!(sanitize_display("C:\\w>%__cui%\r\n"), "C:\\w>\r\n");
         assert_eq!(sanitize_display("a\x1b]0;C:\\windows\\cmd.exe\x07b"), "ab");
         assert_eq!(sanitize_display("a\x1b]2;t\x1b\\b\x1b]0;x\x07c"), "abc");

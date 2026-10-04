@@ -151,6 +151,15 @@ pub(crate) const PROMPT_ONLY_FIELD: &str = "P";
 /// console echoes for an executed command ends in a short ` & %__cui%`.
 const CMD_VAR: &str = "__cui";
 
+/// Name of the cmd variable holding `(call )`, which sets ERRORLEVEL to 0.
+/// cmd's built-ins (echo, cd, set) never reset ERRORLEVEL, so without it an
+/// approved `echo` after a failure, or after Ctrl+C, would report that old code.
+const CMD_RESET_VAR: &str = "__cuz";
+
+/// What the console echoes in front of an executed cmd command: the
+/// ERRORLEVEL reset. It is dropped from what is shown.
+pub(crate) const CMD_RESET_ECHO: &str = "%__cuz% & ";
+
 /// What the console echoes after an executed cmd command: the chained marker
 /// plumbing. It is dropped from what is shown.
 pub(crate) const CMD_PLUMBING_ECHO: &str = " & %__cui%";
@@ -193,7 +202,7 @@ pub fn bootstrap_prompt(shell: &str, nonce: &str) -> Option<String> {
             "function prompt {{ $__cui_ok = $?; $__cui_code = $global:LASTEXITCODE; if ($__cui_ok) {{ $__cui_code = 0 }} elseif (-not ($__cui_code -is [int]) -or $__cui_code -eq 0) {{ $__cui_code = 1 }}; try {{ if ((Get-PSReadLineOption).EditMode -eq 'Vi') {{ Set-PSReadLineKeyHandler -ViMode Insert -Chord 'Ctrl+]' -Function RevertLine; Set-PSReadLineKeyHandler -ViMode Command -Chord 'Ctrl+]' -ScriptBlock {{ [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine(); [Microsoft.PowerShell.PSConsoleReadLine]::ViInsertMode() }} }} else {{ Set-PSReadLineKeyHandler -Chord 'Ctrl+]' -Function RevertLine }} }} catch {{ }}; $__cui_cwd = (Get-Location).Path.Replace('%','%25').Replace([string][char]13,'%0D').Replace([string][char]10,'%0A'); $__cui_line = ([string][char]10) + '{PROMPT_MARKER}|{nonce}|' + $__cui_cwd + '|' + $__cui_code; \"$__cui_line`n> \" }}{ENTER}"
         )),
         ShellFamily::Cmd => Some(format!(
-            "set \"{CMD_VAR}={}\"{ENTER}{}{ENTER}",
+            "set \"{CMD_VAR}={}\"{ENTER}set \"{CMD_RESET_VAR}=(call )\"{ENTER}{}{ENTER}",
             cmd_marker_value(nonce),
             cmd_prompt_command(nonce)
         )),
@@ -218,12 +227,12 @@ pub(crate) fn command_line_for_shell(shell: &str, _nonce: &str, command: &str) -
         // a program that flushes the console input buffer (pause, choice,
         // set /p) cannot eat it.
         if cmd_can_chain(command) {
-            format!("{clear}{command} & %{CMD_VAR}%{ENTER}")
+            format!("{clear}%{CMD_RESET_VAR}% & {command} & %{CMD_VAR}%{ENTER}")
         } else {
             // A trailing rem, ::, ^, an open quote or paren, or an if/for
             // that would take the chained marker into its own body: the
             // marker goes on a line of its own instead.
-            format!("{clear}{command}{ENTER}%{CMD_VAR}%{ENTER}")
+            format!("{clear}%{CMD_RESET_VAR}% & {command}{ENTER}%{CMD_VAR}%{ENTER}")
         }
     } else {
         format!("{clear}{command}{ENTER}")
@@ -896,13 +905,15 @@ mod tests {
         let line = command_line_for_shell("cmd.exe", NONCE, nasty);
         // One line, one Enter: a program that flushes the console input
         // buffer (pause, choice, set /p) has no typed-ahead marker to eat.
-        assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H{nasty} & %__cui%\r"));
+        assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H%__cuz% & {nasty} & %__cui%\r"));
         assert_eq!(line.matches('\r').count(), 1);
         assert!(!line.contains('\n'), "a Windows ConPTY submits on CR; LF is Ctrl+J");
         // The marker plumbing is in the bootstrap's variable, with the nonce.
         let boot = bootstrap_prompt("cmd.exe", NONCE).unwrap();
         assert!(boot.contains(&format!("{PROMPT_MARKER}^^^|{NONCE}^^^|!CD!^^^|!__cui_ec!")), "{boot}");
         assert!(boot.starts_with("set \"__cui=call set __cui_ec=%^ERRORLEVEL% & "), "{boot}");
+        // ...and so is the ERRORLEVEL reset (`(call )` sets it to 0).
+        assert!(boot.contains("\rset \"__cuz=(call )\"\r"), "{boot}");
         assert_eq!(command_line_for_shell("bash", NONCE, "ls"), "\x1dls\r");
         assert_eq!(resync_input("bash", NONCE), "\r");
         assert_eq!(resync_input("cmd.exe", NONCE), "\r");
@@ -921,7 +932,7 @@ mod tests {
             "echo a)",
         ] {
             let line = command_line_for_shell("cmd.exe", NONCE, command);
-            assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H{command}\r%__cui%\r"), "{command}");
+            assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H%__cuz% & {command}\r%__cui%\r"), "{command}");
         }
         for command in ["echo hi", "dir /b", "cd /d \"C:\\a b\"", "echo (a) & echo b", "git status"] {
             let line = command_line_for_shell("cmd.exe", NONCE, command);
@@ -935,14 +946,14 @@ mod tests {
         assert_eq!(command_line_for_shell("pwsh.exe", NONCE, "ls"), "\x1d\x1b[1;5F\x1b[1;5Hls\r");
         assert_eq!(command_line_for_shell("powershell.exe", NONCE, "ls"), "\x1d\x1b[1;5F\x1b[1;5Hls\r");
         assert_eq!(command_line_for_shell("/bin/bash", NONCE, "ls"), "\x1dls\r");
-        assert_eq!(command_line_for_shell("cmd.exe", NONCE, "dir"), "\x1b[1;5F\x1b[1;5Hdir & %__cui%\r");
+        assert_eq!(command_line_for_shell("cmd.exe", NONCE, "dir"), "\x1b[1;5F\x1b[1;5H%__cuz% & dir & %__cui%\r");
     }
 
     #[test]
     fn cmd_commands_with_bangs_are_written_through_unchanged() {
         for command in ["echo hello!", "git commit -m \"done!\"", "cd hello!world"] {
             let line = command_line_for_shell("cmd.exe", NONCE, command);
-            assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H{command} & %__cui%\r"), "{line}");
+            assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H%__cuz% & {command} & %__cui%\r"), "{line}");
             // Only the marker child expands `!`; the session itself never does.
             assert!(
                 bootstrap_prompt("cmd.exe", NONCE).unwrap().contains("\"%ComSpec%\" /v:on /c"),
