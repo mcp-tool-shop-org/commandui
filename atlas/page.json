@@ -93,42 +93,24 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 7,
-      "changed": 20,
+      "added": 0,
+      "changed": 1,
       "moved": 0,
-      "parts": 5,
+      "parts": 1,
       "removed": 0
     },
     "items": [
       {
-        "kind": "door",
-        "sentence": "CI now also runs apps/desktop/src/app/bannedWords.test.ts, apps/desktop/src/lib/fontScale.test.ts and apps/desktop/src/styles/contrast.test.ts.",
-        "subjects": [
-          ".github/workflows/ci.yml",
-          "apps/desktop/src/app/bannedWords.test.ts",
-          "apps/desktop/src/lib/fontScale.test.ts",
-          "apps/desktop/src/styles/contrast.test.ts"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "apps/desktop/src/styles/globals.css is now read by apps/desktop/src/styles/contrast.test.ts.",
-        "subjects": [
-          "apps/desktop/src/styles/globals.css",
-          "apps/desktop/src/styles/contrast.test.ts"
-        ]
-      },
-      {
         "kind": "counts",
-        "sentence": "7 files added and 20 changed content, across 5 parts.",
+        "sentence": "Nothing structural changed since 2026-10-04; 1 file changed content.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "a61a8f30cf33d57ee46b3971f7fc587ef3eb45d6",
-      "generatedAt": "2026-10-04T21:33:33.484Z"
+      "commit": "1ad3636788b10741779510272569e81a53df409d",
+      "generatedAt": "2026-10-04T22:02:09.654Z"
     },
-    "unchanged": false
+    "unchanged": true
   },
   "changesTogether": [
     {
@@ -212,7 +194,7 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 7 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "1ad3636788b10741779510272569e81a53df409d",
+  "commit": "8ff616fec9b5d6ce3ab955f983e5d2b3925a460d",
   "defaultBranch": "main",
   "derived": "16 parts, mostly TypeScript (108 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
@@ -635,7 +617,7 @@
       ]
     }
   ],
-  "generatedAt": "2026-10-04T22:02:09.654Z",
+  "generatedAt": "2026-10-04T22:06:33.820Z",
   "limits": [
     "1 import could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository.",
     "2 writes and 3 reads use paths built at run time and are not named here.",

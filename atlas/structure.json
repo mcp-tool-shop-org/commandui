@@ -1553,33 +1553,39 @@
           "path": "apps/desktop/src/app/AppShell.tsx"
         },
         {
-          "hash": "8b66010a627fcb3a2179b17fd50dba4d6f3c2e6b0abac8a1e4c1186348bbdfa0",
+          "hash": "97a69292bf981cea24940eeef4d8aab91deba6a09bf4041c65c465fd962a10cd",
           "importOrder": [
             "packages/domain/src/index.ts",
             "packages/state/src/index.ts",
             "apps/desktop/src/lib/mockBridge.ts",
             "apps/desktop/src/components/CommandPalette.tsx",
             "apps/desktop/src/components/ConfirmDialog.tsx",
+            "apps/desktop/src/components/HelpDialog.tsx",
             "apps/desktop/src/components/HistoryDrawer.tsx",
             "apps/desktop/src/components/MemoryDrawer.tsx",
             "apps/desktop/src/components/OutputView.tsx",
+            "apps/desktop/src/components/PlanPanel.tsx",
             "apps/desktop/src/components/SettingsDrawer.tsx",
             "apps/desktop/src/components/WelcomeScreen.tsx",
             "apps/desktop/src/components/WorkflowDrawer.tsx",
             "apps/desktop/src/components/WorkflowEditor.tsx",
+            "apps/desktop/src/components/WorkflowRunBanner.tsx",
             "apps/desktop/src/app/AppShell.tsx"
           ],
           "importsFiles": [
             "apps/desktop/src/app/AppShell.tsx",
             "apps/desktop/src/components/CommandPalette.tsx",
             "apps/desktop/src/components/ConfirmDialog.tsx",
+            "apps/desktop/src/components/HelpDialog.tsx",
             "apps/desktop/src/components/HistoryDrawer.tsx",
             "apps/desktop/src/components/MemoryDrawer.tsx",
             "apps/desktop/src/components/OutputView.tsx",
+            "apps/desktop/src/components/PlanPanel.tsx",
             "apps/desktop/src/components/SettingsDrawer.tsx",
             "apps/desktop/src/components/WelcomeScreen.tsx",
             "apps/desktop/src/components/WorkflowDrawer.tsx",
             "apps/desktop/src/components/WorkflowEditor.tsx",
+            "apps/desktop/src/components/WorkflowRunBanner.tsx",
             "apps/desktop/src/lib/mockBridge.ts",
             "packages/domain/src/index.ts",
             "packages/state/src/index.ts"
@@ -5725,7 +5731,7 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "1ad3636788b10741779510272569e81a53df409d",
+    "commit": "8ff616fec9b5d6ce3ab955f983e5d2b3925a460d",
     "tracked": 427
   },
   "landings": [

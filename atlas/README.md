@@ -1,16 +1,14 @@
 # commandui: how it works
 
-Mapped at 2026-10-04 from commit 1ad3636 by Atlas 1.24.0.
+Mapped at 2026-10-04 from commit 8ff616f by Atlas 1.24.0.
 
 ## What this is
 
 16 parts, mostly TypeScript (108 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).
 
-## What changed since 2026-10-04 (a61a8f3)
+## What changed since 2026-10-04 (1ad3636)
 
-- CI now also runs apps/desktop/src/app/bannedWords.test.ts, apps/desktop/src/lib/fontScale.test.ts and apps/desktop/src/styles/contrast.test.ts.
-- apps/desktop/src/styles/globals.css is now read by apps/desktop/src/styles/contrast.test.ts.
-- 7 files added and 20 changed content, across 5 parts.
+Nothing structural changed since 2026-10-04; 1 file changed content.
 
 ## What comes in
 
