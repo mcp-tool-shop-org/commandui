@@ -84,13 +84,18 @@ fn wait_for<F: Fn(&[RuntimeEvent]) -> bool>(sink: &Collect, limit: Duration, f: 
 }
 
 /// What a terminal would show: escape sequences dropped, a cursor-position
-/// escape starts a new row, a carriage return overwrites the row so far.
+/// escape starts a new row, a carriage return overwrites the row so far, and a
+/// backspace moves the cursor left so that what is written next overwrites
+/// (bash redraws a cleared line as backspaces, spaces, backspaces: the text it
+/// erased is not on screen).
 fn visible_lines(raw: &str) -> Vec<String> {
     let chars: Vec<char> = raw.chars().collect();
     let mut rows: Vec<String> = vec![String::new()];
     // After a bare carriage return the cursor is at column 0: what is already
     // on the row stays until something is written over it.
     let mut carriage = false;
+    // How many characters the cursor is to the left of the end of the row.
+    let mut back = 0usize;
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
@@ -105,6 +110,7 @@ fn visible_lines(raw: &str) -> Vec<String> {
                         }
                         if matches!(chars.get(i), Some('H') | Some('f')) {
                             rows.push(String::new());
+                            back = 0;
                         }
                     }
                     Some(']') => {
@@ -131,15 +137,29 @@ fn visible_lines(raw: &str) -> Vec<String> {
             }
             '\n' => {
                 carriage = false;
+                back = 0;
                 rows.push(String::new());
             }
             '\u{7}' => {}
+            '\u{8}' => {
+                back = (back + 1).min(rows.last().unwrap().chars().count());
+            }
             _ => {
                 if carriage {
                     rows.last_mut().unwrap().clear();
                     carriage = false;
+                    back = 0;
                 }
-                rows.last_mut().unwrap().push(c);
+                let row = rows.last_mut().unwrap();
+                if back > 0 {
+                    let mut cells: Vec<char> = row.chars().collect();
+                    let at = cells.len() - back;
+                    cells[at] = c;
+                    *row = cells.into_iter().collect();
+                    back -= 1;
+                } else {
+                    row.push(c);
+                }
             }
         }
         i += 1;
@@ -175,7 +195,14 @@ fn output_lines(sink: &Collect) -> Vec<String> {
 }
 
 fn work_dir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("commandui-live-{}-{tag}", std::process::id()));
+    // The cwd is deliberately wider than the PTY (120 columns): the prompt
+    // marker carries the full cwd, so a marker row that the console wraps must
+    // still parse. CI runners' own temp paths are long enough to hit this; a
+    // developer's are not, so the test pads the path itself.
+    let dir = std::env::temp_dir()
+        .join(format!("commandui-live-{}-{tag}", std::process::id()))
+        .join("a-deliberately-long-directory-name-so-the-working-directory-is-wider-than-the-terminal")
+        .join("and-then-another-long-directory-name-to-push-the-prompt-marker-past-two-hundred-columns");
     std::fs::create_dir_all(dir.join("sub")).unwrap();
     dir
 }
@@ -590,7 +617,7 @@ fn exercise(shell: &str, kind: Kind, tag: &str) {
     assert!(refused.unwrap_err().contains("has exited"), "{shell}: execute on an exited session");
 
     drop(live);
-    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(dir.ancestors().nth(2).unwrap_or(&dir));
 }
 
 fn first_existing(candidates: &[&str]) -> Option<String> {
@@ -661,7 +688,12 @@ fn live_git_bash_on_windows() {
 #[cfg(unix)]
 #[test]
 fn live_bash() {
-    match first_existing(&["/bin/bash", "/usr/bin/bash"]) {
+    // COMMANDUI_LIVE_BASH points the test at another bash build (CI runs the
+    // distribution's; a developer can check an older readline).
+    let chosen = std::env::var("COMMANDUI_LIVE_BASH").ok();
+    let mut candidates: Vec<&str> = chosen.iter().map(|s| s.as_str()).collect();
+    candidates.extend(["/bin/bash", "/usr/bin/bash"]);
+    match first_existing(&candidates) {
         Some(path) => exercise(&path, Kind::Bash, "bash"),
         None => skip("bash", "not installed"),
     }
@@ -678,6 +710,11 @@ fn live_zsh() {
 
 #[test]
 fn visible_lines_follows_a_terminal() {
+    // bash redraws a line it cleared as backspaces, spaces, backspaces.
+    assert_eq!(
+        visible_lines("$ echo Xhalf\u{8}\u{8}\u{8}\u{8}\u{8}\u{8}\u{8}\u{8}\u{8}\u{8}          \u{8}\u{8}\u{8}\u{8}\u{8}\u{8}\u{8}\u{8}\u{8}\u{8}echo ok\r\nok\r\n"),
+        vec!["$ echo ok", "ok", ""]
+    );
     assert_eq!(visible_lines("a\r\nb\rc\r\n"), vec!["a", "c", ""]);
     assert_eq!(
         visible_lines("\u{1b}[?25lone\u{1b}[5;1Htwo\u{1b}]0;title\u{7}\r\n"),

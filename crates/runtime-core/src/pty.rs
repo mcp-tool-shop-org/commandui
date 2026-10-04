@@ -310,18 +310,124 @@ pub(crate) fn resync_input(_shell: &str, _nonce: &str) -> String {
 /// on it and the cursor moves to a different row, and drops it otherwise.
 /// A cursor-position escape that stays on the row the cursor is already on
 /// (an in-line redraw) passes through, as does every other escape. The row is
-/// followed from the escapes seen and from line feeds (wrapped long lines are
-/// not counted; an unknown row counts as different).
+/// followed from the escapes seen and from line feeds (a ConPTY soft wrap is
+/// not a new row: see "Soft wraps" below; an unknown row counts as different).
 /// While the alternate screen is active (`CSI ? 1049/1047/47 h`, alone or
 /// combined with other modes) nothing is rewritten: vim, less and htop need
 /// their cursor positioning. Prompts and markers never appear there.
 /// An escape sequence cut in half by a read is held for the next one.
+///
+/// Soft wraps. When a row is filled to the last column of a console that is
+/// already at the bottom of its screen, ConPTY does not leave the wrap to the
+/// terminal: it writes `CR LF` (to scroll), moves back to the last column of
+/// the row that was wrapped (`CSI row;cols H`) and repaints the last character
+/// before continuing. That is one long line, not two. A line break is
+/// therefore not a line break when the row it ends was filled up to column N
+/// and the next cursor-position escape (after only colour or cursor-visibility
+/// escapes) lands on column N: the break and the escape are dropped, and the
+/// repainted character, which is the character already shown, is dropped
+/// too. The column is followed from the text written, so this holds at any
+/// console width and needs no width to be told. A `CR` or `LF` on a row this
+/// wide is held until the next read shows which it is (`flush_held` releases
+/// it when nothing follows).
 #[derive(Default)]
 pub(crate) struct RowNormalizer {
     carry: String,
     row_has_text: bool,
     alt_screen: bool,
     row: Option<u32>,
+    /// Cursor column, 0-based: how many cells are to the left of it.
+    col: usize,
+    /// The column a carriage return left, for the line feed that follows it.
+    col_before_cr: usize,
+    last_char: Option<char>,
+    /// After a soft wrap: the character ConPTY repaints, to be dropped once.
+    drop_dup: Option<char>,
+    /// `carry` starts with a CR/LF that waits for the next read.
+    holding: bool,
+    /// The console width, once a soft wrap has shown it. Text written past it
+    /// continues on the next row, as the terminal does.
+    width: Option<usize>,
+}
+
+/// Rows narrower than this are never treated as possibly soft-wrapped.
+const MIN_WRAP_COL: usize = 8;
+
+enum Wrap {
+    No,
+    More,
+    Yes { pass: (usize, usize), end: usize, row: Option<u32>, col: usize },
+}
+
+/// Is the line break at `i` (`CR LF` or `LF`) a soft wrap of a row filled to
+/// column `cand`? See `RowNormalizer`.
+fn wrap_lookahead(input: &str, i: usize, cand: usize) -> Wrap {
+    let b = input.as_bytes();
+    let mut j = i;
+    if b.get(j) == Some(&b'\r') {
+        j += 1;
+    }
+    match b.get(j) {
+        None => return Wrap::More,
+        Some(b'\n') => j += 1,
+        Some(_) => return Wrap::No,
+    }
+    let pass_start = j;
+    loop {
+        match b.get(j) {
+            None => return Wrap::More,
+            Some(0x1b) => {
+                match b.get(j + 1) {
+                    None => return Wrap::More,
+                    Some(b'[') => {}
+                    Some(_) => return Wrap::No,
+                }
+                let mut k = j + 2;
+                while k < b.len() && (0x20..=0x3f).contains(&b[k]) {
+                    k += 1;
+                }
+                let Some(&fin) = b.get(k) else { return Wrap::More };
+                let params = &input[j + 2..k];
+                match fin {
+                    b'm' => j = k + 1,
+                    b'h' | b'l' if params == "?25" => j = k + 1,
+                    b'H' | b'f' => {
+                        let mut it = params.split(';');
+                        let row = it.next().and_then(|r| if r.is_empty() { Some(1) } else { r.parse::<u32>().ok() });
+                        let col = it.next().and_then(|c| if c.is_empty() { Some(1) } else { c.parse::<usize>().ok() });
+                        return match col {
+                            Some(c) if c == cand && c > 1 => {
+                                Wrap::Yes { pass: (pass_start, j), end: k + 1, row, col: c }
+                            }
+                            _ => Wrap::No,
+                        };
+                    }
+                    _ => return Wrap::No,
+                }
+            }
+            Some(_) => return Wrap::No,
+        }
+    }
+}
+
+/// The 0-based column a CSI sequence leaves the cursor in, when it says.
+fn csi_column(seq: &str, col: usize) -> usize {
+    let Some(fin) = seq.bytes().last() else { return col };
+    let params = &seq[2..seq.len() - 1];
+    let n = |p: &str| p.split(';').next().and_then(|v| if v.is_empty() { Some(1) } else { v.parse::<usize>().ok() });
+    match fin {
+        b'H' | b'f' => params
+            .split(';')
+            .nth(1)
+            .and_then(|c| if c.is_empty() { Some(1) } else { c.parse::<usize>().ok() })
+            .map(|c| c.max(1) - 1)
+            .unwrap_or(0),
+        b'G' => n(params).map(|c| c.max(1) - 1).unwrap_or(col),
+        b'C' => col + n(params).unwrap_or(1),
+        b'D' => col.saturating_sub(n(params).unwrap_or(1)),
+        b'E' | b'F' => 0,
+        _ => col,
+    }
 }
 
 const MAX_ESCAPE_CARRY: usize = 256;
@@ -343,7 +449,22 @@ fn alt_screen_switch(seq: &str) -> Option<bool> {
 
 impl RowNormalizer {
     pub(crate) fn push(&mut self, text: &str) -> String {
+        self.push_inner(text, false)
+    }
+
+    /// Release a CR/LF that was held for the next read, now that no read came.
+    /// Returns "" when nothing is held.
+    pub(crate) fn flush_held(&mut self) -> String {
+        if self.holding {
+            self.push_inner("", true)
+        } else {
+            String::new()
+        }
+    }
+
+    fn push_inner(&mut self, text: &str, force: bool) -> String {
         let mut input = std::mem::take(&mut self.carry);
+        self.holding = false;
         input.push_str(text);
         let bytes = input.as_bytes();
         let mut out = String::with_capacity(input.len());
@@ -359,6 +480,7 @@ impl RowNormalizer {
                     if self.row_has_text {
                         out.push('\n');
                         self.row_has_text = false;
+                        self.col = 0;
                     }
                 } else if self.alt_screen
                     && rest.len() < PROMPT_MARKER.len()
@@ -369,10 +491,58 @@ impl RowNormalizer {
                     break;
                 }
                 let ch = rest.chars().next().unwrap();
+                if (ch == '\r' || ch == '\n') && !self.alt_screen {
+                    let cand = if ch == '\n' && self.col == 0 { self.col_before_cr } else { self.col };
+                    if cand >= MIN_WRAP_COL {
+                        match wrap_lookahead(&input, i, cand) {
+                            Wrap::Yes { pass, end, row, col } => {
+                                out.push_str(&input[pass.0..pass.1]);
+                                i = end;
+                                self.row = row;
+                                self.row_has_text = true;
+                                self.col = col - 1;
+                                self.width = Some(col);
+                                self.drop_dup = self.last_char.filter(|c| c.is_ascii());
+                                continue;
+                            }
+                            Wrap::More if !force => {
+                                self.carry = input[i..].to_string();
+                                self.holding = true;
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 if ch == '\n' {
                     self.row_has_text = false;
                     self.row = self.row.map(|r| r + 1);
-                } else if !ch.is_whitespace() && !ch.is_control() {
+                    self.col = 0;
+                    self.drop_dup = None;
+                } else if ch == '\r' {
+                    if self.col > 0 {
+                        self.col_before_cr = self.col;
+                    }
+                    self.col = 0;
+                    self.drop_dup = None;
+                } else if ch == '\u{8}' {
+                    self.col = self.col.saturating_sub(1);
+                } else if ch == '\t' {
+                    self.col = (self.col / 8 + 1) * 8;
+                } else if !ch.is_control() {
+                    if self.drop_dup.take() == Some(ch) {
+                        self.col += 1;
+                        i += ch.len_utf8();
+                        continue;
+                    }
+                    if self.width.is_some_and(|w| self.col >= w) {
+                        self.col = 0;
+                    }
+                    self.col += 1;
+                    self.col_before_cr = 0;
+                    self.last_char = Some(ch);
+                }
+                if !ch.is_whitespace() && !ch.is_control() {
                     self.row_has_text = true;
                 }
                 out.push(ch);
@@ -428,6 +598,12 @@ impl RowNormalizer {
                 Some(end) if end <= bytes.len() => {
                     let seq = &input[i..end];
                     let is_cup = seq.starts_with("\x1b[") && (seq.ends_with('H') || seq.ends_with('f'));
+                    if seq.starts_with("\x1b[") && !seq.starts_with("\x1b[?") {
+                        self.col = csi_column(seq, self.col);
+                        if is_cup {
+                            self.drop_dup = None;
+                        }
+                    }
                     if let Some(on) = alt_screen_switch(seq) {
                         self.alt_screen = on;
                         self.row = None;
@@ -484,7 +660,9 @@ impl RowNormalizer {
 
     /// Whatever is still held when the stream ends.
     pub(crate) fn finish(&mut self) -> String {
-        std::mem::take(&mut self.carry)
+        let mut out = self.flush_held();
+        out.push_str(&std::mem::take(&mut self.carry));
+        out
     }
 }
 
@@ -511,18 +689,33 @@ where
     E: FnOnce() + Send + 'static,
 {
     std::thread::spawn(move || {
-        // A panic anywhere in here (a bug in the normalizer or a consumer)
-        // must not leave the session "running" forever: on_exit always runs.
-        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // The read blocks, and a CR/LF held back by the normalizer has to be
+        // released when nothing follows it, so the read gets a thread of its
+        // own and this one waits on it with a short timeout.
+        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+        std::thread::spawn(move || {
             let mut buf = [0u8; 4096];
-            // Bytes of a multibyte character that a read cut in half.
-            let mut pending: Vec<u8> = Vec::new();
-            let mut rows = RowNormalizer::default();
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
-                        let mut text = decode_utf8_stream(&mut pending, &buf[..n]);
+                        if tx.send(buf[..n].to_vec()).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+        // A panic anywhere in here (a bug in the normalizer or a consumer)
+        // must not leave the session "running" forever: on_exit always runs.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // Bytes of a multibyte character that a read cut in half.
+            let mut pending: Vec<u8> = Vec::new();
+            let mut rows = RowNormalizer::default();
+            loop {
+                match rx.recv_timeout(HELD_BREAK_FLUSH) {
+                    Ok(bytes) => {
+                        let mut text = decode_utf8_stream(&mut pending, &bytes);
                         if cfg!(windows) {
                             let raw = text.clone();
                             // The normalizer is only a cosmetic rewrite: if it
@@ -537,6 +730,15 @@ where
                             on_chunk(text);
                         }
                     }
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        if cfg!(windows) {
+                            let text = rows.flush_held();
+                            if !text.is_empty() {
+                                on_chunk(text);
+                            }
+                        }
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                 }
             }
             let mut rest = String::new();
@@ -554,6 +756,9 @@ where
         on_exit();
     });
 }
+
+/// How long a CR/LF held back by the normalizer waits for the next read.
+const HELD_BREAK_FLUSH: std::time::Duration = std::time::Duration::from_millis(40);
 
 /// Decode `incoming` after any bytes held in `pending`. Complete sequences are
 /// returned; an incomplete trailing sequence stays in `pending` for the next
@@ -1063,6 +1268,67 @@ mod tests {
     }
 
     #[test]
+    fn a_conpty_soft_wrap_is_not_a_line_break() {
+        // Observed from ConPTY at the bottom of a 120-column screen: the row is
+        // filled, then CR LF, then a move back to column 120 that repaints the
+        // last character and goes on.
+        let row = "c".repeat(118) + "ab";
+        let wrapped = format!("\n{row}\r\n\x1b[29;120Hb-and-more|0\r\n");
+        let expect = format!("\n{row}-and-more|0\r\n");
+        let mut rows = RowNormalizer::default();
+        let mut out = rows.push(&wrapped);
+        out.push_str(&rows.finish());
+        assert_eq!(out, expect);
+        // Whatever the read boundaries, and with colour escapes in the break.
+        let wrapped = format!("\n{row}\x1b[m\r\n\x1b[33m\x1b[29;120Hb-and-more|0\r\n");
+        let expect = format!("\n{row}\x1b[m\x1b[33m-and-more|0\r\n");
+        for (cut, _) in wrapped.char_indices() {
+            let mut rows = RowNormalizer::default();
+            let mut out = rows.push(&wrapped[..cut]);
+            out.push_str(&rows.push(&wrapped[cut..]));
+            out.push_str(&rows.finish());
+            assert_eq!(out, expect, "cut at {cut}");
+        }
+        // A line three rows long wraps twice, and the second wrap is found
+        // because the first one showed the width.
+        let mid = "m".repeat(118) + "pq";
+        let wrapped = format!("
+{row}
+[29;120Hb{mid}
+[29;120Hq-end|0
+");
+        let mut rows = RowNormalizer::default();
+        let mut out = rows.push(&wrapped);
+        out.push_str(&rows.finish());
+        assert_eq!(out, format!("
+{row}{mid}-end|0
+"));
+        // The same at another width: a 40-column row.
+        let mut rows = RowNormalizer::default();
+        let line = "x".repeat(39) + "y";
+        let mut out = rows.push(&format!("{line}\r\n\x1b[9;40Hyzzz\r\nnext"));
+        out.push_str(&rows.finish());
+        assert_eq!(out, format!("{line}zzz\r\nnext"));
+    }
+
+    #[test]
+    fn a_real_line_break_on_a_wide_row_is_kept() {
+        // A break that does not end a row filled to the column the next jump
+        // names is a break, and a held break is released when nothing follows.
+        let line = "w".repeat(30);
+        let mut rows = RowNormalizer::default();
+        assert_eq!(rows.push(&format!("{line}\r\n\x1b[9;1Hnext")), format!("{line}\r\nnext"));
+        let mut rows = RowNormalizer::default();
+        assert_eq!(rows.push(&format!("{line}\r\n\x1b[9;31Hnext")), format!("{line}\r\nnext"));
+        let mut rows = RowNormalizer::default();
+        assert_eq!(rows.push(&format!("{line}\r\n")), line);
+        assert_eq!(rows.flush_held(), "\r\n");
+        assert_eq!(rows.flush_held(), "");
+        let mut rows = RowNormalizer::default();
+        assert_eq!(rows.push(&format!("{line}\r\nplain")), format!("{line}\r\nplain"));
+    }
+
+    #[test]
     fn row_normalizer_holds_an_escape_cut_by_a_read() {
         let full = "ab\x1b[12;1Hcd";
         for split in 1..full.len() {
@@ -1172,7 +1438,10 @@ mod tests {
         let mut rows = RowNormalizer::default();
         let mut out = rows.push("\x1b[?1049hdraw__COMMANDUI_PRO");
         out.push_str(&rows.push("MPT__|n|C:\\w|0\r\n"));
-        assert_eq!(out, "\x1b[?1049hdraw\n__COMMANDUI_PROMPT__|n|C:\\w|0\r\n");
+        // The row is wide enough to be a soft wrap, so its line break waits for
+        // the next read (or the flush) to say which it is.
+        out.push_str(&rows.flush_held());
+        assert_eq!(out,"\x1b[?1049hdraw\n__COMMANDUI_PROMPT__|n|C:\\w|0\r\n");
         // RIS and DECSTR also leave it.
         let mut rows = RowNormalizer::default();
         rows.push("\x1b[?1049h");
