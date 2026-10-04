@@ -1233,8 +1233,8 @@ mod tests {
 
     #[test]
     fn a_windows_path_shows_as_typed_in_the_review_line() {
-        let lines = visible_command_lines("dir C:\\Users\\bob");
-        assert_eq!(lines, vec!["$ 'dir C:\\Users\\bob'".to_string()]);
+        let lines = visible_command_lines("dir C:\\Work\\notes");
+        assert_eq!(lines, vec!["$ 'dir C:\\Work\\notes'".to_string()]);
         // A typed backslash-r stays distinct from an escaped carriage return.
         let lines = visible_command_lines("echo \\r\r");
         assert_eq!(lines, vec!["$ 'echo \\\\r\\r'".to_string()]);

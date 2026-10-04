@@ -1,3 +1,18 @@
 packages:
   - apps/*
   - packages/*
+
+# pnpm 10 reads these here. The package.json "pnpm" field is ignored.
+onlyBuiltDependencies:
+  - esbuild
+
+# Floors for advisories that have a patched release. Ranges stay on the
+# current major so a later install cannot jump to the next major.
+overrides:
+  vitest: ">=3.2.6 <4"
+  vite: ">=6.4.3 <7"
+  picomatch: ">=4.0.4 <5"
+  ws: ">=8.21.0 <9"
+  postcss: ">=8.5.18 <9"
+  nanoid: ">=3.3.18 <4"
+  browserslist: ">=4.28.7 <5"

@@ -13,6 +13,8 @@ If you discover a security vulnerability, please report it privately via
 
 Do **not** open a public issue for security reports.
 
+We acknowledge a private advisory within 7 days.
+
 ## Threat model
 
 CommandUI is a desktop shell that runs commands on behalf of the user.

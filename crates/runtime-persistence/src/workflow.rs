@@ -128,6 +128,38 @@ mod tests {
     }
 
     #[test]
+    fn camel_case_steps_json_is_stored_and_a_steps_array_is_not() {
+        let stored: Workflow = serde_json::from_str(
+            r#"{
+                "id": "w1",
+                "label": "two",
+                "source": "promoted",
+                "command": "git add . && git status",
+                "stepsJson": "[{\"command\":\"git add .\"},{\"command\":\"git status\"}]",
+                "createdAt": "2026-10-04T00:00:00Z"
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(
+            stored.steps_json.as_deref(),
+            Some("[{\"command\":\"git add .\"},{\"command\":\"git status\"}]")
+        );
+
+        let dropped: Workflow = serde_json::from_str(
+            r#"{
+                "id": "w2",
+                "label": "two",
+                "source": "promoted",
+                "command": "git add . && git status",
+                "steps": [{"command": "git add ."}, {"command": "git status"}],
+                "createdAt": "2026-10-04T00:00:00Z"
+            }"#,
+        )
+        .unwrap();
+        assert!(dropped.steps_json.is_none());
+    }
+
+    #[test]
     fn missing_table_is_an_error() {
         let conn = Connection::open_in_memory().unwrap();
         let wf = sample("w", "t");

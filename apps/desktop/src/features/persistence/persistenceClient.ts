@@ -1,3 +1,4 @@
+import { hydrateWorkflow, toStoredWorkflow, type Workflow } from "@commandui/domain";
 import { tauriInvoke } from "../../lib/tauriInvoke";
 import type {
   HistoryAppendRequest,
@@ -45,11 +46,19 @@ export function planStore(
 export function workflowAdd(
   request: WorkflowAddRequest,
 ): Promise<WorkflowAddResponse> {
-  return tauriInvoke("workflow_add", { request });
+  return tauriInvoke("workflow_add", {
+    request: { workflow: toStoredWorkflow(request.workflow) },
+  });
 }
 
-export function workflowList(): Promise<WorkflowListResponse> {
-  return tauriInvoke("workflow_list", {});
+export async function workflowList(): Promise<WorkflowListResponse> {
+  const response = await tauriInvoke<{ workflows?: Array<Workflow & { stepsJson?: string | null }> }>(
+    "workflow_list",
+    {},
+  );
+  return {
+    workflows: (response.workflows ?? []).map((row) => hydrateWorkflow(row)),
+  };
 }
 
 export function workflowDelete(

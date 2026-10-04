@@ -36,7 +36,7 @@ winget install mcp-tool-shop.CommandUI
 Pack the Store upload from a release build of the desktop app:
 
 ```powershell
-pnpm --filter @commandui/desktop exec tauri build --no-bundle
+./packaging/build-store-exe.ps1
 ./packaging/pack-msix.ps1
 ```
 
@@ -49,7 +49,7 @@ pnpm --filter @commandui/desktop exec tauri build --no-bundle
 - Semantic mode: describe intent → AI generates command → you review/edit/approve
 - Risk-tiered confirmation: low (auto), medium (configurable), high (required)
 - History with rerun, reopen-plan, and save-to-workflow actions
-- Saved workflows: promote any command to a reusable workflow
+- Saved workflows: the plan panel and history save the one command you reviewed. A repeated sequence opens an editor, and those steps are stored and restored
 - Project-scoped memory: learns preferences from repeated edits
 - Multi-session tabs with per-session terminal streams
 - Local-first SQLite persistence (history, plans, workflows, memory, settings)
@@ -63,7 +63,9 @@ pnpm --filter @commandui/desktop exec tauri build --no-bundle
 
 ## Security
 
-See [SECURITY.md](SECURITY.md) for the threat model and vulnerability reporting.
+CommandUI runs on your machine. It keeps history, plans, workflows, memory, and settings in a local SQLite database, and it runs the shell commands you approve. It does not send telemetry. Planning talks to a local Ollama process when one is running, and otherwise uses the built-in mock. Medium and high risk commands wait for you.
+
+See [SECURITY.md](SECURITY.md) for the threat model and how to report a vulnerability.
 
 ## Workspace layout
 

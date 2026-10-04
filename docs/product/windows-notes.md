@@ -18,7 +18,7 @@ The Store product is an MSIX. `packaging/msix/AppxManifest.xml` holds the identi
 
 `packaging/pack-msix.ps1` writes an unsigned MSIX. Partner Center signs it on ingestion. The script checks the packed manifest and refuses a signature. When the identity scanner is on the machine, a hit deletes the package.
 
-A local release build records the Cargo registry path inside the executable unless `RUSTFLAGS` remaps that profile prefix away. Rebuild with the remap before packing. A package that fails the identity scan does not get uploaded.
+`packaging/build-store-exe.ps1` is the release build for that package. It remaps the user-profile prefix out of the executable. A release exe built without that remap records the Cargo registry path, the identity scan hits, and `pack-msix.ps1` deletes the package.
 
 MSI and NSIS are still the direct-download installers in `tauri.conf.json`. Their WebView2 mode is the download bootstrapper. That mode is for those installers. The Store product is the MSIX.
 

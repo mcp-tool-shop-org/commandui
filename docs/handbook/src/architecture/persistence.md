@@ -22,7 +22,7 @@ CommandUI uses SQLite for all persistent storage. The database is created automa
 | Settings | Yes | User preferences |
 | Memory items | Yes | Accepted pattern observations |
 | Memory suggestions | Yes | Pending suggestions |
-| Workflows | Yes | Saved command workflows |
+| Workflows | Yes | A promoted sequence keeps its step list. A save from the plan panel or history stores that one command |
 | Workflow runs | No | Last-run tracked in memory only |
 
 ## Boot hydration sequence

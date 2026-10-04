@@ -40,7 +40,7 @@ Memory items can be viewed and deleted, but not edited. To change a memory item,
 All shortcuts are hardcoded. They use Ctrl-based combos. Custom keybindings are not supported.
 
 ### Terminal theme
-The terminal uses a hardcoded dark theme. Light mode and custom themes are not yet available.
+The app chrome follows the system light or dark scheme. The terminal itself stays on a dark theme. Custom themes are not available.
 
 ### No terminal search
 Scrollback search (Ctrl+F in the terminal) is not implemented.

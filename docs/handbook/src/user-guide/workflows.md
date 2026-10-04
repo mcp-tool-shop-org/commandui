@@ -7,17 +7,17 @@ A workflow is a saved command or multi-step sequence that you can rerun with one
 There are three paths to create a workflow:
 
 ### From the plan panel
-After the planner generates a command, click **Save Workflow**. The workflow editor opens with the command pre-filled.
+After the planner generates a command, click **Save Workflow**. That stores the one reviewed command. It does not open the step editor.
 
 ### From history
-Expand a history item and click **Save Workflow**. Works for both raw and semantic items.
+Expand a history item and click **Save Workflow**. That stores the command that ran, or the generated command if it never ran.
 
 ### From promotion
-The memory system detects command sequences you repeat (e.g., `git add → git commit → git push`). When a pattern reaches sufficient confidence, it appears as a suggestion. Accepting a workflow pattern suggestion creates a multi-step workflow.
+The memory system detects command sequences you repeat (for example `git add`, then `git commit`, then `git push`). When a pattern reaches sufficient confidence, it appears as a suggestion. Accepting it opens the workflow editor with one step per command. Those steps are stored, and after a restart they still run one at a time.
 
 ## The workflow editor
 
-When saving a workflow, the editor lets you:
+The editor is the promotion path. It lets you:
 
 - **Name** the workflow (label)
 - **Define steps** — break a composite command into individual steps, each with its own command

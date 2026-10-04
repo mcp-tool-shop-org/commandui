@@ -115,6 +115,9 @@ jobs:
       - name: pnpm test
         run: pnpm test
 
+      - name: pnpm audit
+        run: pnpm audit --audit-level=high
+
   # The runtime drives real shells through a Windows ConPTY: line endings,
   # repaint-by-position output and clear-line keys all differ from a Unix PTY,
   # and byte-level unit tests passed for a year while no Windows session could

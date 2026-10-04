@@ -5,7 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [1.0.2] - 2026-10-03
 
 ### Added
-- Unsigned x64 MSIX for the existing Partner Center product. Package name `mcp-tool-shop.CommandUI`, package version `1.0.2.0`. `packaging/pack-msix.ps1` packs `commandui-desktop.exe` and refuses a name, publisher, architecture, executable, or version that would not update that product. The file is unsigned. Partner Center signs it.
+- Unsigned x64 MSIX for the existing Partner Center product. Package name `mcp-tool-shop.CommandUI`, package version `1.0.2.0`. `packaging/build-store-exe.ps1` builds the executable with the user-profile prefix remapped out. `packaging/pack-msix.ps1` packs it and refuses a name, publisher, architecture, executable, or version that would not update that product. The file is unsigned. Partner Center signs it.
+
+### Fixed
+- A promoted workflow keeps its step list. The desktop writes `stepsJson` and restores `steps` on launch, so a restart still runs the steps one at a time. A save from the plan panel or from history stores that one command.
 
 ### Changed
 - Desktop version is 1.0.2. The public GitHub release is still the v1.0.0 MSI until the Store upload is published.
