@@ -175,7 +175,79 @@ fn prepare_shell_command(shell: &str, cwd: Option<&str>) -> CommandBuilder {
     if let Some(dir) = cwd {
         cmd.cwd(dir);
     }
+    #[cfg(unix)]
+    {
+        // A desktop app started from a launcher has no TERM at all (and CI
+        // runners have none either): without one `clear`, `less` and `vim`
+        // fail or misbehave. The desktop console is xterm.js. A TERM the
+        // console inherited from a real terminal is kept.
+        if let Some((term, colorterm)) = default_term(cmd.get_env("TERM")) {
+            cmd.env("TERM", term);
+            if cmd.get_env("COLORTERM").is_none() {
+                cmd.env("COLORTERM", colorterm);
+            }
+        }
+        if shell_family(shell) == ShellFamily::Zsh {
+            let zdotdir = cmd.get_env("ZDOTDIR").map(std::path::PathBuf::from);
+            let home = cmd.get_env("HOME").map(std::path::PathBuf::from);
+            if let Some(dir) = zsh_newuser_guard_dir(home.as_deref(), zdotdir.as_deref()) {
+                cmd.env("ZDOTDIR", dir);
+            }
+        }
+    }
     cmd
+}
+
+/// The `TERM` (and `COLORTERM`) to give a shell whose environment has none, or
+/// has `dumb`. None when the inherited TERM is usable.
+#[cfg_attr(not(unix), allow(dead_code))]
+pub(crate) fn default_term(inherited: Option<&std::ffi::OsStr>) -> Option<(&'static str, &'static str)> {
+    match inherited.and_then(|t| t.to_str()).map(str::trim) {
+        Some(term) if !term.is_empty() && term != "dumb" => None,
+        _ => Some(("xterm-256color", "truecolor")),
+    }
+}
+
+/// zsh runs its new-user wizard (`zsh-newuser-install`) in an interactive
+/// shell when none of `.zshenv .zprofile .zshrc .zlogin` exists in `$ZDOTDIR`
+/// (or the home directory), and waits there for a key: a first session of a
+/// brand-new zsh user would hang at it. The wizard only looks for those files
+/// in the directory `$ZDOTDIR` names at startup, so when the user has no
+/// startup files and sets no ZDOTDIR the shell is started with a private one
+/// holding a `.zshenv` that unsets ZDOTDIR again (so `$ZDOTDIR` is unset in the
+/// session, as it would be, and any file the user adds is read as usual) and
+/// removes the directory. The user's own files are never touched or created.
+///
+/// None when the wizard would not run (a startup file exists, or ZDOTDIR is
+/// set), or the directory cannot be made.
+#[cfg_attr(not(unix), allow(dead_code))]
+pub(crate) fn zsh_newuser_guard_dir(
+    home: Option<&std::path::Path>,
+    zdotdir: Option<&std::path::Path>,
+) -> Option<std::path::PathBuf> {
+    if zdotdir.is_some_and(|d| !d.as_os_str().is_empty()) {
+        return None;
+    }
+    let home = home?;
+    let has_startup_file = [".zshenv", ".zprofile", ".zshrc", ".zlogin"]
+        .iter()
+        .any(|name| std::fs::symlink_metadata(home.join(name)).is_ok());
+    if has_startup_file {
+        return None;
+    }
+    let dir = std::env::temp_dir().join(format!("commandui-zdotdir-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir(&dir).ok()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).ok()?;
+    }
+    let dir_text = dir.to_string_lossy().replace('\'', "'\\''");
+    let script = format!("unset ZDOTDIR
+command rm -rf -- '{dir_text}'
+");
+    std::fs::write(dir.join(".zshenv"), script).ok()?;
+    Some(dir)
 }
 
 // ---------------------------------------------------------------------------
@@ -286,6 +358,10 @@ pub(crate) fn marker_osc(kind: char, nonce: &str, exit: Option<i32>, chord: Opti
 pub(crate) enum ReaderEvent {
     Text(String),
     Marker(Marker),
+    /// The stream has been quiet for `HELD_BREAK_FLUSH`: whatever a consumer
+    /// holds back waiting for the rest of a split sequence can be released.
+    /// Sent once per quiet period.
+    Idle,
 }
 
 /// The longest OSC the scanner waits for the end of. A longer one is not a
@@ -1213,6 +1289,7 @@ where
             // of the bootstrap came after the first marker). Waiting for quiet
             // puts the output first, as the shell wrote it.
             let mut held_marker: Option<Marker> = None;
+            let mut idle_sent = true;
             let deliver = |rows: &mut RowNormalizer, marker: Marker| {
                 // Output ends here: release a held break, and a prompt means
                 // no full-screen program is on the screen any more.
@@ -1229,6 +1306,7 @@ where
                 let wait = if held_marker.is_some() { MARKER_SETTLE } else { HELD_BREAK_FLUSH };
                 match rx.recv_timeout(wait) {
                     Ok(bytes) => {
+                        idle_sent = false;
                         let text = decode_utf8_stream(&mut pending, &bytes);
                         rows.set_width(width.load(Ordering::Relaxed));
                         for event in scanner.push(&text) {
@@ -1244,6 +1322,7 @@ where
                                         deliver(&mut rows, earlier);
                                     }
                                 }
+                                ReaderEvent::Idle => {}
                             }
                         }
                     }
@@ -1255,6 +1334,10 @@ where
                             if !text.is_empty() {
                                 on_event(ReaderEvent::Text(text));
                             }
+                        }
+                        if held_marker.is_none() && !idle_sent && wait == HELD_BREAK_FLUSH {
+                            idle_sent = true;
+                            on_event(ReaderEvent::Idle);
                         }
                     }
                     Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
@@ -1438,6 +1521,43 @@ mod tests {
         assert!(lock_err.contains("Lock error"), "{lock_err}");
         let lock_err = write_raw(&handle, "xyz").unwrap_err();
         assert!(lock_err.contains("Lock error"), "{lock_err}");
+    }
+
+    #[test]
+    fn a_missing_or_dumb_term_gets_xterm_and_a_usable_one_is_kept() {
+        use std::ffi::OsStr;
+        assert_eq!(default_term(None), Some(("xterm-256color", "truecolor")));
+        assert_eq!(default_term(Some(OsStr::new(""))), Some(("xterm-256color", "truecolor")));
+        assert_eq!(default_term(Some(OsStr::new("dumb"))), Some(("xterm-256color", "truecolor")));
+        assert_eq!(default_term(Some(OsStr::new("xterm-kitty"))), None);
+        assert_eq!(default_term(Some(OsStr::new("screen"))), None);
+    }
+
+    #[test]
+    fn the_zsh_new_user_guard_applies_only_when_the_wizard_would_run() {
+        let home = std::env::temp_dir().join(format!("cu-zsh-home-{}", uuid::Uuid::new_v4().simple()));
+        std::fs::create_dir_all(&home).unwrap();
+        // No startup files, no ZDOTDIR: guarded, with a .zshenv that unsets ZDOTDIR.
+        let dir = zsh_newuser_guard_dir(Some(&home), None).expect("a guard directory");
+        let zshenv = std::fs::read_to_string(dir.join(".zshenv")).unwrap();
+        assert!(zshenv.starts_with("unset ZDOTDIR
+"), "{zshenv}");
+        assert!(zshenv.contains("rm -rf"), "{zshenv}");
+        let _ = std::fs::remove_dir_all(&dir);
+        // The user set ZDOTDIR: left alone.
+        assert!(zsh_newuser_guard_dir(Some(&home), Some(std::path::Path::new("/somewhere"))).is_none());
+        // An empty ZDOTDIR is no ZDOTDIR.
+        let dir = zsh_newuser_guard_dir(Some(&home), Some(std::path::Path::new(""))).expect("guard");
+        let _ = std::fs::remove_dir_all(dir);
+        // Any one startup file means no wizard: left alone, and nothing is created in HOME.
+        for name in [".zshenv", ".zprofile", ".zshrc", ".zlogin"] {
+            std::fs::write(home.join(name), "").unwrap();
+            assert!(zsh_newuser_guard_dir(Some(&home), None).is_none(), "{name}");
+            std::fs::remove_file(home.join(name)).unwrap();
+        }
+        assert_eq!(std::fs::read_dir(&home).unwrap().count(), 0);
+        assert!(zsh_newuser_guard_dir(None, None).is_none());
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

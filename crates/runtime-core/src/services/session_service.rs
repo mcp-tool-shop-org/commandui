@@ -294,6 +294,7 @@ impl SessionService {
         match event {
             ReaderEvent::Text(text) => Self::process_text(sink, sessions, session_id, &text),
             ReaderEvent::Marker(marker) => Self::process_marker(sink, sessions, session_id, marker),
+            ReaderEvent::Idle => Self::process_idle(sink, sessions, session_id),
         }
     }
 
@@ -345,9 +346,13 @@ impl SessionService {
                 Some(record) => {
                     let exec_id = record.pending_execution_id.clone();
                     let shown = if shell_family(&record.shell) == ShellFamily::Cmd {
-                        // Only a command the runtime ran has plumbing in its
-                        // echo, so only then is a possible start of it held.
-                        strip_cmd_plumbing(&mut record.track.display_hold, text, exec_id.is_none())
+                        // Always stripped, and a possible start of plumbing is
+                        // always held (at most a few characters), whether or
+                        // not a command is pending: the console paints an
+                        // echo late and in pieces, and a redraw can repeat
+                        // one after the prompt. The hold is released by the
+                        // next text or by `process_idle`.
+                        strip_cmd_plumbing(&mut record.track.display_hold, text, false)
                     } else {
                         text.to_string()
                     };
@@ -358,6 +363,26 @@ impl SessionService {
             Err(_) => (None, text.to_string()),
         };
         Self::emit_stdout(sink, session_id, exec_id, shown);
+    }
+
+    /// The stream went quiet: what was held back as a possible start of cmd
+    /// plumbing was ordinary text after all.
+    pub(crate) fn process_idle(
+        sink: &Arc<dyn RuntimeEventSink>,
+        sessions: &Arc<Mutex<SessionRegistry>>,
+        session_id: &str,
+    ) {
+        let (exec_id, held) = match sessions.lock() {
+            Ok(mut reg) => match reg.get_mut(session_id) {
+                Some(record) if !record.track.display_hold.is_empty() => (
+                    record.pending_execution_id.clone(),
+                    strip_cmd_plumbing(&mut record.track.display_hold, "", true),
+                ),
+                _ => return,
+            },
+            Err(_) => return,
+        };
+        Self::emit_stdout(sink, session_id, exec_id, held);
     }
 
     /// A marker from the shell's prompt hook.
@@ -390,7 +415,6 @@ impl SessionService {
             exit_code: i32,
             cwd: String,
             becomes_ready: bool,
-            held_text: String,
         }
         enum Decision {
             Probe(PtyHandle, String),
@@ -445,7 +469,6 @@ impl SessionService {
                     record.cwd = cwd.clone();
                     // Same lock as Ready. take() drops only the id that just finished.
                     let pending = record.pending_execution_id.take();
-                    let held_text = strip_cmd_plumbing(&mut record.track.display_hold, "", true);
                     record.track.pending_exit = None;
                     record.track.pending_tail = CmdTail::Chained;
                     record.track.probed = false;
@@ -470,7 +493,6 @@ impl SessionService {
                         exit_code,
                         cwd,
                         becomes_ready: !still_typed_into,
-                        held_text,
                     })
                 }
             }
@@ -486,10 +508,6 @@ impl SessionService {
             }
             Decision::Applied(applied) => applied,
         };
-
-        // What the console had echoed and could not yet be told apart from
-        // plumbing is output after all.
-        Self::emit_stdout(sink, session_id, applied.pending.clone(), applied.held_text);
 
         sink.emit(RuntimeEvent::SessionCwdChanged(SessionCwdChangedEvent {
             session_id: session_id.to_string(),
@@ -981,13 +999,34 @@ mod tests {
         let shown = shown_text(&sink);
         assert_eq!(shown, "C:\\w>dir /b\r\nfile.txt\r\nC:\\w>", "{shown:?}");
         assert!(!shown.contains("__cu"));
-        // What was held at the end is released with the prompt, not lost.
+        // What was held at the end is released when the stream goes quiet, not lost.
         let (sink, sink_dyn, sessions) = setup();
         running(&sessions, "cmd.exe", "e1");
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", "done 50%");
         assert_eq!(shown_text(&sink), "done 50");
-        SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &prompt(None, "C:\\w"));
+        SessionService::process_reader_event(&sink_dyn, &sessions, "s1", ReaderEvent::Idle);
         assert_eq!(shown_text(&sink), "done 50%");
+    }
+
+    #[test]
+    fn cmd_plumbing_painted_late_or_repeated_with_no_command_pending_is_never_shown() {
+        // The console can paint an echo after the prompt marker (the command
+        // is no longer pending) or redraw it; a read can cut it anywhere.
+        let echo = "C:\\w>%__cuz% & echo hi & %__cui%\x1b[K\r\nhi\r\n";
+        for cut in 0..=echo.len() {
+            let (sink, sink_dyn, sessions) = setup();
+            let mut record = booted_record("s1", NONCE);
+            record.shell = "cmd.exe".to_string();
+            sessions.lock().unwrap().insert(record);
+            let mut scanner = crate::pty::MarkerScanner::default();
+            for part in [&echo[..cut], &echo[cut..]] {
+                for event in scanner.push(part) {
+                    SessionService::process_reader_event(&sink_dyn, &sessions, "s1", event);
+                }
+            }
+            SessionService::process_reader_event(&sink_dyn, &sessions, "s1", ReaderEvent::Idle);
+            assert_eq!(shown_text(&sink), "C:\\w>echo hi\x1b[K\r\nhi\r\n", "cut at {cut}");
+        }
     }
 
     // ---- Typed and pasted input ----
