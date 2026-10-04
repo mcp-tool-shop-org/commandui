@@ -158,7 +158,12 @@ if (Test-Path $scanner) {
         throw 'Identity scan HIT. The package was deleted and must not be uploaded.'
     }
 } else {
-    Write-Output 'identity-scan skipped'
+    # The scan is a local pre-upload step: the scanner lives only on the
+    # author's rig, so CI cannot run it. Say so loudly instead of passing quietly.
+    if ($env:GITHUB_ACTIONS -eq 'true') {
+        Write-Output '::notice title=MSIX identity scan not run::identity-scan.py is not on this runner. The identity scan is a local pre-upload step; this CI-built package was NOT scanned. Run it on the author rig before publishing the artifact.'
+    }
+    Write-Output 'identity-scan skipped (scanner absent; local pre-upload step, package NOT scanned)'
 }
 
 Write-Output "RESULT PASS"

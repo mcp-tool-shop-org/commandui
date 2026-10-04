@@ -27,6 +27,7 @@ on:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/**'
+      - 'packaging/**'
       - 'site/package.json'
       - 'site/package-lock.json'
       - 'site/astro.config.mjs'

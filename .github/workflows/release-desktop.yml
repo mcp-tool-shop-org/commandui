@@ -1,11 +1,18 @@
 name: Release Desktop
 
-# Per-run cost, measured from a real run (run 23078003998, 2026-03-14):
-# one build-windows job on windows-latest, 7m05s wall (8 billed minutes at
-# the 2x Windows multiplier). Release-only; no push cost. The publish job
-# added later runs on ubuntu-latest and only downloads and uploads files.
-# workflow_dispatch runs are build-only: they skip the version check and
-# publish nothing to a release. Tests run in ci.yml, not here.
+# Per-run cost: NOT currently measured. The earlier figure (run 23078003998,
+# 2026-03-14, 7m05s wall, 8 billed minutes) predates the MSIX pack step, the
+# version check and the publish job, so it no longer describes this workflow.
+# Re-measure from a dispatch run and record the wall time here. Release-only;
+# no push cost. The publish job runs on ubuntu-latest and only downloads and
+# uploads files.
+# Dry run: Actions > Release Desktop > Run workflow (workflow_dispatch) on main.
+# Dispatch runs are build-only: they skip the version check, and the publish
+# job is skipped, so nothing is uploaded to a release. Download the
+# commandui-windows artifact to confirm the .msi, .exe and .msix are present.
+# The MSIX identity scan is a local pre-upload step (the scanner is absent on
+# CI); the pack step emits a notice saying the CI-built package was not scanned.
+# Tests run in ci.yml, not here.
 
 on:
   release:
