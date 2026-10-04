@@ -245,7 +245,9 @@ impl SessionService {
             id: uuid::Uuid::new_v4().to_string(),
             session_id: session_id.to_string(),
             execution_id: pending.clone(),
-            kind: "stdout".to_string(),
+            // A runtime notice, not shell output: Raw Play must not write it
+            // into a full-screen app's screen (apps/console skips "notice").
+            kind: "notice".to_string(),
             text: "\n[commandui: the shell exited. Open a new session to continue.]\n".to_string(),
             timestamp: now.clone(),
         }));
@@ -301,33 +303,33 @@ impl SessionService {
         // Carry a trailing partial line on the session for marker parsing.
         // The unterminated tail is still displayed at once (prompts, echo),
         // unless it could be the start of a marker line.
-        let (current_exec_id, complete, skip, tail_display, nonce) = match sessions.lock() {
+        let (current_exec_id, complete, skip, tail_display, nonce, notice) = match sessions.lock() {
             Ok(mut reg) => {
                 if let Some(record) = reg.get_mut(session_id) {
                     record.read_buffer.push_str(text);
                     let exec_id = record.pending_execution_id.clone();
                     let nonce = record.marker_nonce.clone();
-                    let mut complete = drain_complete_lines(&mut record.read_buffer);
+                    let complete = drain_complete_lines(&mut record.read_buffer);
                     let skip = record.emitted_tail.min(complete.len());
                     record.emitted_tail = record.emitted_tail.saturating_sub(complete.len());
                     let before = record.read_buffer.len();
-                    if let Some(notice) = truncate_read_buffer(&mut record.read_buffer) {
+                    let notice = truncate_read_buffer(&mut record.read_buffer);
+                    if notice.is_some() {
                         let cut = before - record.read_buffer.len();
                         record.emitted_tail = record.emitted_tail.saturating_sub(cut);
-                        complete.push_str(&notice);
                     }
                     let tail_display = take_displayable_tail(record);
-                    (exec_id, complete, skip, tail_display, Some(nonce))
+                    (exec_id, complete, skip, tail_display, Some(nonce), notice)
                 } else {
                     let mut scratch = text.to_string();
                     let complete = drain_complete_lines(&mut scratch);
-                    (None, complete, 0, scratch, None)
+                    (None, complete, 0, scratch, None, None)
                 }
             }
             Err(_) => {
                 let mut scratch = text.to_string();
                 let complete = drain_complete_lines(&mut scratch);
-                (None, complete, 0, scratch, None)
+                (None, complete, 0, scratch, None, None)
             }
         };
 
@@ -452,9 +454,22 @@ impl SessionService {
             sink.emit(RuntimeEvent::TerminalLine(TerminalLineEvent {
                 id: uuid::Uuid::new_v4().to_string(),
                 session_id: session_id.to_string(),
-                execution_id: current_exec_id,
+                execution_id: current_exec_id.clone(),
                 kind: "stdout".to_string(),
                 text: display_text,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            }));
+        }
+
+        // A runtime notice, kept out of the shell's own output so Raw Play
+        // does not write it into a full-screen app's screen.
+        if let Some(notice) = notice {
+            sink.emit(RuntimeEvent::TerminalLine(TerminalLineEvent {
+                id: uuid::Uuid::new_v4().to_string(),
+                session_id: session_id.to_string(),
+                execution_id: current_exec_id,
+                kind: "notice".to_string(),
+                text: notice,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             }));
         }
@@ -1440,9 +1455,15 @@ next");
             let reg = sessions.lock().unwrap();
             assert!(reg.get("s1").unwrap().read_buffer.len() <= READ_BUFFER_TAIL);
         }
+        // The notice is its own line of kind "notice", never inside stdout,
+        // so Raw Play can keep it out of a full-screen app's screen.
         assert!(sink.events().iter().any(|e| matches!(
             e,
-            RuntimeEvent::TerminalLine(t) if t.text.contains("dropped")
+            RuntimeEvent::TerminalLine(t) if t.kind == "notice" && t.text.contains("dropped")
+        )));
+        assert!(!sink.events().iter().any(|e| matches!(
+            e,
+            RuntimeEvent::TerminalLine(t) if t.kind == "stdout" && t.text.contains("dropped")
         )));
         // A marker after the oversized line is still recognised.
         let marker = format!("\n{}|test-nonce|/tmp|0\n", PROMPT_MARKER);
