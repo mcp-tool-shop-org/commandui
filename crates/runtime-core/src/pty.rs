@@ -132,6 +132,15 @@ pub fn spawn_shell(
     shell: &str,
     cwd: Option<&str>,
 ) -> Result<(PtyPair, PtyHandle, ShellChild), String> {
+    spawn_shell_with_args(shell, cwd, &[])
+}
+
+/// `spawn_shell`, with arguments for the shell (see `launch_args`).
+pub fn spawn_shell_with_args(
+    shell: &str,
+    cwd: Option<&str>,
+    args: &[String],
+) -> Result<(PtyPair, PtyHandle, ShellChild), String> {
     let pty_system = native_pty_system();
     let pair = pty_system
         .openpty(PtySize {
@@ -142,7 +151,7 @@ pub fn spawn_shell(
         })
         .map_err(|e| format!("Failed to open PTY: {e}"))?;
 
-    let cmd = prepare_shell_command(shell, cwd);
+    let cmd = prepare_shell_command(shell, cwd, args);
 
     let child = pair
         .slave
@@ -168,8 +177,9 @@ pub fn write_raw(handle: &PtyHandle, data: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn prepare_shell_command(shell: &str, cwd: Option<&str>) -> CommandBuilder {
+fn prepare_shell_command(shell: &str, cwd: Option<&str>, args: &[String]) -> CommandBuilder {
     let mut cmd = CommandBuilder::new(shell);
+    cmd.args(args);
     // Delayed expansion is deliberately NOT enabled for cmd: it would rewrite
     // every `!` in the user's commands and paths.
     if let Some(dir) = cwd {
@@ -573,7 +583,89 @@ fn bootstrap_bash(nonce: &str) -> String {
     // The marker carries the answer; a runtime that is told 0 clears a line
     // with Ctrl+E Ctrl+U instead.
     let script = r#"__cui_nonce='@NONCE@'; __cui_chord=0; __cui_prompt() { local ec=$? cwd=$PWD; cwd=${cwd//\%/%25}; cwd=${cwd//;/%3B}; cwd=${cwd//$'\e'/%1B}; cwd=${cwd//$'\a'/%07}; cwd=${cwd//$'\n'/%0A}; cwd=${cwd//$'\r'/%0D}; printf '\033]7733;P;%s;%s;%s;%s\007' "$__cui_nonce" "$ec" "$__cui_chord" "$cwd"; }; __cui_free() { local l; l=$( { bind -m "$1" -p; bind -m "$1" -s; bind -m "$1" -X; } 2>/dev/null | grep -F '"\C-]":' ); [ -z "$l" ] || [ "$l" = '"\C-]": character-search' ] || [ "$l" = '"\C-]": self-insert' ]; }; if __cui_free emacs && __cui_free vi-insert && __cui_free vi-command; then bind -m emacs '"\C-]": kill-whole-line' 2>/dev/null; bind -m vi-insert '"\C-]": kill-whole-line' 2>/dev/null; bind -m vi-command '"\C-]": "A\C-u"' 2>/dev/null; if bind -m emacs -p 2>/dev/null | grep -qF '"\C-]": kill-whole-line' && bind -m vi-insert -p 2>/dev/null | grep -qF '"\C-]": kill-whole-line' && bind -m vi-command -s 2>/dev/null | grep -qF '"\C-]": "A\C-u"'; then __cui_chord=1; fi; fi; PROMPT_COMMAND=__cui_prompt"#;
-    format!("{}{ENTER}", script.replace("@NONCE@", nonce))
+    format!("{}{ENTER}", powershell_script(nonce, script))
+}
+
+fn powershell_script(nonce: &str, script: &str) -> String {
+    script.replace("@NONCE@", nonce)
+}
+
+/// Arguments that start a shell already set up, so the runtime types nothing
+/// and the console echoes nothing. PowerShell takes its bootstrap as
+/// `-EncodedCommand` (with `-NoExit` it stays interactive, after the profile
+/// has run): typed in, PSReadLine echoed the whole script, coloured token by
+/// token, before the first prompt, and no string match could take it out
+/// again. The other shells keep the typed bootstrap; an empty list means
+/// "type `bootstrap_prompt`".
+pub fn launch_args(shell: &str, nonce: &str) -> Vec<String> {
+    match shell_family(shell) {
+        ShellFamily::PowerShell => {
+            let script = bootstrap_powershell(nonce);
+            let script = script.strip_suffix(ENTER).unwrap_or(&script);
+            vec![
+                "-NoLogo".to_string(),
+                "-NoExit".to_string(),
+                "-EncodedCommand".to_string(),
+                encode_powershell_command(script),
+            ]
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// PowerShell's `-EncodedCommand` form: base64 of the UTF-16LE script. No
+/// quoting rules apply to it, so the script reaches PowerShell byte for byte.
+pub(crate) fn encode_powershell_command(script: &str) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
+        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        for (i, shift) in [18, 12, 6, 0].into_iter().enumerate() {
+            if i <= chunk.len() {
+                out.push(ALPHABET[((n >> shift) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
+/// The folder a new session starts in when the caller names none: the
+/// process's folder, unless that is the Windows folder or one under it. A
+/// packaged (MSIX) app started from Start or the taskbar runs in
+/// `C:\Windows\System32`; a terminal opening there is never what the user
+/// wants, so the session starts in their home folder instead. Also the
+/// fallback when the process folder cannot be read.
+pub fn default_session_cwd(
+    process_dir: Option<std::path::PathBuf>,
+    home: Option<std::path::PathBuf>,
+    windows_dir: Option<std::path::PathBuf>,
+) -> Option<std::path::PathBuf> {
+    let under_windows = |dir: &std::path::Path| {
+        windows_dir.as_deref().is_some_and(|win| {
+            let (d, w) = (dir.to_string_lossy().to_lowercase(), win.to_string_lossy().to_lowercase());
+            let w = w.trim_end_matches(['\\', '/']);
+            !w.is_empty() && (d == w || d.starts_with(&format!("{w}\\")) || d.starts_with(&format!("{w}/")))
+        })
+    };
+    match process_dir {
+        Some(dir) if !under_windows(&dir) => Some(dir),
+        other => home.or(other),
+    }
+}
+
+/// `default_session_cwd` for this process: its folder, the user's home
+/// folder (`USERPROFILE`, else `HOME`) and the Windows folder (`SystemRoot`).
+pub fn resolve_default_session_cwd() -> Option<std::path::PathBuf> {
+    let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
+    default_session_cwd(
+        std::env::current_dir().ok(),
+        var("USERPROFILE").or_else(|| var("HOME")),
+        var("SystemRoot").or_else(|| var("windir")),
+    )
 }
 
 fn bootstrap_zsh(nonce: &str) -> String {
@@ -1451,6 +1543,83 @@ mod tests {
 
     const NONCE: &str = "abc123nonce";
 
+    fn decode_powershell_command(encoded: &str) -> String {
+        const ALPHABET: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut bits = 0u32;
+        let mut n = 0;
+        let mut bytes = Vec::new();
+        for c in encoded.chars().filter(|&c| c != '=') {
+            bits = (bits << 6) | ALPHABET.find(c).expect("base64 character") as u32;
+            n += 6;
+            if n >= 8 {
+                n -= 8;
+                bytes.push((bits >> n) as u8);
+                bits &= (1 << n) - 1;
+            }
+        }
+        let units: Vec<u16> = bytes.chunks(2).map(|p| u16::from_le_bytes([p[0], p[1]])).collect();
+        String::from_utf16(&units).expect("UTF-16")
+    }
+
+    #[test]
+    fn encoded_command_is_base64_of_utf16le() {
+        // Known values: what `[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes(...))` gives.
+        assert_eq!(encode_powershell_command("Hi"), "SABpAA==");
+        assert_eq!(encode_powershell_command("dir"), "ZABpAHIA");
+        assert_eq!(encode_powershell_command(""), "");
+        let text = "Write-Host 'é ✓ 𝄞'; $x = 1";
+        assert_eq!(decode_powershell_command(&encode_powershell_command(text)), text);
+    }
+
+    #[test]
+    fn powershell_starts_with_its_bootstrap_and_nothing_is_typed() {
+        for shell in ["pwsh", "pwsh.exe", "powershell.exe", r"C:\Program Files\PowerShell\7\pwsh.exe"] {
+            let args = launch_args(shell, NONCE);
+            assert_eq!(&args[..3], ["-NoLogo", "-NoExit", "-EncodedCommand"], "{shell}");
+            let script = decode_powershell_command(&args[3]);
+            let typed = bootstrap_prompt(shell, NONCE).unwrap();
+            assert_eq!(script, typed.strip_suffix(ENTER).unwrap(), "{shell}: the encoded script is the bootstrap");
+            assert!(script.contains("function global:prompt"), "{shell}");
+            assert!(script.contains(NONCE), "{shell}");
+            assert!(!script.ends_with(ENTER), "{shell}: no Enter in an argument");
+        }
+    }
+
+    #[test]
+    fn other_shells_keep_the_typed_bootstrap() {
+        for shell in ["cmd.exe", "/bin/bash", "/usr/bin/zsh", "fish"] {
+            assert!(launch_args(shell, NONCE).is_empty(), "{shell}");
+        }
+    }
+
+    #[test]
+    fn a_session_never_defaults_to_the_windows_folder() {
+        use std::path::PathBuf;
+        let home = Some(PathBuf::from(r"C:\Users\someone"));
+        let win = Some(PathBuf::from(r"C:\WINDOWS"));
+        let pick = |dir: &str| default_session_cwd(Some(PathBuf::from(dir)), home.clone(), win.clone());
+        // A packaged app launched from Start runs in System32: start at home.
+        assert_eq!(pick(r"C:\Windows\System32"), home);
+        assert_eq!(pick(r"C:\WINDOWS\system32"), home);
+        assert_eq!(pick(r"C:\Windows\SysWOW64"), home);
+        assert_eq!(pick(r"C:\Windows"), home);
+        // Anything else is kept, including a folder that only starts with the same letters.
+        assert_eq!(pick(r"D:\work\api"), Some(PathBuf::from(r"D:\work\api")));
+        assert_eq!(pick(r"C:\WindowsApps\tool"), Some(PathBuf::from(r"C:\WindowsApps\tool")));
+        // An unreadable process folder falls back to home.
+        assert_eq!(default_session_cwd(None, home.clone(), win.clone()), home);
+        // No home known: keep what there is rather than fail.
+        assert_eq!(
+            default_session_cwd(Some(PathBuf::from(r"C:\Windows\System32")), None, win.clone()),
+            Some(PathBuf::from(r"C:\Windows\System32"))
+        );
+        // No Windows folder (Unix): the process folder is used as it is.
+        assert_eq!(
+            default_session_cwd(Some(PathBuf::from("/srv/app")), Some(PathBuf::from("/home/u")), None),
+            Some(PathBuf::from("/srv/app"))
+        );
+    }
+
     #[test]
     fn shell_family_matches_the_executable_name_only() {
         assert!(shell_family("/home/cmdr/.local/bin/fish") == ShellFamily::Unsupported);
@@ -1472,11 +1641,11 @@ mod tests {
 
     #[test]
     fn cmd_launch_does_not_enable_delayed_expansion() {
-        let cmd = prepare_shell_command("C:\\Windows\\System32\\cmd.exe", Some("/work"));
+        let cmd = prepare_shell_command("C:\\Windows\\System32\\cmd.exe", Some("/work"), &[]);
         assert!(!cmd.get_argv().iter().any(|arg| arg == "/v:on"));
         assert_eq!(cmd.get_cwd().map(|d| d.to_string_lossy().to_string()).as_deref(), Some("/work"));
 
-        let bash = prepare_shell_command("/bin/bash", None);
+        let bash = prepare_shell_command("/bin/bash", None, &[]);
         assert!(!bash.get_argv().iter().any(|arg| arg == "/v:on"));
     }
 
@@ -2449,7 +2618,7 @@ mod tests {
             assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H%__cuz% & {command} & %__cui%\r"), "{line}");
         }
         // The session itself never enables delayed expansion.
-        let cmd = prepare_shell_command("cmd.exe", None);
+        let cmd = prepare_shell_command("cmd.exe", None, &[]);
         assert!(!cmd.get_argv().iter().any(|arg| arg == "/v:on"));
         assert!(!bootstrap_prompt("cmd.exe", NONCE).unwrap().contains("/v:on"));
     }

@@ -12,7 +12,8 @@ use crate::events::{
 };
 use crate::pty::{
     bootstrap_prompt, clone_reader, cmd_probe_line, default_shell, new_marker_nonce, shell_family,
-    spawn_reader_with_exit, spawn_shell, strip_cmd_echo, write_raw, CmdTail, Marker, MarkerKind,
+    spawn_reader_with_exit, spawn_shell_with_args, strip_cmd_echo, write_raw, launch_args,
+    resolve_default_session_cwd, CmdTail, Marker, MarkerKind,
     PtyHandle, ReaderEvent, ShellFamily,
 };
 use crate::session::{SessionExecState, SessionRecord, SessionRegistry, SessionTracking};
@@ -66,12 +67,13 @@ impl SessionService {
         let id = uuid::Uuid::new_v4().to_string();
         let label = request.label.unwrap_or_else(|| "Session".to_string());
         let shell = request.shell.unwrap_or_else(default_shell);
-        // Resolve the default cwd before anything is spawned. current_dir()
-        // fails if the process directory was removed.
+        // Resolve the default cwd before anything is spawned: the process
+        // folder, or the user's home folder when that is the Windows folder
+        // (a packaged app starts in System32) or cannot be read.
         let cwd = match request.cwd {
             Some(cwd) => cwd,
-            None => std::env::current_dir()
-                .map_err(|e| format!("Failed to resolve working directory: {e}"))?
+            None => resolve_default_session_cwd()
+                .ok_or_else(|| "Failed to resolve working directory".to_string())?
                 .to_string_lossy()
                 .to_string(),
         };
@@ -82,7 +84,11 @@ impl SessionService {
             return Err(format!("unsupported shell: {shell}"));
         };
 
-        let (pair, writer, child) = spawn_shell(&shell, Some(&cwd))?;
+        // PowerShell is set up by its launch arguments; the others are typed
+        // the bootstrap once the reader is running.
+        let args = launch_args(&shell, &nonce);
+        let typed_bootstrap = args.is_empty();
+        let (pair, writer, child) = spawn_shell_with_args(&shell, Some(&cwd), &args)?;
         let reader = clone_reader(&pair)?;
         let bootstrap_writer = writer.clone();
 
@@ -148,13 +154,15 @@ impl SessionService {
         // exits, so EOF alone is not enough: also watch the child itself.
         Self::spawn_child_watcher(self.event_sink.clone(), self.sessions.clone(), id.clone());
 
-        persist_bootstrap(
-            &self.sessions,
-            &id,
-            &bootstrap_writer,
-            &prompt_cmd,
-            &shell,
-        )?;
+        if typed_bootstrap {
+            persist_bootstrap(
+                &self.sessions,
+                &id,
+                &bootstrap_writer,
+                &prompt_cmd,
+                &shell,
+            )?;
+        }
 
         Ok(summary)
     }

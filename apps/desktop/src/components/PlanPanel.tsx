@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { displayPath } from "../lib/displayPath";
 import { useFocusStore } from "@commandui/state";
 import {
   describeHiddenChars,
@@ -193,7 +194,9 @@ export function PlanPanel({
           <span className="plan-label">Runs in</span>
           <p>
             <strong>{target.label}</strong>
-            {target.cwd ? <span className="muted"> — {target.cwd}</span> : null}
+            {target.cwd ? (
+              <span className="muted" title={target.cwd}> — {displayPath(target.cwd)}</span>
+            ) : null}
           </p>
         </div>
       )}

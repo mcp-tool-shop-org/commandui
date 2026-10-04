@@ -1363,3 +1363,130 @@ select {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+
+/* === Welcome === */
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 120;
+}
+
+.welcome {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px 32px 24px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+.welcome-head {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.welcome-head h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+}
+
+.welcome-head p {
+  margin: 0;
+}
+
+.welcome-mark {
+  border-radius: 14px;
+  flex: none;
+}
+
+.welcome-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  counter-reset: welcome;
+}
+
+.welcome-steps li {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  counter-increment: welcome;
+}
+
+.welcome-steps h2 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.welcome-steps h2::before {
+  content: counter(welcome) ". ";
+  color: var(--accent);
+}
+
+.welcome-steps p {
+  margin: 0;
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+
+.welcome-note {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.welcome-keys {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.welcome-keys kbd {
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+
+.welcome-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b1220;
+  font-weight: 600;
+  padding: 8px 18px;
+}
+
+@media (max-width: 720px) {
+  .welcome-steps {
+    grid-template-columns: 1fr;
+  }
+}

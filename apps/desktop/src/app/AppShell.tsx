@@ -88,6 +88,9 @@ import { WorkflowEditor } from "../components/WorkflowEditor";
 import { WorkflowRunBanner } from "../components/WorkflowRunBanner";
 import { isTauriRuntime } from "../lib/tauriInvoke";
 import { onMockEvent } from "../lib/mockBridge";
+import { displayPath } from "../lib/displayPath";
+import { readShowWelcome, writeShowWelcome } from "../lib/welcomePref";
+import { WelcomeScreen } from "../components/WelcomeScreen";
 import { waitForTerminalStatus } from "./workflowStepWait";
 import {
   busyMessageFor,
@@ -98,6 +101,8 @@ import {
 } from "./execState";
 
 const APP_VERSION = "1.0.2";
+// The model Ask calls; the default of OllamaConfig in crates/runtime-planner/src/types.rs.
+const PLANNER_MODEL = "qwen2.5:14b";
 /** How long a session may stay in "booting" before the UI offers Resync and Close. */
 const BOOT_STALL_MS = 20_000;
 /** How long a typed command (or an interrupt) may hold a session before the UI explains the way out. */
@@ -275,6 +280,9 @@ export function AppShell() {
   const [historyInitialExpandedId, setHistoryInitialExpandedId] = useState<string | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The welcome opens at launch until the user turns it off.
+  const [showWelcomeAtStartup, setShowWelcomeAtStartup] = useState(() => readShowWelcome());
+  const [welcomeOpen, setWelcomeOpen] = useState(showWelcomeAtStartup);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [workflowEditorData, setWorkflowEditorData] = useState<{
     workflowId: string;
@@ -1052,6 +1060,16 @@ export function AppShell() {
     }
   }
 
+  function closeWelcome() {
+    setWelcomeOpen(false);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }
+
+  function changeShowWelcome(show: boolean) {
+    setShowWelcomeAtStartup(show);
+    writeShowWelcome(show);
+  }
+
   function focusComposer() {
     composerRef.current?.focus();
   }
@@ -1720,8 +1738,8 @@ export function AppShell() {
     if (
       (cwdDiffers || item.source === "semantic") &&
       !window.confirm(
-        `Run again in "${session.label}" (${session.cwd})?\n\n${escapeForTerminal(command)}` +
-          (cwdDiffers ? `\n\nIt first ran in ${item.cwd}.` : ""),
+        `Run again in "${session.label}" (${displayPath(session.cwd)})?\n\n${escapeForTerminal(command)}` +
+          (cwdDiffers ? `\n\nIt first ran in ${displayPath(item.cwd)}.` : ""),
       )
     ) {
       return;
@@ -1789,7 +1807,7 @@ export function AppShell() {
       const original = sessions.some((s) => s.id === item.sessionId)
         ? "was made in another session"
         : "was made in a session that is closed";
-      setPlanNotice(`This plan ${original}. It will run in "${live.label}" (${live.cwd}) instead.`);
+      setPlanNotice(`This plan ${original}. It will run in "${live.label}" (${displayPath(live.cwd)}) instead.`);
     } else {
       setPlanNotice(null);
     }
@@ -1914,7 +1932,7 @@ export function AppShell() {
       workflow.projectRoot &&
       workflow.projectRoot !== session.cwd &&
       !window.confirm(
-        `Run "${escapeForTerminal(workflow.label)}" in "${session.label}" (${session.cwd})? It was saved for ${workflow.projectRoot}.\n\n${stepCommands.map(escapeForTerminal).join("\n")}`,
+        `Run "${escapeForTerminal(workflow.label)}" in "${session.label}" (${displayPath(session.cwd)})? It was saved for ${displayPath(workflow.projectRoot)}.\n\n${stepCommands.map(escapeForTerminal).join("\n")}`,
       )
     ) {
       return;
@@ -2390,7 +2408,9 @@ export function AppShell() {
           <strong>CommandUI</strong>
           <span className="muted"> v{APP_VERSION}</span>
           {session && (
-            <span className="muted"> — {session.cwd ?? session.label}</span>
+            <span className="muted" title={session.cwd ?? undefined}>
+              {" "}— {session.cwd ? displayPath(session.cwd) : session.label}
+            </span>
           )}
         </div>
         <div className="topbar-actions">
@@ -2588,12 +2608,24 @@ export function AppShell() {
               />
             ) : (
               <div className="plan-panel">
-                <p className="muted">No semantic plan yet.</p>
+                <p className="muted">
+                  Switch to <strong>Ask</strong> and describe a task. Its plan shows up here
+                  for you to review before anything runs.
+                </p>
               </div>
             )}
           </aside>
         )}
       </main>
+
+      {welcomeOpen && (
+        <WelcomeScreen
+          onStart={closeWelcome}
+          showAtStartup={showWelcomeAtStartup}
+          onShowAtStartupChange={changeShowWelcome}
+          plannerModel={PLANNER_MODEL}
+        />
+      )}
 
       <HistoryDrawer
         isOpen={historyOpen}

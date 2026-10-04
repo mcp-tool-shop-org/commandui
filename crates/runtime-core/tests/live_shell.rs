@@ -717,6 +717,17 @@ fn exercise(shell: &str, kind: Kind, tag: &str) {
     let folder = last_component(&dir.to_string_lossy());
     assert_eq!(last_component(&live.last_cwd()), folder, "{shell}: ready cwd");
 
+    // Everything shown from the first byte, before ready included, carries no
+    // bootstrap: PowerShell is set up by its launch arguments, so there is no
+    // typed script for the console to echo. (Typed, PSReadLine echoed the
+    // whole script, coloured token by token, above the first prompt.)
+    if kind == Kind::PowerShell {
+        let boot = output_lines(&live.sink).join("\n");
+        for leak in ["__cui", "global:prompt", "7733", "EncodedCommand"] {
+            assert!(!boot.contains(leak), "{shell}: bootstrap shown at start ({leak}): {boot}");
+        }
+    }
+
     // A command finishes with exit 0 and a bare output line, and the session's
     // marker plumbing is not shown.
     let (exit, lines) = live.run("echo probe-ok");
