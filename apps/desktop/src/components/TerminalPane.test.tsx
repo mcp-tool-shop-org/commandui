@@ -73,6 +73,12 @@ describe("TerminalPane custom key handler", () => {
     expect(captured.handler!(key("K", { ctrlKey: true, shiftKey: true, altKey: true }))).toBe(true);
   });
 
+  it("does not render the status word", () => {
+    const { unmount } = render(<TerminalPane executionStatus="failure" />);
+    expect(document.body.textContent?.toLowerCase() ?? "").not.toContain("failure");
+    unmount();
+  });
+
   it("passes non-keydown events through", () => {
     expect(captured.handler!(key("K", { ctrlKey: true, shiftKey: true }, "keyup"))).toBe(true);
     expect(captured.handler!(key("K", { ctrlKey: true, shiftKey: true }, "keypress"))).toBe(true);

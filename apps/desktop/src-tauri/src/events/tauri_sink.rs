@@ -125,6 +125,8 @@ mod tests {
             exit_code: 0,
             finished_at: "t3".into(),
             status: "success".into(),
+            exit_known: true,
+            reason: None,
         }));
 
         let seen = seen.lock().expect("seen");

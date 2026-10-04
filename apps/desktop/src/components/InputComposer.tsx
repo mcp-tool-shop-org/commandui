@@ -3,6 +3,8 @@ import { useFocusStore } from "@commandui/state";
 
 export type InputComposerHandle = {
   focus: () => void;
+  /** Replace the draft. A result action uses this to move text into Ask. */
+  setValue: (value: string) => void;
 };
 
 type Props = {
@@ -42,6 +44,9 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
     useImperativeHandle(ref, () => ({
       focus() {
         textareaRef.current?.focus();
+      },
+      setValue(next: string) {
+        setValue(next);
       },
     }));
 

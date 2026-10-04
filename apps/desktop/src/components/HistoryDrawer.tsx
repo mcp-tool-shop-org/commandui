@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { HistoryItem } from "@commandui/domain";
 import type { SessionSummary } from "@commandui/domain";
+import { historyStatusLabel } from "../lib/commandResult";
 
 type Props = {
   isOpen: boolean;
@@ -157,7 +158,7 @@ export function HistoryDrawer({
                     <span aria-hidden="true">{isExpanded ? "▼" : "▶"}</span> {item.userInput}
                   </span>
                   <span className={`history-status history-status--${item.status}`}>
-                    {item.status}
+                    {historyStatusLabel(item.status)}
                   </span>
                 </div>
 

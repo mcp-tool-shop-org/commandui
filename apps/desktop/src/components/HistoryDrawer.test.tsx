@@ -47,6 +47,27 @@ const shown = () =>
   allItems.filter((i) => screen.queryByText(i.userInput, { exact: false })).map((i) => i.id);
 
 describe("HistoryDrawer session filter", () => {
+  it("says a failed command did not work, rather than the status word", () => {
+    const failed = { ...s1a, status: "failure" as const, userInput: "input-failed" };
+    render(
+      <HistoryDrawer
+        isOpen
+        items={[failed]}
+        allItems={[failed]}
+        sessions={sessions}
+        activeSessionId="s1"
+        onClose={vi.fn()}
+        onRerun={vi.fn()}
+        onReopenPlan={vi.fn()}
+        onSaveWorkflow={vi.fn()}
+        onCopyCommand={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Did not work")).toBeInTheDocument();
+    expect(screen.queryByText("failure")).not.toBeInTheDocument();
+    expect(screen.queryByText("FAILURE")).not.toBeInTheDocument();
+  });
+
   it("defaults to the current session items", () => {
     renderDrawer();
     expect(shown()).toEqual(["a1", "a2"]);

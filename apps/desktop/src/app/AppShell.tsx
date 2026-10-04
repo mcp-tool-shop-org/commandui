@@ -73,8 +73,16 @@ import { InputComposer } from "../components/InputComposer";
 import type { InputComposerHandle } from "../components/InputComposer";
 import { PlanPanel, planCanRun } from "../components/PlanPanel";
 import { commandProblem, escapeForTerminal } from "../lib/displaySafe";
+import {
+  askFixPrompt,
+  countOutputLines,
+  describeResult,
+  looksLikeRequest,
+} from "../lib/commandResult";
+import type { CommandResult, ResultAction } from "../lib/commandResult";
 import type { PlanRunGate } from "../components/PlanPanel";
 import { TerminalPane } from "../components/TerminalPane";
+import { ResultLine } from "../components/ResultLine";
 import type { TerminalPaneHandle } from "../components/TerminalPane";
 import { CommandPalette } from "../components/CommandPalette";
 import type { PaletteAction } from "../components/CommandPalette";
@@ -106,6 +114,15 @@ import {
 const APP_VERSION = "1.0.2";
 /** How long a delete can be undone, in milliseconds. */
 const UNDO_MS = 10_000;
+
+type SessionResult = {
+  command: string;
+  view: CommandResult;
+  output: string;
+  outputOpen: boolean;
+  exitCode: number | null;
+  exitKnown: boolean;
+};
 
 type ConfirmRequest = {
   title: string;
@@ -308,6 +325,8 @@ export function AppShell() {
   const undoTimerRef = useRef<number | null>(null);
   const [undoMessage, setUndoMessage] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [resultsBySession, setResultsBySession] = useState<Record<string, SessionResult>>({});
+  const [requestOffers, setRequestOffers] = useState<Record<string, string>>({});
   const [workflowEditorData, setWorkflowEditorData] = useState<{
     workflowId: string;
     suggestionId: string;
@@ -321,6 +340,9 @@ export function AppShell() {
   // session; xterm keeps the real scrollback.
   const terminalLinesBySessionRef = useRef<Record<string, string[]>>({});
   const executionToHistoryRef = useRef<Record<string, string>>({});
+  const outputByExecRef = useRef<Record<string, string>>({});
+  const commandByExecRef = useRef<Record<string, string>>({});
+  const runningExecBySessionRef = useRef<Record<string, string>>({});
   const bootedRef = useRef(false);
   const settingsHydratedRef = useRef(false);
   const sessionBadgeRef = useRef<Record<string, SessionBadgeStatus>>({});
@@ -601,6 +623,10 @@ export function AppShell() {
   }
 
   function appendTerminalLine(sessionId: string, line: string) {
+    const runningExec = runningExecBySessionRef.current[sessionId];
+    if (runningExec) {
+      outputByExecRef.current[runningExec] = (outputByExecRef.current[runningExec] ?? "") + line;
+    }
     // Every PTY chunk is kept and shown: a read of real output can begin with any text, so
     // reduced clutter must never drop one. (It applies to the app's own annotations.)
 
@@ -786,10 +812,20 @@ export function AppShell() {
   function noteExecutionStarted(event: TerminalExecutionStartedEvent) {
     const sessionId = event.execution.sessionId;
     if (!sessionId) return;
+    const executionId = event.execution.id;
+    commandByExecRef.current[executionId] = event.execution.command ?? "";
+    outputByExecRef.current[executionId] = "";
+    runningExecBySessionRef.current[sessionId] = executionId;
+    setRequestOffers((prev) => {
+      if (!(sessionId in prev)) return prev;
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
     publishBadge(sessionId, "running");
     noteExecState(sessionId, "running");
     if (sessionId === activeSessionIdRef.current) {
-      setActiveExecution(event.execution.id);
+      setActiveExecution(executionId);
     }
   }
 
@@ -797,6 +833,39 @@ export function AppShell() {
     const status = event.status;
     const badge: SessionBadgeStatus =
       status === "failure" ? "failure" : status === "success" ? "success" : "idle";
+    const output = outputByExecRef.current[event.executionId] ?? "";
+    const command =
+      commandByExecRef.current[event.executionId] ??
+      useHistoryStore.getState().items.find((item) => item.id === event.executionId)?.executedCommand ??
+      "";
+    delete outputByExecRef.current[event.executionId];
+    delete commandByExecRef.current[event.executionId];
+    if (event.sessionId && runningExecBySessionRef.current[event.sessionId] === event.executionId) {
+      delete runningExecBySessionRef.current[event.sessionId];
+    }
+    const exitKnown =
+      event.exitKnown !== false &&
+      event.status !== "unknown" &&
+      event.reason !== "exit_unknown" &&
+      event.reason !== "shell_exited" &&
+      event.reason !== "input_not_accepted";
+    const phase =
+      event.status === "success"
+        ? "success"
+        : event.status === "interrupted"
+          ? "interrupted"
+          : event.status === "unknown" || event.reason === "exit_unknown"
+            ? "unknown"
+            : "failure";
+    const view = describeResult({
+      phase,
+      exitCode: event.exitCode,
+      exitKnown: event.exitKnown,
+      reason: event.reason,
+      outputText: output,
+      outputLines: countOutputLines(output),
+      command,
+    });
     if (event.sessionId) {
       publishBadge(event.sessionId, badge);
       const exec = useExecutionStore.getState().sessionExecStates[event.sessionId];
@@ -806,6 +875,18 @@ export function AppShell() {
       if (event.sessionId === activeSessionIdRef.current) {
         setActiveExecution(null);
       }
+      const sessionId = event.sessionId;
+      setResultsBySession((prev) => ({
+        ...prev,
+        [sessionId]: {
+          command,
+          view,
+          output,
+          outputOpen: false,
+          exitCode: exitKnown ? event.exitCode : null,
+          exitKnown,
+        },
+      }));
     }
     setLastExecutionId(event.executionId);
 
@@ -819,14 +900,14 @@ export function AppShell() {
 
     updateHistoryItem(historyId, {
       status,
-      exitCode: event.exitCode,
+      exitCode: exitKnown ? event.exitCode : undefined,
       finishedAt,
       durationMs,
     });
     persistInBackground("history update", historyUpdate({
       historyId,
       status,
-      exitCode: event.exitCode,
+      exitCode: exitKnown ? event.exitCode : undefined,
       finishedAt,
       durationMs,
     }));
@@ -1270,19 +1351,20 @@ export function AppShell() {
 
   // --- Submit handler ---
   // Resolves false when the submit was rejected, so the composer keeps the user's text.
-  async function handleSubmit(value: string): Promise<boolean> {
+  async function handleSubmit(value: string, modeOverride?: "command" | "ask"): Promise<boolean> {
+    const mode = modeOverride ?? inputMode;
     if (!session) return false;
     if (busySessionsRef.current.has(session.id)) return false;
-    if (inputMode === "command" && sessionIsRunning(session.id)) {
+    if (mode === "command" && sessionIsRunning(session.id)) {
       setError(busyMessage(session.id));
       return false;
     }
     const sessionId = session.id;
-    if (inputMode === "command" && sessionNotReady(sessionId)) {
+    if (mode === "command" && sessionNotReady(sessionId)) {
       setError(notReadyMessage(sessionId));
       return false;
     }
-    if (inputMode === "command") {
+    if (mode === "command") {
       // Checked before any history row exists: a command the backend would refuse
       // (multi-line, control character) or that hides text must not leave a failure row.
       const problem = commandProblem(value);
@@ -1290,13 +1372,24 @@ export function AppShell() {
         setError(problem);
         return false;
       }
+      if (looksLikeRequest(value)) {
+        setRequestOffers((prev) => ({ ...prev, [sessionId]: value }));
+        setError(null);
+        return false;
+      }
     }
+    setRequestOffers((prev) => {
+      if (!(sessionId in prev)) return prev;
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
     let accepted = true;
     lockSession(sessionId);
     setError(null);
 
     try {
-      if (inputMode === "command") {
+      if (mode === "command") {
         // --- Raw command flow ---
         if (sessionIsRunning(sessionId)) {
           setError(busyMessage(sessionId));
@@ -2460,6 +2553,70 @@ export function AppShell() {
     }
   }
 
+  const offerText = activeSessionId ? requestOffers[activeSessionId] : undefined;
+  const sessionResult = activeSessionId ? resultsBySession[activeSessionId] : undefined;
+  const shownResult = offerText
+    ? describeResult({ phase: "request", command: offerText })
+    : isRunning
+      ? describeResult({ phase: "running", command: sessionResult?.command })
+      : sessionResult?.view ?? null;
+
+  function onResultAction(action: ResultAction) {
+    if (!activeSessionId) return;
+    if (action === "stop") {
+      void handleInterrupt();
+      return;
+    }
+    if (action === "show-output") {
+      const sessionId = activeSessionId;
+      setResultsBySession((prev) => {
+        const current = prev[sessionId];
+        if (!current) return prev;
+        return { ...prev, [sessionId]: { ...current, outputOpen: !current.outputOpen } };
+      });
+      return;
+    }
+    if (action === "ask-instead") {
+      const text = requestOffers[activeSessionId];
+      if (!text) return;
+      const sessionId = activeSessionId;
+      setRequestOffers((prev) => {
+        if (!(sessionId in prev)) return prev;
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
+      });
+      setInputMode("ask");
+      composerRef.current?.setValue(text);
+      composerRef.current?.focus();
+      return;
+    }
+    const current = resultsBySession[activeSessionId];
+    if (!current) return;
+    if (action === "ask-fix") {
+      const prompt = askFixPrompt({
+        command: current.command,
+        exitCode: current.exitCode,
+        exitKnown: current.exitKnown,
+        outputText: current.output,
+        cause: current.view.cause,
+      });
+      setInputMode("ask");
+      composerRef.current?.setValue(prompt);
+      void handleSubmit(prompt, "ask").then((ok) => {
+        if (ok) composerRef.current?.setValue("");
+      });
+      return;
+    }
+    if (action === "run-again" && current.command) {
+      const command = current.command;
+      composerRef.current?.setValue(command);
+      void handleSubmit(command, "command").then((ok) => {
+        if (ok) composerRef.current?.setValue("");
+      });
+    }
+  }
+
   const showPlanColumn =
     productMode === "guided" || plan !== null;
 
@@ -2617,11 +2774,17 @@ export function AppShell() {
             <div className="boot-loading">Starting CommandUI...</div>
           )}
 
+          <ResultLine
+            result={shownResult}
+            outputOpen={sessionResult?.outputOpen ?? false}
+            outputText={sessionResult?.output ?? ""}
+            onAction={onResultAction}
+          />
+
           <TerminalPane
             ref={terminalPaneRef}
             sessionId={activeSessionId}
             executionStatus={visibleExecutionStatus}
-            statusLabel={activeExecState === "userRunning" ? "running (typed)" : undefined}
             onResize={handleTerminalResize}
             onData={handleTerminalData}
             autoFocus

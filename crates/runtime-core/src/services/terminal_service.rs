@@ -199,6 +199,8 @@ impl TerminalService {
                         &request.execution_id,
                         "failure",
                         1,
+                        false,
+                        Some("input_not_accepted"),
                     );
                 }
                 Rollback::NotOurs => {}
@@ -208,6 +210,8 @@ impl TerminalService {
                         &request.execution_id,
                         "failure",
                         1,
+                        false,
+                        Some("input_not_accepted"),
                     );
                     return Err(format!("Session not found: {}", request.session_id));
                 }
@@ -231,7 +235,14 @@ impl TerminalService {
             }
         };
         let Some(still_running) = still_running else {
-            self.emit_execution_finished(&request.session_id, &request.execution_id, "failure", 1);
+            self.emit_execution_finished(
+                &request.session_id,
+                &request.execution_id,
+                "failure",
+                1,
+                false,
+                Some("input_not_accepted"),
+            );
             return Err(format!("Session not found: {}", request.session_id));
         };
 
@@ -330,7 +341,7 @@ impl TerminalService {
 
         if let Some(pending) = transition {
             if let Some(exec_id) = pending {
-                self.emit_execution_finished(session_id, &exec_id, "interrupted", 130);
+                self.emit_execution_finished(session_id, &exec_id, "interrupted", 130, true, None);
             }
             self.emit_exec_state(session_id, &SessionExecState::Booting);
         }
@@ -404,6 +415,8 @@ impl TerminalService {
         execution_id: &str,
         status: &str,
         exit_code: i32,
+        exit_known: bool,
+        reason: Option<&str>,
     ) {
         self.event_sink.emit(RuntimeEvent::ExecutionFinished(
             ExecutionFinishedEvent {
@@ -412,6 +425,8 @@ impl TerminalService {
                 exit_code,
                 finished_at: chrono::Utc::now().to_rfc3339(),
                 status: status.to_string(),
+                exit_known,
+                reason: reason.map(str::to_string),
             },
         ));
     }
@@ -855,6 +870,8 @@ mod tests {
                     exit_code: 0,
                     finished_at: "t".to_string(),
                     status: "success".to_string(),
+                    exit_known: true,
+                    reason: None,
                 }));
                 Err(std::io::Error::other("flush failed"))
             }

@@ -26,7 +26,11 @@ export type TerminalExecutionFinishedEvent = {
   sessionId: string;
   exitCode: number;
   finishedAt: string;
-  status: "success" | "failure" | "interrupted";
+  status: "success" | "failure" | "interrupted" | "unknown";
+  /** False when exitCode was invented or does not describe the outcome. */
+  exitKnown?: boolean;
+  /** exit_unknown, shell_exited, or input_not_accepted when the runtime knows why. */
+  reason?: string | null;
 };
 
 export type SessionCwdChangedEvent = {

@@ -32,9 +32,8 @@ export type TerminalPaneHandle = {
 
 type Props = {
   sessionId?: string | null;
+  /** Drives the cursor blink while a command runs. The result line lives outside this pane. */
   executionStatus?: "idle" | "running" | "success" | "failure" | "interrupted";
-  /** Text for the status badge when it should differ from the status itself. */
-  statusLabel?: string;
   onResize?: (cols: number, rows: number) => void;
   onData?: (data: string) => void;
   autoFocus?: boolean;
@@ -45,7 +44,6 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
     {
       sessionId,
       executionStatus = "idle",
-      statusLabel,
       onResize,
       onData,
       autoFocus = false,
@@ -248,11 +246,6 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
 
     return (
       <div className="terminal-shell">
-        <div className="terminal-meta">
-          <span className={`exec-badge exec-${executionStatus}`}>
-            {statusLabel ?? executionStatus}
-          </span>
-        </div>
         <div ref={containerRef} className="terminal-xterm-host" />
       </div>
     );
