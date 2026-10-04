@@ -197,8 +197,10 @@ export function HistoryDrawer({
             const duration = formatDuration(item.durationMs);
             const sourceLabel =
               item.source === "semantic"
-                ? `semantic${item.plannerSource ? `/${item.plannerSource}` : ""}`
-                : "raw";
+                ? item.plannerSource === "mock"
+                  ? "From Ask, practice plan"
+                  : "From Ask"
+                : "Typed command";
 
             return (
               <div

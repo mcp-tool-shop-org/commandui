@@ -50,7 +50,7 @@ function mockCommandOutput(command: string): string[] {
       "def5678 feat: initial v0 scaffold (3 hours ago)",
     ];
   }
-  return [`[mock] ${command}`, "(browser preview — command not executed)"];
+  return [`(preview) ${command}`, "This command did not run. Open the CommandUI application to use your terminal."];
 }
 
 function uuid(): string {
@@ -73,7 +73,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       id: uuid(),
       label: (req.label as string) || `Session ${sessionCounter}`,
       cwd: (req.cwd as string) || "~/projects",
-      shell: "mock-shell",
+      shell: "shell",
       status: "active" as const,
       createdAt: now,
       lastActiveAt: now,
@@ -242,7 +242,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     const memoryItems = (context.memoryItems ?? []) as Array<Record<string, string>>;
 
     // Check if any workflow matches the intent
-    let command = `echo "mock plan for: ${intent}"`;
+    let command = `echo "practice plan for: ${intent}"`;
     let explanation = `This is a stand-in plan for "${intent}". Open the CommandUI application for a plan from your own model.`;
 
     const wfFact = projectFacts.find(
@@ -263,7 +263,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     return {
       plan: {
         id: planId,
-        sessionId: req.sessionId ?? "mock",
+        sessionId: req.sessionId ?? "preview",
         source: "mock",
         userIntent: intent,
         command,
@@ -366,7 +366,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       settings: {
         productMode: "guided",
         defaultInputMode: "ask",
-        reducedClutter: false,
+        fontSize: "md",
         simplifiedSummaries: false,
         plannerModel: "qwen2.5:14b",
         plannerEndpoint: "http://localhost:11434",

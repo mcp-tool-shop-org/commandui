@@ -93,7 +93,7 @@ function resetStores() {
   useWorkflowRunStore.setState({ activeRun: null, lastRunByWorkflowId: {} });
   useSettingsStore.setState({
     productMode: "classic",
-    reducedClutter: false,
+    fontSize: "md",
     simplifiedSummaries: false,
     plannerModel: "qwen2.5:14b",
     plannerEndpoint: "http://localhost:11434",
@@ -200,8 +200,8 @@ describe("Workstream 2 accessibility", () => {
         onProductModeChange={() => {}}
         defaultInputMode="ask"
         onDefaultInputModeChange={() => {}}
-        reducedClutter={false}
-        onReducedClutterChange={() => {}}
+        fontSize="md"
+        onFontSizeChange={() => {}}
         simplifiedSummaries={false}
         onSimplifiedSummariesChange={() => {}}
         plannerModel="qwen2.5:14b"
@@ -292,6 +292,18 @@ describe("Workstream 2 accessibility", () => {
     await waitFor(() => {
       expect(document.querySelector("[role='status']")).toHaveTextContent(/Finished\./);
     });
+  });
+
+  it("changes the text size from the keyboard", async () => {
+    const user = userEvent.setup();
+    await renderReadyShell();
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const slider = screen.getByRole("slider", { name: "Text size" });
+    expect(slider).toHaveValue("100");
+    fireEvent.change(slider, { target: { value: "200" } });
+    expect(slider).toHaveValue("200");
+    expect(document.querySelector(".app-shell")).toHaveStyle({ "--ui-scale": "2" });
+    expect(screen.getByText("200%")).toBeInTheDocument();
   });
 
   it("asks, reviews, and hears the plan from the keyboard", async () => {

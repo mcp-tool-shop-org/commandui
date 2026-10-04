@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import type {
   CommandPlan,
   HistoryItem,
@@ -107,6 +108,7 @@ import { recordedPlannerSource } from "../lib/plannerSource";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { onMockEvent } from "../lib/mockBridge";
 import { displayPath } from "../lib/displayPath";
+import { fontScale } from "../lib/fontScale";
 import { readShowWelcome, writeShowWelcome } from "../lib/welcomePref";
 import { WelcomeScreen } from "../components/WelcomeScreen";
 import { waitForTerminalStatus } from "./workflowStepWait";
@@ -280,13 +282,13 @@ export function AppShell() {
   } = useMemoryStore();
   const {
     productMode,
-    reducedClutter,
+    fontSize,
     simplifiedSummaries,
     plannerModel,
     plannerEndpoint,
     defaultInputMode,
     setProductMode,
-    setReducedClutter,
+    setFontSize,
     setSimplifiedSummaries,
     setPlannerModel,
     setPlannerEndpoint,
@@ -724,7 +726,7 @@ export function AppShell() {
             const s = settingsRes.settings as Record<string, unknown>;
             if (typeof s.productMode === "string") setProductMode(s.productMode as "classic" | "guided");
             if (typeof s.defaultInputMode === "string") setDefaultInputMode(s.defaultInputMode as "command" | "ask");
-            if (typeof s.reducedClutter === "boolean") setReducedClutter(s.reducedClutter);
+            if (typeof s.fontSize === "string" && s.fontSize.trim()) setFontSize(s.fontSize);
             if (typeof s.simplifiedSummaries === "boolean") setSimplifiedSummaries(s.simplifiedSummaries);
             if (typeof s.plannerModel === "string" && s.plannerModel.trim()) setPlannerModel(s.plannerModel);
             if (typeof s.plannerEndpoint === "string" && s.plannerEndpoint.trim()) setPlannerEndpoint(s.plannerEndpoint);
@@ -818,7 +820,7 @@ export function AppShell() {
         const msg = errorText(e);
         setBootError(msg);
         setBootPhase("failed");
-        setError(`Boot failed: ${msg}`);
+        setError(`CommandUI did not start. ${msg}`);
       }
     }
     boot();
@@ -1033,7 +1035,7 @@ export function AppShell() {
       .catch((e: unknown) => {
         const msg = errorText(e);
         console.error("[AppShell] Listener setup failed:", msg);
-        setError(`A background initialization step failed: ${msg}. Some features may not work correctly.`);
+        setError(`CommandUI could not finish starting. ${msg} Some parts may not work until you close the window and open CommandUI again.`);
       });
 
     return () => {
@@ -1049,8 +1051,7 @@ export function AppShell() {
           });
       }
     };
-    // Subscriptions live for the whole shell: appendTerminalLine reads reducedClutter from
-    // getState(), and resubscribing is asynchronous so events in the gap would be lost.
+    // Subscriptions live for the whole shell. Resubscribing is asynchronous, so events in the gap would be lost.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1112,7 +1113,7 @@ export function AppShell() {
             .catch((e: unknown) => {
               const msg = errorText(e);
               console.error("[AppShell] Reconcile session states failed during stall check:", msg);
-              setError(`Session sync failed: ${msg}. Click Resync if a session appears stuck.`);
+              setError(`CommandUI could not check this session (${msg}). Choose Resync if a session looks stuck.`);
             });
         } else if (
           execIsForeground(state) &&
@@ -1134,14 +1135,14 @@ export function AppShell() {
     persistInBackground("settings update", settingsUpdate({
       settings: {
         productMode,
-        reducedClutter,
+        fontSize,
         simplifiedSummaries,
         plannerModel,
         plannerEndpoint,
         defaultInputMode,
       },
     }));
-  }, [browserPreview, productMode, reducedClutter, simplifiedSummaries, plannerModel, plannerEndpoint, defaultInputMode]);
+  }, [browserPreview, productMode, fontSize, simplifiedSummaries, plannerModel, plannerEndpoint, defaultInputMode]);
 
   // --- Background persistence failure banner ---
   useEffect(() => {
@@ -1150,7 +1151,7 @@ export function AppShell() {
         what: string;
         message: string;
       };
-      setError(`Background save failed (${detail.what}): ${detail.message}. Your data may not be persisted.`);
+      setError(`CommandUI could not save your latest change: ${detail.message}. Try again. If this keeps happening, the change may be lost when you close the window.`);
     };
     window.addEventListener("commandui:persist-failed", handler);
     return () => window.removeEventListener("commandui:persist-failed", handler);
@@ -1397,7 +1398,7 @@ export function AppShell() {
     ];
 
     if (isRunning) {
-      actions.push({ id: "interrupt", label: "Interrupt Command", action: handleInterrupt });
+      actions.push({ id: "interrupt", label: "Stop the command", action: handleInterrupt });
     }
     // A dead shell cannot be resynced; New Session (above) is its way forward.
     if ((activeExecState === "desynced" || activeBootStalled) && !activeExited) {
@@ -1557,7 +1558,7 @@ export function AppShell() {
         // Lines the app writes itself are escaped: model text must not move the cursor
         // or hide characters in the transcript.
         appendAppNote(session.id, `? ${escapeForTerminal(value)}\r\n`);
-        appendAppNote(session.id, `[plan] ${escapeForTerminal(res.plan.command)}\r\n`);
+        appendAppNote(session.id, `Drafted: ${escapeForTerminal(res.plan.command)}\r\n`);
       }
     } catch (e: unknown) {
       const msg = errorText(e);
@@ -1689,7 +1690,7 @@ export function AppShell() {
         }
       }
 
-      appendAppNote(session.id, `[approved] ${escapeForTerminal(trimmed)}\r\n`);
+      appendAppNote(session.id, `Approved: ${escapeForTerminal(trimmed)}\r\n`);
 
       try {
         await executeCommand({
@@ -1763,7 +1764,7 @@ export function AppShell() {
     // Works with no session open, or when the plan's session is gone.
     const noteSessionId =
       planSessionId && sessions.some((s) => s.id === planSessionId) ? planSessionId : session?.id;
-    if (noteSessionId) appendAppNote(noteSessionId, "[rejected]\r\n");
+    if (noteSessionId) appendAppNote(noteSessionId, "Rejected the draft.\r\n");
     setPlan(null);
     setPlanNotice(null);
     setCurrentPlanHistoryId(null);
@@ -1910,7 +1911,7 @@ export function AppShell() {
       addSession(res.session);
       setActiveSessionId(res.session.id);
       void reconcileSessionStates();
-      appendAppNote(res.session.id, `[session] ${escapeForTerminal(res.session.label)}\r\n`);
+      appendAppNote(res.session.id, `Opened ${escapeForTerminal(res.session.label)}.\r\n`);
     } catch (e: unknown) {
       setError(errorText(e));
     }
@@ -2203,14 +2204,14 @@ export function AppShell() {
     const durSuffix = duration ? ` (${duration})` : "";
 
     if (finalStatus === "success") {
-      appendAppNote(sessionId, `[workflow:done] ${escapeForTerminal(run.workflowName)} — ${succeeded}/${total} succeeded${durSuffix}\r\n`);
+      appendAppNote(sessionId, `Finished workflow ${escapeForTerminal(run.workflowName)}. ${succeeded} of ${total} steps worked${durSuffix}.\r\n`);
     } else if (finalStatus === "failed") {
       const failedStep = run.steps.find((s) => s.status === "failed");
-      appendAppNote(sessionId, `[workflow:failed] ${escapeForTerminal(run.workflowName)} — ${succeeded}/${total} succeeded, failed on step ${(failedStep?.index ?? 0) + 1}${durSuffix}\r\n`);
+      appendAppNote(sessionId, `Workflow ${escapeForTerminal(run.workflowName)} stopped. ${succeeded} of ${total} steps worked, and step ${(failedStep?.index ?? 0) + 1} did not${durSuffix}.\r\n`);
     } else {
       const skipped = run.steps.filter((s) => s.status === "skipped").length;
       const interruptedStep = run.steps.find((s) => s.status === "interrupted");
-      appendAppNote(sessionId, `[workflow:interrupted] ${escapeForTerminal(run.workflowName)} — interrupted during step ${(interruptedStep?.index ?? 0) + 1}; ${skipped} skipped${durSuffix}\r\n`);
+      appendAppNote(sessionId, `Workflow ${escapeForTerminal(run.workflowName)} was stopped during step ${(interruptedStep?.index ?? 0) + 1}. ${skipped} steps were skipped${durSuffix}.\r\n`);
     }
   }
 
@@ -2336,7 +2337,7 @@ export function AppShell() {
         ) {
           appendAppNote(
             runSessionId,
-            `[workflow:waiting] step ${i + 1}/${commands.length} is still running. Use Interrupt to stop it.`,
+            `Step ${i + 1} of ${commands.length} is still running. Choose Stop to end it.`,
           );
           waited = await waitForStepCompletion(executionId, controller.signal);
         }
@@ -2516,7 +2517,7 @@ export function AppShell() {
           ),
         );
         setError(
-          "That suggestion is no longer pending in the database (it was accepted or dismissed before), so no memory item was created and it was removed from the list.",
+          "That suggestion was already handled, so nothing new was saved and it was taken off the list.",
         );
         return;
       }
@@ -2831,10 +2832,12 @@ export function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsOpen]);
 
+  const shellStyle = { "--ui-scale": String(fontScale(fontSize)) } as CSSProperties;
+
   // --- Boot failure screen ---
   if (bootPhase === "failed") {
     return (
-      <div className="app-shell">
+      <div className="app-shell" style={shellStyle}>
         <header className="topbar">
           <div>
             <strong>CommandUI</strong>
@@ -2872,7 +2875,7 @@ export function AppShell() {
 
   // --- Render ---
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={shellStyle}>
       <header className="topbar">
         <h1 className="visually-hidden">CommandUI</h1>
         <div className="visually-hidden" role="status" aria-atomic="true">
@@ -2947,8 +2950,8 @@ export function AppShell() {
           )}
 
           {activeExecState === "desynced" && !activeExited && (
-            <div className="desync-banner">
-              <span>Terminal appears desynced.</span>
+            <div className="session-banner">
+              <span>The terminal lost track of this session. Choose Resync to connect it again.</span>
               <button type="button" onClick={handleResync}>
                 Resync
               </button>
@@ -2956,10 +2959,10 @@ export function AppShell() {
           )}
 
           {activeBootStalled && !activeExited && activeSessionId && (
-            <div className="desync-banner" role="status">
+            <div className="session-banner" role="status">
               <span>
-                The {session?.shell ?? "shell"} in this session has not reported ready.
-                A shell profile that errors or replaces the prompt can cause this.
+                This session has not finished starting. A startup script may have stopped the shell.
+                Choose Resync, or close the session and open a new one.
               </span>
               <button type="button" onClick={handleResync}>
                 Resync
@@ -2971,12 +2974,12 @@ export function AppShell() {
           )}
 
           {activeForegroundStuck && !activeExited && activeSessionId && (
-            <div className="desync-banner" role="status">
+            <div className="session-banner" role="status">
               <span>
                 {activeExecState === "interrupting"
-                  ? "The interrupt has not ended the command."
+                  ? "Stop has not ended the command."
                   : "A command you typed has held this session for a while."}{" "}
-                A nested shell, ssh session or REPL stays open until you type exit in the terminal.
+                A program you started, such as another shell or a remote login, stays open until you type exit in the terminal.
                 Resync is not offered here because it would type into that program.
               </span>
               <button type="button" onClick={() => requestCloseSession(activeSessionId)}>
@@ -3048,15 +3051,15 @@ export function AppShell() {
             disabled={composerDisabled(activeExecState, activeExited)}
             disabledReason={
               activeExited
-                ? "Shell exited — open a new session."
+                ? "The shell exited. Open a new session to continue."
                 : activeExecState === "desynced"
-                  ? "Terminal out of sync — use Resync."
+                  ? "The terminal lost track of this session. Choose Resync."
                   : activeBootStalled
-                    ? "Terminal not ready — use Resync or close the session."
+                    ? "The terminal has not finished starting. Choose Resync, or close the session."
                     : activeExecState === "booting"
-                      ? "Terminal starting…"
+                      ? "The terminal is still starting."
                       : activeExecState === "userRunning"
-                        ? "A command you typed is running — wait for the prompt."
+                        ? "A command you typed is running. Wait for the prompt."
                         : undefined
             }
           />
@@ -3192,8 +3195,8 @@ export function AppShell() {
         onProductModeChange={setProductMode}
         defaultInputMode={defaultInputMode}
         onDefaultInputModeChange={setDefaultInputMode}
-        reducedClutter={reducedClutter}
-        onReducedClutterChange={setReducedClutter}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
         simplifiedSummaries={simplifiedSummaries}
         onSimplifiedSummariesChange={setSimplifiedSummaries}
         plannerModel={plannerModel}

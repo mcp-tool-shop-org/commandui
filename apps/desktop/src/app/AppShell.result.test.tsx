@@ -41,7 +41,7 @@ function resetStores() {
   useWorkflowRunStore.setState({ activeRun: null, lastRunByWorkflowId: {} });
   useSettingsStore.setState({
     productMode: "classic",
-    reducedClutter: false,
+    fontSize: "md",
     simplifiedSummaries: false,
     plannerModel: "qwen2.5:14b",
     plannerEndpoint: "http://localhost:11434",

@@ -49,7 +49,7 @@ function resetStores() {
   useWorkflowRunStore.setState({ activeRun: null, lastRunByWorkflowId: {} });
   useSettingsStore.setState({
     productMode: "classic",
-    reducedClutter: false,
+    fontSize: "md",
     simplifiedSummaries: false,
     plannerModel: "qwen2.5:14b",
     plannerEndpoint: "http://localhost:11434",
@@ -397,9 +397,8 @@ describe("making a workflow from the shell", () => {
     expect(within(editor).getByLabelText("Step 2")).toHaveValue("echo new");
   });
 
-  it("still shows a pattern suggestion when reduced clutter is on", async () => {
+  it("shows a pattern suggestion", async () => {
     await renderReadyShell();
-    useSettingsStore.getState().setReducedClutter(true);
     const suggestion: MemorySuggestion = {
       id: "sug-1",
       scope: "global",

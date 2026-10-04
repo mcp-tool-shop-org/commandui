@@ -67,6 +67,44 @@ describe("TerminalPane custom key handler", () => {
 
   it("turns on screen reader mode so typing, dictation, and paste stay in the terminal", () => {
     expect(captured.options?.screenReaderMode).toBe(true);
+    // The shell zoom is the text scale. A 28px cell under that zoom would draw the glyphs twice.
+    expect(captured.options?.fontSize).toBe(14);
+  });
+
+  it("follows the light theme", () => {
+    const previous = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes("light"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+      onchange: null,
+    })) as typeof window.matchMedia;
+    render(<TerminalPane />);
+    const theme = captured.options?.theme as { background?: string; foreground?: string };
+    expect(theme.background).toBe("#ffffff");
+    expect(theme.foreground).toBe("#111827");
+    window.matchMedia = previous;
+  });
+
+  it("stops the cursor blink when reduced motion is on, even while a command runs", () => {
+    const previous = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes("reduce"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+      onchange: null,
+    })) as typeof window.matchMedia;
+    render(<TerminalPane executionStatus="running" />);
+    expect(captured.options?.cursorBlink).toBe(false);
+    window.matchMedia = previous;
   });
 
   it.each(["K", "X", "W", "k"])("returns the Ctrl+Shift+%s chord to the app", (letter) => {

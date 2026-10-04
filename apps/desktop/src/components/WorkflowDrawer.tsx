@@ -1,4 +1,5 @@
 import type { Workflow, WorkflowRun, WorkflowStepRun } from "@commandui/domain";
+import { runStatusLabel } from "../lib/runStatusLabel";
 import { useModalDialog } from "../lib/useModalDialog";
 import { RelativeTime } from "./RelativeTime";
 
@@ -136,7 +137,7 @@ export function WorkflowDrawer({
                 <div className="workflow-header">
                   <div className="history-main">{wf.label}</div>
                   {wf.source === "promoted" && (
-                    <span className="workflow-badge-promoted">promoted</span>
+                    <span className="workflow-badge-promoted">From a suggestion</span>
                   )}
                 </div>
 
@@ -170,8 +171,10 @@ export function WorkflowDrawer({
                       }
                     }}
                   >
-                    <span className={`workflow-last-run-dot workflow-last-run-dot--${lastRun.status}`} />
-                    <span aria-hidden="true">{isExpanded ? "▼" : "▶"}</span> Last run: {formatRunSummary(lastRun)} —{" "}
+                    <span className={`workflow-last-run-dot workflow-last-run-dot--${lastRun.status}`} aria-hidden="true" />
+                    <span aria-hidden="true">{isExpanded ? "▼" : "▶"}</span>{" "}
+                    <span>{runStatusLabel(lastRun.status)}. </span>
+                    Last run: {formatRunSummary(lastRun)} —{" "}
                     <RelativeTime value={lastRun.finishedAt} />
                   </div>
                 )}
@@ -179,7 +182,8 @@ export function WorkflowDrawer({
                 {isExpanded && lastRun && (
                   <div className="workflow-run-detail">
                     <div className="workflow-run-detail-header">
-                      <span className={`wf-dot wf-dot--${lastRun.status}`} />
+                      <span className={`wf-dot wf-dot--${lastRun.status}`} aria-hidden="true" />
+                      <span>{runStatusLabel(lastRun.status)}</span>
                       <span>Started: {formatTimestamp(lastRun.startedAt)}</span>
                       {lastRun.finishedAt != null && (
                         <span>Duration: {formatDuration(lastRun.finishedAt - lastRun.startedAt)}</span>
@@ -192,7 +196,8 @@ export function WorkflowDrawer({
                         className={`workflow-step-row${stepStatusClass(step)}`}
                       >
                         <span className="workflow-step-num">{step.index + 1}</span>
-                        <span className={`wf-dot wf-dot--${step.status}`} />
+                        <span className={`wf-dot wf-dot--${step.status}`} aria-hidden="true" />
+                        <span>{runStatusLabel(step.status)}</span>
                         <code title={step.command}>{step.command}</code>
                         <span className="muted">{stepDuration(step)}</span>
                         <div className="step-actions">

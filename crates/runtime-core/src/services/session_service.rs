@@ -259,7 +259,7 @@ impl SessionService {
             // A runtime notice, not shell output: Raw Play must not write it
             // into a full-screen app's screen (apps/console skips "notice").
             kind: "notice".to_string(),
-            text: "\n[commandui: the shell exited. Open a new session to continue.]\n".to_string(),
+            text: "\nThe shell exited. Open a new session to continue.\n".to_string(),
             timestamp: now.clone(),
         }));
         if let Some(exec_id) = pending {
@@ -1176,7 +1176,7 @@ mod tests {
             .collect();
         assert_eq!(lines.len(), 1, "{lines:?}");
         assert_eq!(lines[0].0, "notice");
-        assert!(lines[0].1.contains("the shell exited"), "{lines:?}");
+        assert!(lines[0].1.to_ascii_lowercase().contains("the shell exited"), "{lines:?}");
         assert!(lines.iter().all(|(kind, _)| kind != "stdout"));
         // Idempotent: a second call emits nothing more.
         let n = sink.len();

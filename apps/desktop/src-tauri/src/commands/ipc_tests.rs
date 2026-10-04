@@ -459,22 +459,23 @@ fn database_commands_round_trip() {
     assert!(workflows["workflows"].as_array().unwrap().is_empty());
 
     let settings = ipc(&webview, "settings_get", json!({})).unwrap();
-    assert_eq!(settings["settings"]["theme"], "dark");
+    assert!(settings["settings"].get("theme").is_none());
     assert_eq!(settings["settings"]["plannerModel"], "qwen2.5:14b");
     assert_eq!(settings["settings"]["plannerEndpoint"], "http://localhost:11434");
+    assert_eq!(settings["settings"]["fontSize"], "md");
     assert_ok(
         &ipc(
             &webview,
             "settings_update",
-            json!({ "request": { "settings": { "theme": "light", "plannerModel": "qwen2.5:7b" } } }),
+            json!({ "request": { "settings": { "theme": "light", "plannerModel": "qwen2.5:7b", "fontSize": "200" } } }),
         )
         .unwrap(),
     );
     let settings = ipc(&webview, "settings_get", json!({})).unwrap();
-    assert_eq!(settings["settings"]["theme"], "light");
+    assert!(settings["settings"].get("theme").is_none());
     assert_eq!(settings["settings"]["plannerModel"], "qwen2.5:7b");
     assert_eq!(settings["settings"]["plannerEndpoint"], "http://localhost:11434");
-    assert_eq!(settings["settings"]["fontSize"], "md");
+    assert_eq!(settings["settings"]["fontSize"], "200");
 
     drop(app);
     drop(webview);

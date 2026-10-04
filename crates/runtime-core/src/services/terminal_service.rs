@@ -124,10 +124,10 @@ impl TerminalService {
                     return Err("A command is already running in this session".to_string());
                 }
                 SessionExecState::Booting => {
-                    return Err("Session is still booting".to_string());
+                    return Err("The terminal is still starting. Wait a moment, then try again.".to_string());
                 }
                 SessionExecState::Desynced => {
-                    return Err("Session is desynced — resync first".to_string());
+                    return Err("The terminal lost track of this session. Choose Resync, then try again.".to_string());
                 }
                 SessionExecState::UserRunning => {
                     return Err(USER_RUNNING_ERROR.to_string());
@@ -1213,11 +1213,11 @@ mod tests {
         let booting = svc
             .execute(exec_request("e-boot"))
             .unwrap_err();
-        assert!(booting.contains("still booting"), "{booting}");
+        assert!(booting.contains("still starting"), "{booting}");
 
         sessions.lock().unwrap().get_mut("s1").unwrap().exec_state = SessionExecState::Desynced;
         let desynced = svc.execute(exec_request("e-desync")).unwrap_err();
-        assert!(desynced.contains("desynced"), "{desynced}");
+        assert!(desynced.contains("lost track"), "{desynced}");
 
         sessions.lock().unwrap().get_mut("s1").unwrap().exec_state = SessionExecState::Interrupting;
         let interrupting = svc.execute(exec_request("e-int")).unwrap_err();

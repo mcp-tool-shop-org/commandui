@@ -195,7 +195,7 @@ export function PlanPanel({
       onFocus={() => setFocusZone("plan")}
     >
       {plannerSource === "mock" && (
-        <div className="plan-mock-notice muted">
+        <div className="plan-practice-notice muted">
           Practice plan — Ollama is not connected. This is not a real plan.
         </div>
       )}

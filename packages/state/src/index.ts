@@ -181,13 +181,13 @@ export const useMemoryStore = create<MemoryState>((set) => ({
 
 type SettingsState = {
   productMode: "classic" | "guided";
-  reducedClutter: boolean;
+  fontSize: string;
   simplifiedSummaries: boolean;
   plannerModel: string;
   plannerEndpoint: string;
   defaultInputMode: "command" | "ask";
   setProductMode: (mode: "classic" | "guided") => void;
-  setReducedClutter: (value: boolean) => void;
+  setFontSize: (value: string) => void;
   setSimplifiedSummaries: (value: boolean) => void;
   setPlannerModel: (value: string) => void;
   setPlannerEndpoint: (value: string) => void;
@@ -196,13 +196,14 @@ type SettingsState = {
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   productMode: "classic",
-  reducedClutter: false,
+  // "md" is the stored default and draws at 100%. See fontScale.
+  fontSize: "md",
   simplifiedSummaries: false,
   plannerModel: "qwen2.5:14b",
   plannerEndpoint: "http://localhost:11434",
   defaultInputMode: "command",
   setProductMode: (productMode) => set({ productMode }),
-  setReducedClutter: (reducedClutter) => set({ reducedClutter }),
+  setFontSize: (fontSize) => set({ fontSize }),
   setSimplifiedSummaries: (simplifiedSummaries) =>
     set({ simplifiedSummaries }),
   setPlannerModel: (plannerModel) => set({ plannerModel }),
