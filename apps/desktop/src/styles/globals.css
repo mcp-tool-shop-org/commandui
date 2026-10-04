@@ -499,6 +499,12 @@ select {
   margin-bottom: 14px;
 }
 
+.drawer-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 /* === History Drawer === */
 .history-overlay {
   position: fixed;
@@ -561,6 +567,49 @@ select {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+}
+
+.history-select {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.history-expand {
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  color: inherit;
+  font: inherit;
+}
+
+.history-save-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.history-last-n {
+  width: 4.5rem;
+  min-height: 24px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+}
+
+.workflow-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .history-source {
@@ -1041,8 +1090,13 @@ select {
 
 .workflow-editor-step button {
   padding: 4px 8px;
-  font-size: 11px;
-  min-width: unset;
+  font-size: 13px;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.workflow-editor-add {
+  margin-top: 8px;
 }
 
 .workflow-editor-footer {

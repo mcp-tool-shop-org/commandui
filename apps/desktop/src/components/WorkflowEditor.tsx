@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useModalDialog } from "../lib/useModalDialog";
 
 type Props = {
   initialLabel: string;
   initialSteps: string[];
   projectRoot?: string;
+  /** create names a new list. edit changes one that is already saved. */
+  mode?: "create" | "edit";
   onConfirm: (label: string, steps: string[]) => void;
   onCancel: () => void;
 };
@@ -12,18 +14,25 @@ type Props = {
 export function WorkflowEditor({
   initialLabel,
   initialSteps,
+  mode = "create",
   onConfirm,
   onCancel,
 }: Props) {
   const [label, setLabel] = useState(initialLabel);
-  const [steps, setSteps] = useState<string[]>(initialSteps);
-  const nameRef = useRef<HTMLInputElement>(null);
-  const submittedRef = useRef(false);
+  const [steps, setSteps] = useState<string[]>(initialSteps.length > 0 ? initialSteps : [""]);
+  const [focusIndex, setFocusIndex] = useState<number | null>(null);
   const dialogRef = useModalDialog(true, onCancel);
+  const creating = mode === "create";
 
   useEffect(() => {
-    requestAnimationFrame(() => nameRef.current?.focus());
-  }, []);
+    if (focusIndex == null) return;
+    const index = focusIndex < 0 ? steps.length - 1 : focusIndex;
+    const node = dialogRef.current?.querySelector<HTMLInputElement>(
+      `[aria-label="Step ${index + 1}"]`,
+    );
+    node?.focus();
+    setFocusIndex(null);
+  }, [focusIndex, steps, dialogRef]);
 
   function updateStep(index: number, value: string) {
     setSteps((prev) => prev.map((s, i) => (i === index ? value : s)));
@@ -48,7 +57,12 @@ export function WorkflowEditor({
   }
 
   function removeStep(index: number) {
-    setSteps((prev) => prev.filter((_, i) => i !== index));
+    setSteps((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
+  }
+
+  function addStep() {
+    setSteps((prev) => [...prev, ""]);
+    setFocusIndex(-1);
   }
 
   const canConfirm =
@@ -57,19 +71,11 @@ export function WorkflowEditor({
     steps.every((s) => s.trim() !== "");
 
   function handleConfirm() {
-    if (!canConfirm || submittedRef.current) return;
-    submittedRef.current = true;
+    if (!canConfirm) return;
     onConfirm(
       label.trim(),
       steps.map((s) => s.trim()),
     );
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      onCancel();
-    }
   }
 
   return (
@@ -81,10 +87,9 @@ export function WorkflowEditor({
         aria-modal="true"
         aria-labelledby="workflow-editor-title"
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={handleKeyDown}
       >
         <div className="workflow-editor-header">
-          <h3 id="workflow-editor-title">Edit Workflow</h3>
+          <h3 id="workflow-editor-title">{creating ? "New workflow" : "Edit workflow"}</h3>
         </div>
 
         <div className="workflow-editor-body">
@@ -92,7 +97,6 @@ export function WorkflowEditor({
             <label htmlFor="workflow-name">Name</label>
             <input
               id="workflow-name"
-              ref={nameRef}
               className="workflow-editor-name"
               type="text"
               data-autofocus
@@ -143,6 +147,9 @@ export function WorkflowEditor({
                 </button>
               </div>
             ))}
+            <button type="button" className="workflow-editor-add" onClick={addStep}>
+              Add step
+            </button>
           </div>
         </div>
 
@@ -156,7 +163,7 @@ export function WorkflowEditor({
             disabled={!canConfirm}
             onClick={handleConfirm}
           >
-            Create Workflow
+            {creating ? "Create workflow" : "Save changes"}
           </button>
         </div>
       </div>

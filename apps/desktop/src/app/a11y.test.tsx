@@ -160,6 +160,7 @@ describe("Workstream 2 accessibility", () => {
         onRerun={() => {}}
         onReopenPlan={() => {}}
         onSaveWorkflow={() => {}}
+        onSaveSelected={() => {}}
         onCopyCommand={() => {}}
       />,
     );
@@ -174,6 +175,8 @@ describe("Workstream 2 accessibility", () => {
         expandedRunWorkflowId={null}
         onClose={() => {}}
         onRun={() => {}}
+        onNew={() => {}}
+        onEdit={() => {}}
         onExpandRun={() => {}}
         onRetryStep={() => {}}
         onCopyCommand={() => {}}

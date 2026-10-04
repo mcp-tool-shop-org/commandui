@@ -8,6 +8,11 @@ function focusable(root: HTMLElement): HTMLElement[] {
   );
 }
 
+/** The undo bar sits above a dialog. Tab must be able to reach it. */
+function undoButton(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(".undo-bar button:not([disabled])");
+}
+
 /**
  * Makes an open panel a modal dialog: focus moves in, Tab stays inside,
  * Escape closes it, and focus returns to whatever opened it.
@@ -50,11 +55,28 @@ export function useModalDialog(open: boolean, onClose: () => void) {
         event.preventDefault();
         return;
       }
-      const index = items.indexOf(document.activeElement as HTMLElement);
-      const leavingForward = !event.shiftKey && (index === -1 || index === items.length - 1);
-      const leavingBackward = event.shiftKey && index <= 0;
+      const undo = undoButton();
+      const active = document.activeElement as HTMLElement | null;
+      const inUndo = undo != null && active === undo;
+      if (inUndo) {
+        event.preventDefault();
+        (event.shiftKey ? items[items.length - 1] : items[0])?.focus();
+        return;
+      }
+      const index = items.indexOf(active as HTMLElement);
+      if (index === -1) {
+        event.preventDefault();
+        items[0]?.focus();
+        return;
+      }
+      const leavingForward = !event.shiftKey && index === items.length - 1;
+      const leavingBackward = event.shiftKey && index === 0;
       if (leavingForward || leavingBackward) {
         event.preventDefault();
+        if (undo) {
+          undo.focus();
+          return;
+        }
         items[leavingBackward ? items.length - 1 : 0].focus();
       }
     };
@@ -62,6 +84,7 @@ export function useModalDialog(open: boolean, onClose: () => void) {
     const onFocus = (event: FocusEvent) => {
       if (!root || !isTop()) return;
       if (event.target instanceof Node && root.contains(event.target)) return;
+      if (event.target instanceof Element && event.target.closest(".undo-bar")) return;
       focusFirst();
     };
 

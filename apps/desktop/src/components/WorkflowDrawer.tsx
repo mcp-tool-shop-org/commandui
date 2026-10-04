@@ -1,5 +1,6 @@
 import type { Workflow, WorkflowRun, WorkflowStepRun } from "@commandui/domain";
 import { useModalDialog } from "../lib/useModalDialog";
+import { RelativeTime } from "./RelativeTime";
 
 type Props = {
   isOpen: boolean;
@@ -9,20 +10,14 @@ type Props = {
   onClose: () => void;
   onRun: (workflow: Workflow) => void;
   onDelete?: (workflowId: string) => void;
+  onNew?: () => void;
+  onEdit?: (workflow: Workflow) => void;
   onExpandRun: (workflowId: string | null) => void;
   onRetryStep: (command: string) => void;
   onCopyCommand: (command: string) => void;
   onViewHistoryItem: (historyItemId: string) => void;
   loading?: boolean;
 };
-
-function formatTimeAgo(ts: number): string {
-  const diff = Date.now() - ts;
-  if (diff < 60_000) return "just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return `${Math.floor(diff / 86_400_000)}d ago`;
-}
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -66,6 +61,9 @@ function stepDuration(step: WorkflowStepRun): string {
   return "";
 }
 
+const EMPTY_COPY =
+  "Workflows are saved lists of commands you can run again with one click. Make one here, or save commands from History.";
+
 export function WorkflowDrawer({
   isOpen,
   workflows,
@@ -74,6 +72,8 @@ export function WorkflowDrawer({
   onClose,
   onRun,
   onDelete,
+  onNew,
+  onEdit,
   onExpandRun,
   onRetryStep,
   onCopyCommand,
@@ -95,9 +95,16 @@ export function WorkflowDrawer({
       >
         <div className="drawer-header">
           <strong id="workflow-title">Workflows</strong>
-          <button type="button" data-autofocus onClick={onClose}>
-            Close
-          </button>
+          <div className="drawer-header-actions">
+            {onNew && !loading && workflows.length > 0 && (
+              <button type="button" onClick={onNew}>
+                New workflow
+              </button>
+            )}
+            <button type="button" data-autofocus onClick={onClose}>
+              Close
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -110,7 +117,14 @@ export function WorkflowDrawer({
             ))}
           </>
         ) : workflows.length === 0 ? (
-          <p className="muted">No saved workflows yet.</p>
+          <div className="workflow-empty">
+            <p>{EMPTY_COPY}</p>
+            {onNew && (
+              <button type="button" onClick={onNew}>
+                New workflow
+              </button>
+            )}
+          </div>
         ) : (
           workflows.map((wf) => {
             const lastRun = lastRunByWorkflowId[wf.id];
@@ -157,7 +171,8 @@ export function WorkflowDrawer({
                     }}
                   >
                     <span className={`workflow-last-run-dot workflow-last-run-dot--${lastRun.status}`} />
-                    <span aria-hidden="true">{isExpanded ? "▼" : "▶"}</span> Last run: {formatRunSummary(lastRun)} — {formatTimeAgo(lastRun.finishedAt)}
+                    <span aria-hidden="true">{isExpanded ? "▼" : "▶"}</span> Last run: {formatRunSummary(lastRun)} —{" "}
+                    <RelativeTime value={lastRun.finishedAt} />
                   </div>
                 )}
 
@@ -230,8 +245,15 @@ export function WorkflowDrawer({
                 {wf.originalIntent && (
                   <div className="history-sub muted">{wf.originalIntent}</div>
                 )}
-                <div className="history-sub muted">{wf.createdAt}</div>
+                <div className="history-sub muted">
+                  <RelativeTime value={wf.createdAt} />
+                </div>
                 <div className="workflow-actions">
+                  {onEdit && (
+                    <button type="button" onClick={() => onEdit(wf)}>
+                      Edit
+                    </button>
+                  )}
                   <button type="button" onClick={() => onRun(wf)}>
                     Run
                   </button>

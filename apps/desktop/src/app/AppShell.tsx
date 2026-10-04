@@ -345,10 +345,14 @@ export function AppShell() {
   const [requestOffers, setRequestOffers] = useState<Record<string, string>>({});
   const [workflowEditorData, setWorkflowEditorData] = useState<{
     workflowId: string;
-    suggestionId: string;
+    suggestionId?: string;
     label: string;
     steps: string[];
     projectRoot?: string;
+    createdAt?: string;
+    source?: Workflow["source"];
+    originalIntent?: string;
+    mode: "create" | "edit";
   } | null>(null);
 
   // Background buffer for session-switch replay
@@ -1790,6 +1794,7 @@ export function AppShell() {
       source: "semantic",
       originalIntent: plan.plan.userIntent,
       command,
+      steps: [{ command }],
       projectRoot: session.cwd,
       createdAt: new Date().toISOString(),
     };
@@ -1802,7 +1807,7 @@ export function AppShell() {
       return;
     }
     addWorkflow(workflow);
-    appendAppNote(session.id, `[workflow:saved] ${escapeForTerminal(workflow.label)}\r\n`);
+    appendAppNote(session.id, `Saved workflow ${escapeForTerminal(workflow.label)}.\r\n`);
   }
 
   // --- Terminal handlers ---
@@ -2118,6 +2123,7 @@ export function AppShell() {
       source: item.source,
       originalIntent: item.source === "semantic" ? item.userInput : undefined,
       command,
+      steps: [{ command }],
       projectRoot: session.cwd,
       createdAt: new Date().toISOString(),
     };
@@ -2129,8 +2135,50 @@ export function AppShell() {
       return;
     }
     addWorkflow(workflow);
-    appendAppNote(session.id, `[workflow:saved] ${escapeForTerminal(workflow.label)}\r\n`);
+    appendAppNote(session.id, `Saved workflow ${escapeForTerminal(workflow.label)}.\r\n`);
     setHistoryOpen(false);
+  }
+
+  function handleNewWorkflow() {
+    setWorkflowEditorData({
+      workflowId: crypto.randomUUID(),
+      label: "",
+      steps: [""],
+      projectRoot: session?.cwd,
+      mode: "create",
+    });
+  }
+
+  function handleEditWorkflow(workflow: Workflow) {
+    const steps =
+      workflow.steps && workflow.steps.length > 0
+        ? workflow.steps.map((step) => step.command)
+        : workflow.command
+          ? [workflow.command]
+          : [""];
+    setWorkflowEditorData({
+      workflowId: workflow.id,
+      label: workflow.label,
+      steps,
+      projectRoot: workflow.projectRoot,
+      createdAt: workflow.createdAt,
+      source: workflow.source,
+      originalIntent: workflow.originalIntent,
+      mode: "edit",
+    });
+  }
+
+  function handleSaveSelectedWorkflows(items: HistoryItem[]) {
+    const chosen = items.filter((item) => item.executedCommand ?? item.generatedCommand);
+    if (chosen.length === 0) return;
+    const only = chosen.length === 1 ? chosen[0] : undefined;
+    setWorkflowEditorData({
+      workflowId: crypto.randomUUID(),
+      label: only ? only.userInput.slice(0, 48) : "",
+      steps: chosen.map((item) => item.executedCommand ?? item.generatedCommand ?? ""),
+      projectRoot: session?.cwd,
+      mode: "create",
+    });
   }
 
   // --- Workflow run helpers ---
@@ -2437,6 +2485,7 @@ export function AppShell() {
           label: suggestion.proposedKey,
           steps,
           projectRoot: suggestion.projectRoot,
+          mode: "create",
         });
         return;
       } catch (error: unknown) {
@@ -2479,29 +2528,37 @@ export function AppShell() {
   async function handleWorkflowEditorConfirm(label: string, steps: string[]) {
     if (!workflowEditorData || confirmingRef.current) return;
     confirmingRef.current = true;
-    const { workflowId, suggestionId, projectRoot } = workflowEditorData;
+    const data = workflowEditorData;
+    const existing = useWorkflowStore.getState().items.find((item) => item.id === data.workflowId);
 
     try {
-      // 1. Create and persist the workflow first. The editor stays open until this
-      //    succeeds so the user's edits are never lost to a failed write.
+      // Persist first. The editor stays open until this succeeds so a failed
+      // write does not throw away the name and steps.
       const workflow: Workflow = {
-        id: workflowId,
+        id: data.workflowId,
         label,
-        source: "promoted",
+        source: data.suggestionId ? "promoted" : (data.source ?? existing?.source ?? "raw"),
+        originalIntent: data.originalIntent ?? existing?.originalIntent,
         command: steps.join(" && "),
         steps: steps.map((cmd) => ({ command: cmd })),
-        projectRoot,
-        createdAt: new Date().toISOString(),
+        projectRoot: data.projectRoot ?? existing?.projectRoot,
+        createdAt: data.createdAt ?? existing?.createdAt ?? new Date().toISOString(),
       };
       await workflowAdd({ workflow });
       addWorkflow(workflow);
       setWorkflowEditorData(null);
       if (session) {
-        appendAppNote(session.id, `[workflow:promoted] ${escapeForTerminal(workflow.label)}\r\n`);
+        const verb = data.mode === "edit" ? "Updated workflow" : "Saved workflow";
+        appendAppNote(session.id, `${verb} ${escapeForTerminal(workflow.label)}.\r\n`);
+      }
+      if (!data.suggestionId) {
+        setOverlay("workflow");
+        return;
       }
 
-      // 2. Accept the memory suggestion. A failure here is partial success: the
-      //    workflow exists, so report it instead of discarding anything.
+      // Accept the memory suggestion. A failure here is partial success: the
+      // workflow exists, so report it instead of discarding anything.
+      const suggestionId = data.suggestionId;
       try {
         const res = await memoryAcceptSuggestion({ suggestionId });
         if (res.createdItem) {
@@ -2972,15 +3029,13 @@ export function AppShell() {
             </div>
           )}
 
-          {!reducedClutter && (
-            <MemorySuggestions
-              suggestions={memorySuggestions.filter(
-                (s) => s.status === "pending",
-              )}
-              onAccept={handleAcceptSuggestion}
-              onDismiss={handleDismissSuggestion}
-            />
-          )}
+          <MemorySuggestions
+            suggestions={memorySuggestions.filter(
+              (s) => s.status === "pending",
+            )}
+            onAccept={handleAcceptSuggestion}
+            onDismiss={handleDismissSuggestion}
+          />
 
           <InputComposer
             ref={composerRef}
@@ -3083,6 +3138,7 @@ export function AppShell() {
         onRerun={handleRerunHistoryItem}
         onReopenPlan={handleReopenPlan}
         onSaveWorkflow={handleSaveWorkflowFromHistory}
+        onSaveSelected={handleSaveSelectedWorkflows}
         onCopyCommand={(cmd) => { void navigator.clipboard.writeText(cmd); }}
         onViewWorkflowRun={handleViewWorkflowRun}
         initialExpandedId={historyInitialExpandedId}
@@ -3100,6 +3156,8 @@ export function AppShell() {
         }}
         onRun={handleRunWorkflow}
         onDelete={handleDeleteWorkflow}
+        onNew={handleNewWorkflow}
+        onEdit={handleEditWorkflow}
         onExpandRun={setExpandedRunWorkflowId}
         onRetryStep={handleRetryFailedStep}
         onCopyCommand={(cmd) => void navigator.clipboard.writeText(cmd)}
@@ -3159,6 +3217,7 @@ export function AppShell() {
           initialLabel={workflowEditorData.label}
           initialSteps={workflowEditorData.steps}
           projectRoot={workflowEditorData.projectRoot}
+          mode={workflowEditorData.mode}
           onConfirm={handleWorkflowEditorConfirm}
           onCancel={handleWorkflowEditorCancel}
         />
