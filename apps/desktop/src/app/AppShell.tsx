@@ -880,13 +880,14 @@ export function AppShell() {
           : event.status === "unknown" || event.reason === "exit_unknown"
             ? "unknown"
             : "failure";
+    const visible = collapseRedraws(output, command);
     const view = describeResult({
       phase,
       exitCode: event.exitCode,
       exitKnown: event.exitKnown,
       reason: event.reason,
-      outputText: output,
-      outputLines: countOutputLines(output),
+      outputText: visible,
+      outputLines: countOutputLines(visible),
       command,
     });
     if (event.sessionId) {
@@ -904,7 +905,7 @@ export function AppShell() {
         [sessionId]: {
           command,
           view,
-          output,
+          output: visible,
           outputOpen: false,
           exitCode: exitKnown ? event.exitCode : null,
           exitKnown,
@@ -916,7 +917,7 @@ export function AppShell() {
           id: event.executionId,
           command,
           headline: resultText(view),
-          output: collapseRedraws(output),
+          output: visible,
         };
         const without = list.filter((item) => item.id !== block.id);
         return { ...prev, [sessionId]: [...without, block].slice(-40) };

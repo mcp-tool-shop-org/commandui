@@ -183,7 +183,8 @@ export function PlanPanel({
     flags?.destructive ? flagInWords("DESTRUCTIVE_OPERATION") : "",
     flags?.escalatesPrivileges ? flagInWords("PRIVILEGE_ESCALATION") : "",
     flags?.touchesNetwork ? flagInWords("NETWORK_ACCESS") : "",
-    flags?.touchesFiles ? "Changes files" : "",
+    // touchesFiles is set when a command reads or writes. It is not a change,
+    // so a listing must not be described as changing files.
   ]).filter((words) => words !== riskWords);
 
   return (

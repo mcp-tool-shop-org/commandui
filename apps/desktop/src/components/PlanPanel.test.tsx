@@ -130,6 +130,27 @@ describe("PlanPanel", () => {
     expect(onRunGate).toHaveBeenLastCalledWith({ command: "", confirmed: false });
   });
 
+  it("does not call a file listing a change", () => {
+    render(
+      <PlanPanel
+        {...defaultProps}
+        command="Get-ChildItem -File -Filter *.log | Sort-Object Length -Descending | Select-Object -First 3"
+        risk="low"
+        flags={{ touchesFiles: true }}
+        explanation=""
+      />,
+    );
+    expect(screen.getByText("Low risk. Easy to undo.")).toBeInTheDocument();
+    expect(screen.queryByText("Changes files")).toBeNull();
+    expect(
+      screen.getByText(
+        "Lists files whose names match *.log, then sorts them by Length, largest first, then keeps the first 3.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Passed to the program")).toBeNull();
+    expect(screen.queryByText("Runs Get-ChildItem.")).toBeNull();
+  });
+
   it("shows empty state when no command", () => {
     render(<PlanPanel {...defaultProps} command="" />);
     expect(screen.getByText(/no plan yet/i)).toBeDefined();
