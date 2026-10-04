@@ -1,10 +1,10 @@
 # Line coverage, uploaded by the codecov job in .github/workflows/ci.yml.
 #
-# Measured 2026-10-04 on 04281cb: Rust 94.2% of lines (cargo-llvm-cov),
-# TypeScript about 25% (the React desktop UI is 18%), combined about 75%.
-# Decision (Mike, 2026-10-04): the Rust flag is a 90% gate; TypeScript is
-# reported but informational until the desktop UI tests reach it; every PR's
-# new lines must be 90% covered. Make typescript blocking once it is over 90%.
+# Measured 2026-10-04 on this branch: TypeScript 4,664/5,113 lines (91.2%).
+# Desktop 4,173/4,611 (90.5%), state 179/182 (98.4%), domain 301/309 (97.4%),
+# api-contract 11/11. ui has no executable lines. Rust was 94.2% on 04281cb.
+# Decision (Mike, 2026-10-04): both flags are 90% gates, and every PR's new
+# lines must be 90% covered.
 coverage:
   range: "90...100" # the badge is red below the 90% bar
   status:
@@ -18,7 +18,8 @@ coverage:
       typescript:
         flags: [typescript]
         target: 90%
-        informational: true
+        threshold: 0%
+        informational: false
     patch:
       default:
         target: 90%

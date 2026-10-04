@@ -63,6 +63,28 @@ const mockWorkflows: Array<Record<string, unknown>> = [];
 const mockMemoryItems: Array<Record<string, unknown>> = [];
 const mockMemorySuggestions: Array<Record<string, unknown>> = [];
 const mockRunningExecs = new Set<string>();
+const pendingTimers = new Set<ReturnType<typeof setTimeout>>();
+
+function later(fn: () => void, ms: number) {
+  const id = setTimeout(() => {
+    pendingTimers.delete(id);
+    fn();
+  }, ms);
+  pendingTimers.add(id);
+}
+
+/** Drop leftover sessions and timers so one test cannot leak into the next. */
+export function resetMockBridge() {
+  for (const id of pendingTimers) clearTimeout(id);
+  pendingTimers.clear();
+  sessionCounter = 0;
+  for (const id of Object.keys(mockSessions)) delete mockSessions[id];
+  mockHistory.length = 0;
+  mockWorkflows.length = 0;
+  mockMemoryItems.length = 0;
+  mockMemorySuggestions.length = 0;
+  mockRunningExecs.clear();
+}
 
 const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   session_create(args) {
@@ -81,7 +103,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     mockSessions[session.id] = session;
 
     // Simulate boot → ready
-    setTimeout(() => {
+    later(() => {
       emitMockEvent("session:exec_state_changed", {
         sessionId: session.id,
         execState: "ready",
@@ -121,7 +143,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     mockRunningExecs.add(execKey);
 
     // Simulate async PTY output
-    setTimeout(() => {
+    later(() => {
       emitMockEvent("session:exec_state_changed", {
         sessionId,
         execState: "running",
@@ -142,14 +164,14 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     // Emit output lines with staggered timing
     const outputLines = mockCommandOutput(command);
     outputLines.forEach((line, i) => {
-      setTimeout(() => {
+      later(() => {
         if (!mockRunningExecs.has(execKey)) return;
         emitMockEvent("terminal:line", { sessionId, executionId, text: `${line}\r\n` });
       }, 150 + i * 80);
     });
 
     // Emit prompt + execution finished
-    setTimeout(() => {
+    later(() => {
       const wasInterrupted = !mockRunningExecs.has(execKey);
       mockRunningExecs.delete(execKey);
 
@@ -170,7 +192,16 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       });
     }, 200 + outputLines.length * 80);
 
-    return { executionId, command };
+    return {
+      execution: {
+        id: executionId,
+        sessionId,
+        command,
+        source: req.source === "semantic" ? "semantic" : "raw",
+        status: "running",
+        startedAt: new Date().toISOString(),
+      },
+    };
   },
 
   terminal_interrupt(args) {
@@ -197,7 +228,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     const req = (args.request ?? {}) as Record<string, unknown>;
     const sessionId = req.sessionId as string;
 
-    setTimeout(() => {
+    later(() => {
       emitMockEvent("session:exec_state_changed", {
         sessionId,
         execState: "ready",

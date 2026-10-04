@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
+  useComposerStore,
   useExecutionStore,
   useFocusStore,
   useHistoryStore,
   useMemoryStore,
   useSettingsStore,
   useSessionStore,
+  useWorkflowRunStore,
   useWorkflowStore,
   resolveEffectiveMemory,
 } from "./index";
@@ -416,5 +418,114 @@ describe("WorkflowStore", () => {
     expect(items[1].label).toBe("edited");
     expect(items[1].command).toBe("pwd");
     expect(items[1].steps).toEqual([{ command: "pwd", label: "where" }]);
+  });
+
+  it("removes a workflow by id", () => {
+    useWorkflowStore.setState({ items: [] });
+    useWorkflowStore.getState().addWorkflow({
+      id: "w1",
+      label: "test",
+      source: "raw",
+      command: "ls",
+      createdAt: "2025-01-01",
+    });
+    useWorkflowStore.getState().removeWorkflow("w1");
+    expect(useWorkflowStore.getState().items).toEqual([]);
+  });
+});
+
+describe("stores the shell writes while a person is working", () => {
+  it("tracks the composer, the last execution, and a cleared history", () => {
+    useComposerStore.getState().setInputValue("echo hi");
+    useComposerStore.getState().setInputMode("ask");
+    expect(useComposerStore.getState()).toMatchObject({ inputValue: "echo hi", inputMode: "ask" });
+
+    useExecutionStore.getState().setLastExecutionId("exec-9");
+    expect(useExecutionStore.getState().lastExecutionId).toBe("exec-9");
+
+    useHistoryStore.getState().appendHistoryItem({
+      id: "1",
+      sessionId: "s",
+      source: "raw",
+      userInput: "ls",
+      status: "success",
+      createdAt: "2025-01-01",
+    });
+    useHistoryStore.getState().clearHistory();
+    expect(useHistoryStore.getState().items).toEqual([]);
+  });
+
+  it("replaces sessions, patches one, and stores memory items", () => {
+    const session = {
+      id: "s1",
+      label: "One",
+      cwd: "/tmp",
+      shell: "bash",
+      status: "active" as const,
+      createdAt: "",
+      lastActiveAt: "",
+    };
+    useSessionStore.getState().setSessions([session]);
+    useSessionStore.getState().updateSession("s1", { cwd: "/work", label: "Work" });
+    expect(useSessionStore.getState().sessions[0]).toMatchObject({ cwd: "/work", label: "Work" });
+
+    const item = {
+      id: "m1",
+      scope: "global" as const,
+      kind: "preferred_cwd" as const,
+      key: "workspace",
+      value: "/work",
+      confidence: 1,
+      source: "manual" as const,
+      createdAt: "",
+      updatedAt: "",
+    };
+    useMemoryStore.getState().setMemoryItems([item]);
+    useMemoryStore.getState().addMemoryItem({ ...item, id: "m2", key: "tool" });
+    useMemoryStore.getState().removeMemoryItem("m1");
+    expect(useMemoryStore.getState().items.map((entry) => entry.id)).toEqual(["m2"]);
+  });
+
+  it("stores every settings switch", () => {
+    const settings = useSettingsStore.getState();
+    settings.setReducedClutter(true);
+    settings.setSimplifiedSummaries(true);
+    settings.setConfirmMediumRisk(false);
+    settings.setDefaultInputMode("ask");
+    expect(useSettingsStore.getState()).toMatchObject({
+      reducedClutter: true,
+      simplifiedSummaries: true,
+      confirmMediumRisk: false,
+      defaultInputMode: "ask",
+    });
+  });
+
+  it("updates the running workflow and files the finished run", () => {
+    useWorkflowRunStore.setState({ activeRun: null, lastRunByWorkflowId: {} });
+    const store = useWorkflowRunStore.getState();
+    store.updateActiveRunStep(0, { status: "running" });
+    store.completeActiveRun("failed");
+    expect(useWorkflowRunStore.getState().activeRun).toBeNull();
+
+    store.setActiveRun({
+      id: "r",
+      workflowId: "w",
+      workflowName: "Ship",
+      startedAt: 10,
+      status: "running",
+      currentStepIndex: 0,
+      steps: [
+        { index: 0, command: "echo a", status: "pending" },
+        { index: 1, command: "echo b", status: "pending" },
+      ],
+    });
+    useWorkflowRunStore.getState().updateActiveRunStep(0, { status: "running" });
+    expect(useWorkflowRunStore.getState().activeRun?.currentStepIndex).toBe(0);
+    useWorkflowRunStore.getState().updateActiveRunStep(0, { status: "success" });
+    expect(useWorkflowRunStore.getState().activeRun?.currentStepIndex).toBe(0);
+    useWorkflowRunStore.getState().completeActiveRun("success");
+    expect(useWorkflowRunStore.getState().activeRun).toBeNull();
+    expect(useWorkflowRunStore.getState().lastRunByWorkflowId.w.status).toBe("success");
+    expect(useWorkflowRunStore.getState().lastRunByWorkflowId.w.finishedAt).toEqual(expect.any(Number));
   });
 });
