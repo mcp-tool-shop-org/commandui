@@ -296,7 +296,7 @@ fn render_terminal_pane(frame: &mut Frame, area: Rect, model: &Model) {
             Line::from(""),
             Line::from(Span::styled("    ^T  Ask the AI           ^G  Raw Play (fullscreen)", Style::default().fg(Color::DarkGray))),
             Line::from(Span::styled("    ^S  Switch runs           ^N  New session", Style::default().fg(Color::DarkGray))),
-            Line::from(Span::styled("    ^H  Help                  ^Q  Quit", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("    F1  Help                  ^Q  Quit", Style::default().fg(Color::DarkGray))),
             Line::from(""),
             Line::from(Span::styled(
                 "  Press ^N to start a session.",
@@ -449,13 +449,13 @@ fn render_shell_footer(frame: &mut Frame, area: Rect, model: &Model) {
         ));
     } else if model.can_accept_input() {
         if is_running {
-            spans.push(Span::raw("  ^C Stop  ^S Runs  ^H Help  ^Q Quit"));
+            spans.push(Span::raw("  ^C Stop  ^G Raw Play  ^S Runs  F1 Help  ^Q Quit"));
         } else {
-            spans.push(Span::raw("  ^T Ask  ^G Raw Play  ^S Runs  ^H Help  ^Q Quit"));
+            spans.push(Span::raw("  ^T Ask  ^G Raw Play  ^S Runs  F1 Help  ^Q Quit"));
         }
     } else if model.active_session().is_some_and(|s| s.boot_is_slow()) {
         spans.push(Span::styled(
-            "  Still starting. ^R retries, ^W closes, ^N New",
+            "  Still starting. ^R sends Enter, ^W closes, ^N New",
             Style::default().fg(Color::Yellow),
         ));
     } else {
@@ -721,9 +721,15 @@ fn is_invisible_format(c: char) -> bool {
 
 fn escape_segment(segment: &str) -> String {
     let mut out = String::with_capacity(segment.len());
-    for ch in segment.chars() {
+    let mut chars = segment.chars().peekable();
+    while let Some(ch) = chars.next() {
         match ch {
-            '\\' => out.push_str("\\\\"),
+            // A backslash is doubled only where it could be read as one of this
+            // pane's own escapes, so C:\Users shows as typed.
+            '\\' if matches!(chars.peek(), Some('r' | 't' | 'x' | 'u' | '\'' | '\\')) => {
+                out.push_str("\\\\")
+            }
+            '\\' => out.push('\\'),
             '\'' => out.push_str("\\'"),
             '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
@@ -1142,7 +1148,7 @@ fn render_help_overlay(frame: &mut Frame, area: Rect) {
         Line::from(" ^Q  Quit               Enter  Select"),
         Line::from("                        1-9    Jump"),
         Line::from(""),
-        Line::from(Span::styled(" Esc or ^H to close", Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled(" Esc or F1 to close", Style::default().fg(Color::DarkGray))),
     ];
 
     let paragraph = Paragraph::new(lines).block(block);
@@ -1209,6 +1215,15 @@ mod tests {
         assert!(overlay.height <= host.height);
         assert!(overlay.x.saturating_add(overlay.width) <= frame.width);
         assert!(overlay.y.saturating_add(overlay.height) <= frame.height);
+    }
+
+    #[test]
+    fn a_windows_path_shows_as_typed_in_the_review_line() {
+        let lines = visible_command_lines("dir C:\\Users\\bob");
+        assert_eq!(lines, vec!["$ 'dir C:\\Users\\bob'".to_string()]);
+        // A typed backslash-r stays distinct from an escaped carriage return.
+        let lines = visible_command_lines("echo \\r\r");
+        assert_eq!(lines, vec!["$ 'echo \\\\r\\r'".to_string()]);
     }
 
     #[test]

@@ -303,9 +303,7 @@ impl App {
                 self.observe_session_modes(&event);
                 // Text the runtime injects (truncation and exit notices) is not the
                 // app's output; it must not print into the app's screen.
-                if active_id.as_deref() == Some(line_event.session_id.as_str())
-                    && line_event.kind != "notice"
-                {
+                if should_write_to_host(active_id.as_deref(), line_event) {
                     let mut out = stdout();
                     let _ = out.write_all(line_event.text.as_bytes());
                     let _ = out.flush();
@@ -648,6 +646,16 @@ impl App {
 
 /// PTY size for the chrome pane in `mode` on a `width` x `height` host.
 /// `None` when nothing fits. Raw Play has no chrome, so the whole host is the pane.
+/// Whether a runtime line is written straight to the host terminal in Raw Play:
+/// only the active session's own output. Text the runtime injects (truncation
+/// and exit notices) is not the app's output and must not print into its screen.
+fn should_write_to_host(
+    active_id: Option<&str>,
+    line: &commandui_runtime_core::events::TerminalLineEvent,
+) -> bool {
+    active_id == Some(line.session_id.as_str()) && line.kind != "notice"
+}
+
 fn pane_size_for(mode: InputMode, width: u16, height: u16) -> Option<(u16, u16)> {
     let chrome_overhead = match mode {
         InputMode::Shell | InputMode::Switcher => 4,
@@ -901,6 +909,25 @@ mod tests {
     use commandui_runtime_core::events::{NoopSink, RuntimeEventSink};
     use commandui_runtime_core::session::SessionRegistry;
     use std::sync::{Arc, Mutex};
+
+    fn line(session: &str, kind: &str) -> commandui_runtime_core::events::TerminalLineEvent {
+        commandui_runtime_core::events::TerminalLineEvent {
+            id: "l".into(),
+            session_id: session.into(),
+            execution_id: None,
+            kind: kind.into(),
+            text: "x".into(),
+            timestamp: "t".into(),
+        }
+    }
+
+    #[test]
+    fn raw_play_writes_only_active_stdout_to_the_host() {
+        assert!(should_write_to_host(Some("s1"), &line("s1", "stdout")));
+        assert!(!should_write_to_host(Some("s1"), &line("s1", "notice")));
+        assert!(!should_write_to_host(Some("s1"), &line("s2", "stdout")));
+        assert!(!should_write_to_host(None, &line("s1", "stdout")));
+    }
 
     fn test_app() -> App {
         let sessions = Arc::new(Mutex::new(SessionRegistry::new()));

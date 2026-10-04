@@ -3,6 +3,7 @@ mod event_sink;
 mod input;
 mod model;
 mod planner;
+mod stderr_guard;
 mod ui;
 
 use commandui_runtime_core::services::session_service::SessionService;
@@ -25,7 +26,17 @@ async fn main() -> anyhow::Result<()> {
     let session_service = SessionService::new(sessions.clone(), sink.clone());
     let terminal_service = TerminalService::new(sessions, sink);
 
-    // Run Console
+    // Run Console. The runtime logs lifecycle lines to stderr; while the TUI owns
+    // the terminal they go to a log file instead of onto the screen.
+    let guard = stderr_guard::StderrGuard::redirect();
     let mut app = app::App::new(session_service, terminal_service, rx);
-    app.run().await
+    let result = app.run().await;
+    if let Some(g) = guard {
+        let path = g.path().to_path_buf();
+        drop(g);
+        if std::fs::metadata(&path).map(|m| m.len() > 0).unwrap_or(false) {
+            eprintln!("commandui: runtime log at {}", path.display());
+        }
+    }
+    result
 }

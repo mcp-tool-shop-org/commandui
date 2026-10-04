@@ -10,7 +10,7 @@
 //!   - Ctrl+T       → switch to ASK mode
 //!   - Ctrl+G       → enter Raw Play
 //!   - Ctrl+S       → open the run selector
-//!   - Ctrl+H       → help overlay (Esc or Ctrl+H closes it)
+//!   - F1 / Ctrl+/  → help overlay (Esc or F1 closes it)
 //!   - Ctrl+N       → create new session
 //!   - Ctrl+W       → close active session (the last one too); asks y/n first
 //!     when it has a running command (only a bare y proceeds)
@@ -122,6 +122,13 @@ pub fn handle_key(
     }
 }
 
+/// F1, or Ctrl+/ (Unix crossterm reports the 0x1f byte as Ctrl+7).
+fn is_help_key(key: &KeyEvent) -> bool {
+    key.code == KeyCode::F(1)
+        || (key.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(key.code, KeyCode::Char('/') | KeyCode::Char('7')))
+}
+
 fn handle_shell_key(
     key: KeyEvent,
     model: &mut Model,
@@ -134,9 +141,7 @@ fn handle_shell_key(
                 model.show_help = false;
                 return InputAction::Ignored;
             }
-            _ if key.modifiers.contains(KeyModifiers::CONTROL)
-                && key.code == KeyCode::Char('h') =>
-            {
+            _ if is_help_key(&key) => {
                 model.show_help = false;
                 return InputAction::Ignored;
             }
@@ -166,14 +171,16 @@ fn handle_shell_key(
         }
     }
 
+    // Help: F1 or Ctrl+/. Not Ctrl+H: terminals whose Backspace sends 0x08
+    // report it as Ctrl+H, and Backspace must erase.
+    if is_help_key(&key) {
+        model.show_help = true;
+        return InputAction::Ignored;
+    }
+
     // Session management
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         match key.code {
-            // Ctrl+H — toggle help overlay
-            KeyCode::Char('h') => {
-                model.show_help = true;
-                return InputAction::Ignored;
-            }
             // Ctrl+G — enter raw play mode (game mode)
             KeyCode::Char('g') => {
                 if model.can_accept_input() {
@@ -248,12 +255,15 @@ fn handle_shell_key(
         None => return InputAction::Ignored,
     };
 
-    // A session still booting takes Ctrl+R (resync) and plain keys, so a
-    // bootstrap that never completes is not a dead pane.
+    // A session still booting takes only Ctrl+R (resync), so a bootstrap that
+    // never completes is not a dead pane. Typed text and Ctrl+C would interleave
+    // with the bootstrap echo, and an Enter in Booting is not tracked as a run.
     let booting = model
         .active_session()
         .is_some_and(|s| s.session_state == SessionState::Booting);
-    if !model.can_accept_input() && !booting {
+    let is_resync_key = key.modifiers.contains(KeyModifiers::CONTROL)
+        && key.code == KeyCode::Char('r');
+    if !model.can_accept_input() && !(booting && is_resync_key) {
         return InputAction::Ignored;
     }
 
@@ -1216,11 +1226,11 @@ mod tests {
         );
         assert!(model.show_help);
         assert_eq!(
-            handle_key(press(KeyCode::Char('h'), KeyModifiers::CONTROL), &mut model, &terminal),
+            handle_key(press(KeyCode::F(1), KeyModifiers::NONE), &mut model, &terminal),
             InputAction::Ignored
         );
         assert!(!model.show_help);
-        handle_key(press(KeyCode::Char('h'), KeyModifiers::CONTROL), &mut model, &terminal);
+        handle_key(press(KeyCode::F(1), KeyModifiers::NONE), &mut model, &terminal);
         assert!(model.show_help);
 
         let mut model = two_sessions();
@@ -1773,7 +1783,47 @@ mod tests {
     }
 
     #[test]
-    fn a_booting_session_still_takes_resync_and_keys() {
+    fn ctrl_h_is_backspace_not_help_and_ctrl_slash_opens_help() {
+        let terminal = service();
+        let mut model = two_sessions();
+        handle_key(press(KeyCode::Char('h'), KeyModifiers::CONTROL), &mut model, &terminal);
+        assert!(!model.show_help);
+        handle_key(press(KeyCode::Char('/'), KeyModifiers::CONTROL), &mut model, &terminal);
+        assert!(model.show_help);
+        handle_key(press(KeyCode::Esc, KeyModifiers::NONE), &mut model, &terminal);
+        assert!(!model.show_help);
+        handle_key(press(KeyCode::Char('7'), KeyModifiers::CONTROL), &mut model, &terminal);
+        assert!(model.show_help);
+    }
+
+    #[test]
+    fn ctrl_bracket_is_ignored_with_one_session_in_shell_mode() {
+        let terminal = service();
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        model.sessions[0].session_state = SessionState::Active;
+        model.sessions[0].exec_state = "ready".into();
+        let action = handle_key(press(KeyCode::Char(']'), KeyModifiers::CONTROL), &mut model, &terminal);
+        assert_eq!(action, InputAction::Ignored);
+        assert_eq!(model.active_session_id(), Some("s1"));
+        assert!(model.status_line.is_none());
+    }
+
+    #[test]
+    fn ctrl_bracket_is_forwarded_to_the_shell_in_raw_play() {
+        let terminal = service();
+        let mut model = two_sessions();
+        model.input_mode = InputMode::RawPlay;
+        let action = handle_key(press(KeyCode::Char(']'), KeyModifiers::CONTROL), &mut model, &terminal);
+        // Not a session switch: the byte went to the runtime, whose refusal
+        // (no such session in the test service) marks the session.
+        assert_ne!(action, InputAction::NextSession);
+        assert_eq!(model.active_session_id(), Some("s1"));
+        assert!(matches!(model.sessions[0].session_state, SessionState::Error(_)));
+    }
+
+    #[test]
+    fn a_booting_session_takes_resync_but_not_typed_keys() {
         let terminal = service();
         let mut model = Model::new();
         model.add_session("s1".into(), "A".into());
@@ -1784,7 +1834,14 @@ mod tests {
         assert_eq!(action, InputAction::Ignored);
         assert!(model.status_line.as_deref().unwrap().contains("Session not found"));
         model.status_line = None;
-        handle_key(press(KeyCode::Char('a'), KeyModifiers::NONE), &mut model, &terminal);
-        assert!(model.status_line.as_deref().unwrap().contains("Session not found"));
+        // Typed text and Ctrl+C would interleave with the bootstrap echo.
+        for k in [
+            press(KeyCode::Char('a'), KeyModifiers::NONE),
+            press(KeyCode::Enter, KeyModifiers::NONE),
+            press(KeyCode::Char('c'), KeyModifiers::CONTROL),
+        ] {
+            assert_eq!(handle_key(k, &mut model, &terminal), InputAction::Ignored);
+            assert!(model.status_line.is_none());
+        }
     }
 }

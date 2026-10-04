@@ -222,6 +222,13 @@ impl SessionModel {
         match self.esc_state {
             EscState::Ground => {}
             EscState::Esc => {
+                // A terminal runs C0 controls inside an escape sequence, and a
+                // second ESC restarts it; neither is swallowed.
+                if matches!(ch, '\n' | '\r' | '\u{8}' | '\u{1b}') {
+                    self.esc_state = EscState::Ground;
+                    self.ingest_char(ch);
+                    return;
+                }
                 self.esc_state = match ch {
                     '[' => {
                         self.csi_params.clear();
@@ -238,6 +245,9 @@ impl SessionModel {
             }
             EscState::EscSkip => {
                 self.esc_state = EscState::Ground;
+                if matches!(ch, '\n' | '\r' | '\u{8}' | '\u{1b}') {
+                    self.ingest_char(ch);
+                }
                 return;
             }
             EscState::Csi => {
@@ -469,6 +479,11 @@ impl SessionModel {
     fn apply_event(&mut self, event: &RuntimeEvent) {
         match event {
             RuntimeEvent::TerminalLine(e) => {
+                // A runtime notice is its own line: when the open line holds
+                // partial output, the notice starts on a new row.
+                if e.kind == "notice" && !self.line_remainder.is_empty() {
+                    self.ingest_terminal_chunk("\n");
+                }
                 self.ingest_terminal_chunk(&e.text);
             }
             RuntimeEvent::SessionReady(e) => {
@@ -955,6 +970,40 @@ mod tests {
             text: text.to_string(),
             timestamp: "2026-01-01T00:00:00Z".to_string(),
         })
+    }
+
+    fn make_notice_event(session_id: &str, text: &str) -> RuntimeEvent {
+        RuntimeEvent::TerminalLine(TerminalLineEvent {
+            id: "n1".to_string(),
+            session_id: session_id.to_string(),
+            execution_id: None,
+            kind: "notice".to_string(),
+            text: text.to_string(),
+            timestamp: "2026-01-01T00:00:00Z".to_string(),
+        })
+    }
+
+    #[test]
+    fn a_notice_after_partial_output_starts_its_own_row() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        model.apply_event(make_line_event("s1", "partial"));
+        model.apply_event(make_notice_event("s1", "[commandui: dropped]\n"));
+        let s = model.active_session().unwrap();
+        assert_eq!(s.terminal_lines, vec!["partial".to_string(), "[commandui: dropped]".to_string()]);
+    }
+
+    #[test]
+    fn esc_followed_by_a_control_keeps_the_control() {
+        let mut model = Model::new();
+        model.add_session("s1".into(), "A".into());
+        model.apply_event(make_line_event("s1", "a\u{1b}\nb\n"));
+        model.apply_event(make_line_event("s1", "\u{1b}\u{1b}[31mred\u{1b}(\nz\n"));
+        let s = model.active_session().unwrap();
+        assert_eq!(
+            s.terminal_lines,
+            vec!["a".to_string(), "b".to_string(), "red".to_string(), "z".to_string()]
+        );
     }
 
     fn make_ready_event(session_id: &str, cwd: &str) -> RuntimeEvent {
