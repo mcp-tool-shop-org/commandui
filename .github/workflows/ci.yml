@@ -4,8 +4,9 @@ name: CI
 # one check-and-test job on ubuntu-latest, 3m09s wall (about 4 billed minutes).
 # A cold-cache run (36922825113) took 12m02s. Each PR commit runs once
 # (pull_request); pushes run only on main.
-# windows-shells (added 2026-10-03) is not measured yet; Windows minutes bill
-# at about 2x Linux. Record its cost here from its first real run.
+# windows-shells, measured on run 37168387421 (2026-10-04): 3m44s wall on
+# windows-latest, about 8 billed minutes at the 2x Windows rate. Most of it
+# is the live shells starting one at a time.
 
 on:
   push:
