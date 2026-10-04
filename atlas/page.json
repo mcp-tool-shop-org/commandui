@@ -93,30 +93,47 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 0,
-      "changed": 15,
+      "added": 21,
+      "changed": 81,
       "moved": 0,
-      "parts": 3,
-      "removed": 0
+      "parts": 11,
+      "removed": 4
     },
     "items": [
       {
+        "kind": "door",
+        "sentence": "CI now also runs apps/desktop/src/app/AppShell.honesty.test.tsx, apps/desktop/src/app/execState.test.ts, apps/desktop/src/components/WelcomeScreen.test.tsx and 7 more.",
+        "subjects": [
+          ".github/workflows/ci.yml",
+          "apps/desktop/src/app/AppShell.honesty.test.tsx",
+          "apps/desktop/src/app/execState.test.ts",
+          "apps/desktop/src/components/WelcomeScreen.test.tsx",
+          "apps/desktop/src/features/persistence/persistenceClient.test.ts",
+          "apps/desktop/src/lib/commandError.test.ts",
+          "apps/desktop/src/lib/displayPath.test.ts",
+          "apps/desktop/src/lib/plannerSource.test.ts",
+          "apps/desktop/src/lib/tauriInvoke.test.ts",
+          "apps/desktop/src/lib/welcomePref.test.ts",
+          "packages/domain/src/workflowPersist.test.ts"
+        ]
+      },
+      {
         "kind": "counts",
-        "sentence": "Nothing structural changed since 2026-10-04; 15 files changed content.",
+        "sentence": "21 files added, 4 removed and 81 changed content, across 11 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "334a5b3d74c9cd3aa3c05bf049819fcdc455368c",
-      "generatedAt": "2026-10-04T08:09:20.836Z"
+      "commit": "042eaae94dd4edb0fcf727f1853715a8e9165baf",
+      "generatedAt": "2026-10-04T15:27:29.067Z"
     },
-    "unchanged": true
+    "unchanged": false
   },
   "changesTogether": [
     {
-      "a": "apps/console/src/input.rs",
+      "a": "apps/console/src/app.rs",
       "b": "apps/console/src/model.rs",
-      "either": 8,
+      "either": 10,
       "partLabels": [
         "console",
         "console"
@@ -126,27 +143,12 @@
         "console"
       ],
       "relation": "inside",
-      "shared": 8
-    },
-    {
-      "a": "apps/console/src/input.rs",
-      "b": "apps/console/src/ui.rs",
-      "either": 8,
-      "partLabels": [
-        "console",
-        "console"
-      ],
-      "parts": [
-        "console",
-        "console"
-      ],
-      "relation": "inside",
-      "shared": 8
+      "shared": 9
     },
     {
       "a": "apps/console/src/model.rs",
       "b": "apps/console/src/ui.rs",
-      "either": 8,
+      "either": 10,
       "partLabels": [
         "console",
         "console"
@@ -156,25 +158,10 @@
         "console"
       ],
       "relation": "inside",
-      "shared": 8
+      "shared": 9
     },
     {
-      "a": "apps/console/src/app.rs",
-      "b": "apps/console/src/input.rs",
-      "either": 9,
-      "partLabels": [
-        "console",
-        "console"
-      ],
-      "parts": [
-        "console",
-        "console"
-      ],
-      "relation": "inside",
-      "shared": 8
-    },
-    {
-      "a": "apps/console/src/app.rs",
+      "a": "apps/console/src/input.rs",
       "b": "apps/console/src/model.rs",
       "either": 9,
       "partLabels": [
@@ -187,16 +174,46 @@
       ],
       "relation": "inside",
       "shared": 8
+    },
+    {
+      "a": "apps/console/src/app.rs",
+      "b": "apps/console/src/ui.rs",
+      "either": 11,
+      "partLabels": [
+        "console",
+        "console"
+      ],
+      "parts": [
+        "console",
+        "console"
+      ],
+      "relation": "inside",
+      "shared": 9
+    },
+    {
+      "a": "crates/runtime-core/src/pty.rs",
+      "b": "crates/runtime-core/src/services/session_service.rs",
+      "either": 15,
+      "partLabels": [
+        "runtime-core",
+        "runtime-core"
+      ],
+      "parts": [
+        "runtime-core",
+        "runtime-core"
+      ],
+      "relation": "inside",
+      "shared": 12
     }
   ],
   "changesTogetherNote": [
     "Confidence is low: fewer than 25 source files reach 10 revisions in the window.",
-    "Window: 180 days; a pair counts from 3 shared commits, since 3 source files reach 10 revisions; the floor rises to 10 when 25 do."
+    "Window: 180 days; a pair counts from 3 shared commits, since 6 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "042eaae94dd4edb0fcf727f1853715a8e9165baf",
+  "commit": "84db89ed1c361290f51649f4369d4198e1c01fb1",
   "defaultBranch": "main",
-  "derived": "16 parts, mostly TypeScript (68 files), Rust (57), CSS (3), Astro (2), JavaScript (2), HTML (1) and PowerShell (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
+  "derived": "16 parts, mostly TypeScript (84 files), Rust (57), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
     {
       "checks": [
@@ -229,12 +246,12 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 53
+          "files": 69
         },
         {
           "boundary": "domain",
           "depth": 0,
-          "files": 9
+          "files": 10
         },
         {
           "boundary": "packaging",
@@ -283,14 +300,23 @@
         "apps/desktop/src-tauri/src/events/tauri_sink.rs",
         "apps/desktop/src-tauri/src/navigation.rs",
         "apps/desktop/src-tauri/src/state.rs",
+        "apps/desktop/src/app/AppShell.honesty.test.tsx",
+        "apps/desktop/src/app/execState.test.ts",
         "apps/desktop/src/app/workflowStepWait.test.ts",
         "apps/desktop/src/components/CommandPalette.test.tsx",
         "apps/desktop/src/components/HistoryDrawer.test.tsx",
         "apps/desktop/src/components/InputComposer.test.tsx",
         "apps/desktop/src/components/PlanPanel.test.tsx",
         "apps/desktop/src/components/TerminalPane.test.tsx",
+        "apps/desktop/src/components/WelcomeScreen.test.tsx",
+        "apps/desktop/src/features/persistence/persistenceClient.test.ts",
+        "apps/desktop/src/lib/commandError.test.ts",
+        "apps/desktop/src/lib/displayPath.test.ts",
         "apps/desktop/src/lib/persistInBackground.test.ts",
+        "apps/desktop/src/lib/plannerSource.test.ts",
         "apps/desktop/src/lib/shortcuts.test.ts",
+        "apps/desktop/src/lib/tauriInvoke.test.ts",
+        "apps/desktop/src/lib/welcomePref.test.ts",
         "crates/runtime-core/src/errors.rs",
         "crates/runtime-core/src/events.rs",
         "crates/runtime-core/src/lib.rs",
@@ -314,10 +340,11 @@
         "crates/runtime-planner/src/validate.rs",
         "packages/api-contract/src/contracts.test.ts",
         "packages/domain/src/memoryDetectors.test.ts",
+        "packages/domain/src/workflowPersist.test.ts",
         "packages/state/src/index.test.ts"
       ],
-      "runsCount": 47,
-      "runsMore": 44,
+      "runsCount": 57,
+      "runsMore": 54,
       "sends": [],
       "stages": [],
       "triggers": [
@@ -358,7 +385,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 66
+          "files": 82
         },
         {
           "boundary": "packaging",
@@ -595,8 +622,9 @@
       ]
     }
   ],
-  "generatedAt": "2026-10-04T15:27:29.067Z",
+  "generatedAt": "2026-10-04T19:59:58.868Z",
   "limits": [
+    "1 import could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository.",
     "2 writes and 3 reads use paths built at run time and are not named here.",
     "2 writes and 1 read go to a path their caller passes, not to this repository.",
     "3 writes go to a temporary directory, not to this repository.",
@@ -643,16 +671,16 @@
   "startReason": "This path follows commandui-desktop (the desktop app people install) from its entry, since CI runs only tests, scripts that import no code here and checks.",
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 46,
+  "testFiles": 56,
   "testedBy": {
-    "api-contract": 2,
+    "api-contract": 7,
     "console": 7,
-    "desktop": 14,
-    "domain": 3,
+    "desktop": 23,
+    "domain": 6,
     "runtime-core": 9,
     "runtime-persistence": 6,
     "runtime-planner": 6,
-    "state": 5,
+    "state": 6,
     "ui": 0
   },
   "testedInside": [
