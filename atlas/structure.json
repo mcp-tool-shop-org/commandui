@@ -1280,190 +1280,190 @@
             {
               "in": "refreshSessionStatuses",
               "kind": "catch",
-              "line": 553
+              "line": 556
             },
             {
               "in": "reconcileSessionStates",
               "kind": "catch",
-              "line": 642
+              "line": 645
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 734
+              "line": 737
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 742
+              "line": 745
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 768
+              "line": 771
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 788
+              "line": 791
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 796
+              "line": 799
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 803
+              "line": 806
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 811
+              "line": 814
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 819
+              "line": 822
             },
             {
               "in": "handleSubmit",
               "kind": "catch",
-              "line": 1496
+              "line": 1505
             },
             {
               "in": "handleSubmit",
               "kind": "throw",
-              "line": 1498
+              "line": 1507
             },
             {
               "in": "handleSubmit",
               "kind": "catch",
-              "line": 1564
+              "line": 1573
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1704
+              "line": 1713
             },
             {
               "in": "handleApprovePlan",
               "kind": "throw",
-              "line": 1714
+              "line": 1723
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1728
+              "line": 1737
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1738
+              "line": 1747
             },
             {
               "in": "handleSaveWorkflow",
               "kind": "catch",
-              "line": 1807
+              "line": 1816
             },
             {
               "in": "handleInterrupt",
               "kind": "catch",
-              "line": 1876
+              "line": 1885
             },
             {
               "in": "handleResync",
               "kind": "catch",
-              "line": 1898
+              "line": 1907
             },
             {
               "in": "handleCreateSession",
               "kind": "catch",
-              "line": 1916
+              "line": 1925
             },
             {
               "in": "handleCloseSession",
               "kind": "catch",
-              "line": 1963
+              "line": 1972
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "catch",
-              "line": 2039
+              "line": 2048
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "throw",
-              "line": 2041
+              "line": 2050
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "catch",
-              "line": 2047
+              "line": 2056
             },
             {
               "in": "handleSaveWorkflowFromHistory",
               "kind": "catch",
-              "line": 2135
+              "line": 2144
             },
             {
               "in": "handleRunWorkflow",
               "kind": "catch",
-              "line": 2323
+              "line": 2332
             },
             {
               "in": "handleRunWorkflow",
               "kind": "throw",
-              "line": 2325
+              "line": 2334
             },
             {
               "in": "handleRunWorkflow",
               "kind": "catch",
-              "line": 2401
+              "line": 2410
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "throw",
-              "line": 2481
+              "line": 2490
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "catch",
-              "line": 2493
+              "line": 2502
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "catch",
-              "line": 2510
+              "line": 2519
             },
             {
               "in": "handleWorkflowEditorConfirm",
               "kind": "catch",
-              "line": 2574
+              "line": 2583
             },
             {
               "in": "handleWorkflowEditorConfirm",
               "kind": "catch",
-              "line": 2587
+              "line": 2596
             },
             {
               "in": "handleDismissSuggestion",
               "kind": "catch",
-              "line": 2601
+              "line": 2610
             },
             {
               "in": "generateSuggestions",
               "kind": "catch",
-              "line": 2671
+              "line": 2680
             },
             {
               "in": "refreshPlannerStatus",
               "kind": "catch",
-              "line": 2782
+              "line": 2791
             }
           ],
-          "hash": "2a7eda34842f0daa8a6ccaeb21591a76771c2eb6c20add8036e59b5d10fdb522",
+          "hash": "9af07562b49d1fd574d30c90985ccb5cf9af24cef4757a7be73bb1e392ecff7b",
           "importOrder": [
             "packages/domain/src/index.ts",
             "packages/api-contract/src/index.ts",
@@ -1481,6 +1481,7 @@
             "apps/desktop/src/components/PlanPanel.tsx",
             "apps/desktop/src/components/PlannerStatusCard.tsx",
             "apps/desktop/src/lib/displaySafe.ts",
+            "apps/desktop/src/lib/layoutWidth.ts",
             "apps/desktop/src/lib/commandResult.ts",
             "apps/desktop/src/components/TerminalPane.tsx",
             "apps/desktop/src/components/ResultLine.tsx",
@@ -1540,6 +1541,7 @@
             "apps/desktop/src/lib/displayPath.ts",
             "apps/desktop/src/lib/displaySafe.ts",
             "apps/desktop/src/lib/fontScale.ts",
+            "apps/desktop/src/lib/layoutWidth.ts",
             "apps/desktop/src/lib/mockBridge.ts",
             "apps/desktop/src/lib/persistInBackground.ts",
             "apps/desktop/src/lib/plannerSource.ts",
@@ -1553,7 +1555,7 @@
           "path": "apps/desktop/src/app/AppShell.tsx"
         },
         {
-          "hash": "97a69292bf981cea24940eeef4d8aab91deba6a09bf4041c65c465fd962a10cd",
+          "hash": "3cc145cc5bedeeb7ddf6a6b036fbada75dc2a23ad961a222afbb6926e29be362",
           "importOrder": [
             "packages/domain/src/index.ts",
             "packages/state/src/index.ts",
@@ -1708,7 +1710,7 @@
           "exports": [
             "HelpDialog"
           ],
-          "hash": "4f807c6acbd5ea4224a5df4254ffc4b8ec61c920c5c25eb0639e58f207768dc2",
+          "hash": "f603b2f337c9a9aeb1f7afe33d41310ba1d2b7254a1821ee82526c43b3e6d828",
           "importsFiles": [
             "apps/desktop/src/lib/useModalDialog.ts"
           ],
@@ -1777,27 +1779,49 @@
           "path": "apps/desktop/src/components/MemoryDrawer.tsx"
         },
         {
+          "hash": "74384eae93466adc10be62166614030c86412e9762bbed198b184294b8ac5a0b",
+          "importOrder": [
+            "packages/domain/src/index.ts",
+            "apps/desktop/src/components/MemorySuggestions.tsx"
+          ],
+          "importsFiles": [
+            "apps/desktop/src/components/MemorySuggestions.tsx",
+            "packages/domain/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/MemorySuggestions.test.tsx",
+          "testFramework": "vitest"
+        },
+        {
           "exports": [
             "MemorySuggestions"
           ],
-          "hash": "3d769b503c6c94737b99e015d8173943c0579ed9f4dc0b5a767f8417e8061c85",
+          "hash": "8578ef7ddf1534e53583a652c46acd891ff0719fbaecd6b9fe024d9a0965e38c",
           "importsFiles": [
             "packages/domain/src/index.ts"
           ],
           "path": "apps/desktop/src/components/MemorySuggestions.tsx"
         },
         {
+          "hash": "0e13f49dca2b4df4fc0ff2b744c44561c99184055b63a889b8327cb3de0fff07",
+          "importsFiles": [
+            "apps/desktop/src/components/OutputView.tsx"
+          ],
+          "path": "apps/desktop/src/components/OutputView.test.tsx",
+          "testFramework": "vitest"
+        },
+        {
           "exports": [
             "OutputView"
           ],
-          "hash": "6534d91e6aa28ab27a17627273afe8a04df8ada6a827331e78861e95997c7207",
+          "hash": "be0f5e9eee9ffcb1450e3c6d5b86498701eedb8cafc5ba23951ddbd11f376b41",
           "importsFiles": [
+            "apps/desktop/src/lib/scrollRegion.ts",
             "apps/desktop/src/lib/useModalDialog.ts"
           ],
           "path": "apps/desktop/src/components/OutputView.tsx"
         },
         {
-          "hash": "eb66475554d8b2b85254bbdd8297c04bc1e2b26e1e0b21adfbd9750d96864cfe",
+          "hash": "4a22fcefa42f547b6b6c8140b6c221a0d042d391c55b0b2836fd34f48aa3bb9b",
           "importsFiles": [
             "apps/desktop/src/components/PlanPanel.tsx"
           ],
@@ -1807,10 +1831,11 @@
         {
           "exports": [
             "PlanPanel",
+            "contextInWords",
             "planCanRun",
             "planNeedsConfirmation"
           ],
-          "hash": "51884dd4839ddd6f8f3bd9247bdb52442dbeb1c4cb3192893a8812f65e0a0c5b",
+          "hash": "9427ae3f6f653037eb7d39cacd03d0a1c1477e235137232584da49f227bdbf21",
           "importOrder": [
             "apps/desktop/src/lib/displayPath.ts",
             "apps/desktop/src/lib/planLanguage.ts",
@@ -1875,9 +1900,10 @@
           "exports": [
             "ResultLine"
           ],
-          "hash": "02772632bfa81ad5e72280e61929942b3901af4023e1c0b726fe0027c3841242",
+          "hash": "f6c52b3bb4f8947272f95aba5fa39919e28cc22b825d57e4b7823c9ac907b0ad",
           "importsFiles": [
-            "apps/desktop/src/lib/commandResult.ts"
+            "apps/desktop/src/lib/commandResult.ts",
+            "apps/desktop/src/lib/scrollRegion.ts"
           ],
           "path": "apps/desktop/src/components/ResultLine.tsx"
         },
@@ -2155,7 +2181,7 @@
           "path": "apps/desktop/src/lib/commandError.ts"
         },
         {
-          "hash": "8e155e616b69b13da791d40699891a8275f1a377c87b3a749367e493d25bf5b8",
+          "hash": "dc5f594a2d94b9780fe8975f56c27de612faea9bbb3b181e96df691d15eb4d53",
           "importsFiles": [
             "apps/desktop/src/lib/commandResult.ts"
           ],
@@ -2172,7 +2198,7 @@
             "looksLikeRequest",
             "resultText"
           ],
-          "hash": "5d686fa1cb1130c4c6c55da0eeb12e43551b1bd5970a13b6307a0cbaeb431642",
+          "hash": "0764672a187292bfff9684739bcd717fc008c017fdef40d9d623131d13b1e36d",
           "path": "apps/desktop/src/lib/commandResult.ts"
         },
         {
@@ -2192,9 +2218,18 @@
           "path": "apps/desktop/src/lib/displayPath.ts"
         },
         {
+          "hash": "bb10c97de3d1087c9c8455e0b0cb1babc79383656524a58a5824da7d8c941697",
+          "importsFiles": [
+            "apps/desktop/src/lib/displaySafe.ts"
+          ],
+          "path": "apps/desktop/src/lib/displaySafe.test.ts",
+          "testFramework": "vitest"
+        },
+        {
           "exports": [
             "commandProblem",
             "describeHiddenChars",
+            "escapeForNote",
             "escapeForTerminal",
             "findHiddenChars",
             "formatCodePoint",
@@ -2202,7 +2237,7 @@
             "markHiddenChars",
             "stripHiddenChars"
           ],
-          "hash": "329e48711139a5f42d931de203ffd94e493bfa5e9c675b4057c1f98079fc2b19",
+          "hash": "29e56da04fbc2b623e096810525ed3e82aab0d42fbfebc331bcc82ab7daddeb0",
           "path": "apps/desktop/src/lib/displaySafe.ts"
         },
         {
@@ -2220,6 +2255,22 @@
           ],
           "hash": "1d12d61896dab81c949b5d377bc2ec4abf29f95ec1f0fba897236301095ceb37",
           "path": "apps/desktop/src/lib/fontScale.ts"
+        },
+        {
+          "hash": "dbb141f9cd189b26c4c6fbdf9c3625d8d69a3ff4568bc34f6a4a38f5c6830185",
+          "importsFiles": [
+            "apps/desktop/src/lib/layoutWidth.ts"
+          ],
+          "path": "apps/desktop/src/lib/layoutWidth.test.ts",
+          "testFramework": "vitest"
+        },
+        {
+          "exports": [
+            "layoutIsNarrow",
+            "layoutWidth"
+          ],
+          "hash": "0a0b13d299f95b62c18041482cf057bbcf167c25cd8899c9ffa818e50e0e5e83",
+          "path": "apps/desktop/src/lib/layoutWidth.ts"
         },
         {
           "exports": [
@@ -2303,6 +2354,13 @@
           ],
           "hash": "3f2c8caad408f6d8f5b3a040c266eb03e86cb3a84c8dd1924cbf6bd970bab2db",
           "path": "apps/desktop/src/lib/runStatusLabel.ts"
+        },
+        {
+          "exports": [
+            "scrollRegionKeyDown"
+          ],
+          "hash": "55102539fd27599f125777e9124885243901c42b9a2e48e50a1cef82bc35887e",
+          "path": "apps/desktop/src/lib/scrollRegion.ts"
         },
         {
           "hash": "c21c7a45ca66b52e81eba4f449289139dff159afcfdb30db58daa5853bfc3b39",
@@ -2433,12 +2491,17 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "0fa9d6c053b8320c8aa7c4e418777bfd561c31154cee25b5e53d9c18e0205784",
+          "hash": "61dd83cadedbb9dbc93d85c9d96b31ff0dff8682b26822dd1685362bf6f5c8f9",
           "path": "apps/desktop/src/styles/globals.css"
         },
         {
           "hash": "c32f3cbe288a66c1ea618051353293b5dcaaacd38687648de49ee4b81699bd2a",
           "path": "apps/desktop/src/styles/nodeBuiltins.d.ts"
+        },
+        {
+          "hash": "b97be9309c29820b30acdc233f79274a4dc161d10087edbbbebac72021b51d3e",
+          "path": "apps/desktop/src/styles/reflow.test.ts",
+          "testFramework": "vitest"
         },
         {
           "hash": "90ec9100c29e008c3d9194acd818e2cfa6dc6e177154bc8e10c5959aa35619ed",
@@ -2485,7 +2548,7 @@
         "cargo test",
         "vitest"
       ],
-      "testedBy": 33,
+      "testedBy": 37,
       "unresolvedNamed": [
         {
           "path": "apps/desktop/src/app/AppShell.honesty.test.tsx",
@@ -2811,7 +2874,7 @@
       "testRunners": [
         "vitest"
       ],
-      "testedBy": 9,
+      "testedBy": 10,
       "unresolvedSites": 0
     },
     {
@@ -4356,7 +4419,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 93
+          "files": 100
         },
         {
           "boundary": "domain",
@@ -4575,6 +4638,20 @@
         {
           "job": "check-and-test",
           "matched": true,
+          "path": "apps/desktop/src/components/MemorySuggestions.test.tsx",
+          "runKind": "executes",
+          "via": "vitest apps/desktop/vite.config.ts"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/desktop/src/components/OutputView.test.tsx",
+          "runKind": "executes",
+          "via": "vitest apps/desktop/vite.config.ts"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
           "path": "apps/desktop/src/components/PlanPanel.test.tsx",
           "runKind": "executes",
           "via": "vitest apps/desktop/vite.config.ts"
@@ -4638,7 +4715,21 @@
         {
           "job": "check-and-test",
           "matched": true,
+          "path": "apps/desktop/src/lib/displaySafe.test.ts",
+          "runKind": "executes",
+          "via": "vitest apps/desktop/vite.config.ts"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
           "path": "apps/desktop/src/lib/fontScale.test.ts",
+          "runKind": "executes",
+          "via": "vitest apps/desktop/vite.config.ts"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/desktop/src/lib/layoutWidth.test.ts",
           "runKind": "executes",
           "via": "vitest apps/desktop/vite.config.ts"
         },
@@ -4695,6 +4786,13 @@
           "job": "check-and-test",
           "matched": true,
           "path": "apps/desktop/src/styles/contrast.test.ts",
+          "runKind": "executes",
+          "via": "vitest apps/desktop/vite.config.ts"
+        },
+        {
+          "job": "check-and-test",
+          "matched": true,
+          "path": "apps/desktop/src/styles/reflow.test.ts",
           "runKind": "executes",
           "via": "vitest apps/desktop/vite.config.ts"
         },
@@ -4983,7 +5081,7 @@
           "runKind": "executes"
         }
       ],
-      "runsCount": 74,
+      "runsCount": 79,
       "secrets": [],
       "sends": {
         "deploysPages": false,
@@ -5006,7 +5104,7 @@
         {
           "config": "apps/desktop/vite.config.ts",
           "dir": "apps/desktop",
-          "files": 28,
+          "files": 33,
           "job": "check-and-test",
           "runner": "vitest",
           "step": "pnpm test",
@@ -5393,7 +5491,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 106
+          "files": 113
         },
         {
           "boundary": "packaging",
@@ -5735,8 +5833,8 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "c0a587bd3606644802142595fe97ceeab72804e0",
-    "tracked": 428
+    "commit": "f9a0f0759785568b2640746ae4193e2d0d5b64fb",
+    "tracked": 435
   },
   "landings": [
     {
@@ -5896,6 +5994,12 @@
       "readers": [
         {
           "by": "apps/desktop/src/styles/contrast.test.ts",
+          "call": "readFileSync",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "apps/desktop/src/styles/reflow.test.ts",
           "call": "readFileSync",
           "confidence": "ast",
           "fromTests": true
@@ -6087,7 +6191,7 @@
   "overlaps": [],
   "submodules": [],
   "symlinks": [],
-  "testFiles": 68,
+  "testFiles": 73,
   "unassigned": [],
   "workspaces": [
     "apps/desktop",
