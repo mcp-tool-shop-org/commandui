@@ -93,64 +93,36 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 4,
-      "changed": 22,
+      "added": 5,
+      "changed": 21,
       "moved": 0,
-      "parts": 2,
+      "parts": 7,
       "removed": 0
     },
     "items": [
       {
         "kind": "door",
-        "sentence": "CI now also runs apps/desktop/src/app/a11y.test.tsx.",
+        "sentence": "CI now also runs apps/desktop/src/components/PlannerStatusCard.test.tsx, apps/desktop/src/lib/planLanguage.test.ts and crates/runtime-planner/src/status.rs.",
         "subjects": [
           ".github/workflows/ci.yml",
-          "apps/desktop/src/app/a11y.test.tsx"
+          "apps/desktop/src/components/PlannerStatusCard.test.tsx",
+          "apps/desktop/src/lib/planLanguage.test.ts",
+          "crates/runtime-planner/src/status.rs"
         ]
       },
       {
         "kind": "counts",
-        "sentence": "4 files added and 22 changed content, across 2 parts.",
+        "sentence": "5 files added and 21 changed content, across 7 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "2471a47de0314efd7f39bc0418e1ae00ec667d5a",
-      "generatedAt": "2026-10-04T20:30:22.201Z"
+      "commit": "7976cc3a70276fa3349ccfcc90220903ab3773d0",
+      "generatedAt": "2026-10-04T20:53:13.604Z"
     },
     "unchanged": false
   },
   "changesTogether": [
-    {
-      "a": "apps/console/src/app.rs",
-      "b": "apps/console/src/model.rs",
-      "either": 11,
-      "partLabels": [
-        "console",
-        "console"
-      ],
-      "parts": [
-        "console",
-        "console"
-      ],
-      "relation": "inside",
-      "shared": 9
-    },
-    {
-      "a": "apps/console/src/app.rs",
-      "b": "apps/console/src/ui.rs",
-      "either": 11,
-      "partLabels": [
-        "console",
-        "console"
-      ],
-      "parts": [
-        "console",
-        "console"
-      ],
-      "relation": "inside",
-      "shared": 9
-    },
     {
       "a": "apps/console/src/model.rs",
       "b": "apps/console/src/ui.rs",
@@ -167,8 +139,8 @@
       "shared": 9
     },
     {
-      "a": "apps/console/src/app.rs",
-      "b": "apps/console/src/input.rs",
+      "a": "apps/console/src/input.rs",
+      "b": "apps/console/src/model.rs",
       "either": 10,
       "partLabels": [
         "console",
@@ -183,7 +155,7 @@
     },
     {
       "a": "apps/console/src/input.rs",
-      "b": "apps/console/src/model.rs",
+      "b": "apps/console/src/ui.rs",
       "either": 10,
       "partLabels": [
         "console",
@@ -195,6 +167,36 @@
       ],
       "relation": "inside",
       "shared": 8
+    },
+    {
+      "a": "crates/runtime-core/src/services/session_service.rs",
+      "b": "crates/runtime-core/src/services/terminal_service.rs",
+      "either": 14,
+      "partLabels": [
+        "runtime-core",
+        "runtime-core"
+      ],
+      "parts": [
+        "runtime-core",
+        "runtime-core"
+      ],
+      "relation": "inside",
+      "shared": 11
+    },
+    {
+      "a": "crates/runtime-core/src/pty.rs",
+      "b": "crates/runtime-core/src/services/session_service.rs",
+      "either": 16,
+      "partLabels": [
+        "runtime-core",
+        "runtime-core"
+      ],
+      "parts": [
+        "runtime-core",
+        "runtime-core"
+      ],
+      "relation": "inside",
+      "shared": 12
     }
   ],
   "changesTogetherNote": [
@@ -202,9 +204,9 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 7 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "7976cc3a70276fa3349ccfcc90220903ab3773d0",
+  "commit": "435695b639f4904fee452cbf221b8f4a59157841",
   "defaultBranch": "main",
-  "derived": "16 parts, mostly TypeScript (93 files), Rust (57), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
+  "derived": "16 parts, mostly TypeScript (97 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
     {
       "checks": [
@@ -237,7 +239,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 78
+          "files": 82
         },
         {
           "boundary": "domain",
@@ -262,7 +264,7 @@
         {
           "boundary": "runtime-planner",
           "depth": 0,
-          "files": 7
+          "files": 8
         },
         {
           "boundary": "state",
@@ -300,6 +302,7 @@
         "apps/desktop/src/components/HistoryDrawer.test.tsx",
         "apps/desktop/src/components/InputComposer.test.tsx",
         "apps/desktop/src/components/PlanPanel.test.tsx",
+        "apps/desktop/src/components/PlannerStatusCard.test.tsx",
         "apps/desktop/src/components/ResultLine.test.tsx",
         "apps/desktop/src/components/TerminalPane.test.tsx",
         "apps/desktop/src/components/WelcomeScreen.test.tsx",
@@ -308,6 +311,7 @@
         "apps/desktop/src/lib/commandResult.test.ts",
         "apps/desktop/src/lib/displayPath.test.ts",
         "apps/desktop/src/lib/persistInBackground.test.ts",
+        "apps/desktop/src/lib/planLanguage.test.ts",
         "apps/desktop/src/lib/plannerSource.test.ts",
         "apps/desktop/src/lib/shortcuts.test.ts",
         "apps/desktop/src/lib/tauriInvoke.test.ts",
@@ -332,14 +336,15 @@
         "crates/runtime-planner/src/mock.rs",
         "crates/runtime-planner/src/parity.rs",
         "crates/runtime-planner/src/prompt.rs",
+        "crates/runtime-planner/src/status.rs",
         "crates/runtime-planner/src/validate.rs",
         "packages/api-contract/src/contracts.test.ts",
         "packages/domain/src/memoryDetectors.test.ts",
         "packages/domain/src/workflowPersist.test.ts",
         "packages/state/src/index.test.ts"
       ],
-      "runsCount": 61,
-      "runsMore": 58,
+      "runsCount": 64,
+      "runsMore": 61,
       "sends": [],
       "stages": [],
       "triggers": [
@@ -380,7 +385,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 91
+          "files": 95
         },
         {
           "boundary": "packaging",
@@ -415,7 +420,7 @@
         {
           "boundary": "runtime-planner",
           "depth": 2,
-          "files": 7
+          "files": 8
         }
       ],
       "runs": [
@@ -497,7 +502,7 @@
         {
           "boundary": "runtime-planner",
           "depth": 2,
-          "files": 7
+          "files": 8
         }
       ],
       "runs": [
@@ -534,7 +539,7 @@
         {
           "boundary": "runtime-planner",
           "depth": 2,
-          "files": 7
+          "files": 8
         }
       ],
       "runs": [
@@ -617,7 +622,7 @@
       ]
     }
   ],
-  "generatedAt": "2026-10-04T20:53:13.604Z",
+  "generatedAt": "2026-10-04T21:14:32.349Z",
   "limits": [
     "1 import could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository.",
     "2 writes and 3 reads use paths built at run time and are not named here.",
@@ -666,15 +671,15 @@
   "startReason": "This path follows commandui-desktop (the desktop app people install) from its entry, since CI runs only tests, scripts that import no code here and checks.",
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 60,
+  "testFiles": 63,
   "testedBy": {
-    "api-contract": 9,
+    "api-contract": 10,
     "console": 7,
-    "desktop": 27,
+    "desktop": 29,
     "domain": 8,
     "runtime-core": 9,
     "runtime-persistence": 6,
-    "runtime-planner": 6,
+    "runtime-planner": 7,
     "state": 8,
     "ui": 0
   },

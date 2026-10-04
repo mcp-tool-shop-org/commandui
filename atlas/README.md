@@ -1,19 +1,19 @@
 # commandui: how it works
 
-Mapped at 2026-10-04 from commit 7976cc3 by Atlas 1.24.0.
+Mapped at 2026-10-04 from commit 435695b by Atlas 1.24.0.
 
 ## What this is
 
-16 parts, mostly TypeScript (93 files), Rust (57), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).
+16 parts, mostly TypeScript (97 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).
 
-## What changed since 2026-10-04 (2471a47)
+## What changed since 2026-10-04 (7976cc3)
 
-- CI now also runs apps/desktop/src/app/a11y.test.tsx.
-- 4 files added and 22 changed content, across 2 parts.
+- CI now also runs apps/desktop/src/components/PlannerStatusCard.test.tsx, apps/desktop/src/lib/planLanguage.test.ts and crates/runtime-planner/src/status.rs.
+- 5 files added and 21 changed content, across 7 parts.
 
 ## What comes in
 
-1. **CI.** On a pull request; on a push to main touching 18 paths; or by hand. Runs packaging/check-release-version.mjs, apps/console/src/app.rs, apps/console/src/event_sink.rs and 58 more; checks apps/desktop/src/, packages/api-contract/src/, packages/domain/src/ and 4 more.
+1. **CI.** On a pull request; on a push to main touching 18 paths; or by hand. Runs packaging/check-release-version.mjs, apps/console/src/app.rs, apps/console/src/event_sink.rs and 61 more; checks apps/desktop/src/, packages/api-contract/src/, packages/domain/src/ and 4 more.
 2. **Release Desktop.** When a release is published; or by hand. Runs packaging/pack-msix.ps1, apps/desktop/src-tauri/build.rs, apps/desktop/src/ and 1 more; builds apps/desktop/src-tauri/src/main.rs; checks apps/desktop/src-tauri/src/lib.rs. On a release event, it also runs packaging/check-release-version.mjs.
 3. **Deploy site to GitHub Pages.** On a pull request touching 2 paths; on a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
 4. **commandui-desktop** (the desktop app people install). Runs apps/desktop/src-tauri/src/main.rs.
@@ -21,7 +21,7 @@ Mapped at 2026-10-04 from commit 7976cc3 by Atlas 1.24.0.
 
 ## What happens through CI
 
-1. The workflow runs packaging/check-release-version.mjs in packaging, packages/api-contract/src/contracts.test.ts in api-contract, 7 files in console, 28 files in desktop, packages/domain/src/memoryDetectors.test.ts and packages/domain/src/workflowPersist.test.ts in domain, and 22 files in 4 more parts; it checks packages/api-contract/src/ in api-contract, apps/desktop/src/ in desktop, packages/domain/src/ in domain, packages/state/src/ in state and packages/ui/src/ in ui.
+1. The workflow runs packaging/check-release-version.mjs in packaging, packages/api-contract/src/contracts.test.ts in api-contract, 7 files in console, 30 files in desktop, packages/domain/src/memoryDetectors.test.ts and packages/domain/src/workflowPersist.test.ts in domain, and 23 files in 4 more parts; it checks packages/api-contract/src/ in api-contract, apps/desktop/src/ in desktop, packages/domain/src/ in domain, packages/state/src/ in state and packages/ui/src/ in ui.
 2. It writes to apps/desktop/src-tauri/gen/schemas/.
 
 ## Who reads the results
@@ -51,11 +51,11 @@ Mapped at 2026-10-04 from commit 7976cc3 by Atlas 1.24.0.
 
 ## What tends to change together
 
-- **apps/console/src/app.rs** and **apps/console/src/model.rs** changed together in 9 of 11 commits, inside the console part.
-- **apps/console/src/app.rs** and **apps/console/src/ui.rs** changed together in 9 of 11 commits, inside the console part.
 - **apps/console/src/model.rs** and **apps/console/src/ui.rs** changed together in 9 of 11 commits, inside the console part.
-- **apps/console/src/app.rs** and **apps/console/src/input.rs** changed together in 8 of 10 commits, inside the console part.
 - **apps/console/src/input.rs** and **apps/console/src/model.rs** changed together in 8 of 10 commits, inside the console part.
+- **apps/console/src/input.rs** and **apps/console/src/ui.rs** changed together in 8 of 10 commits, inside the console part.
+- **crates/runtime-core/src/services/session_service.rs** and **crates/runtime-core/src/services/terminal_service.rs** changed together in 11 of 14 commits, inside the runtime-core part.
+- **crates/runtime-core/src/pty.rs** and **crates/runtime-core/src/services/session_service.rs** changed together in 12 of 16 commits, inside the runtime-core part.
 
 Confidence is low: fewer than 25 source files reach 10 revisions in the window.
 
