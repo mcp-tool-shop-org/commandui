@@ -1,22 +1,14 @@
 # commandui: how it works
 
-Mapped at 2026-10-04 from commit 7f9a89e by Atlas 1.24.0.
+Mapped at 2026-10-04 from commit 334a5b3 by Atlas 1.24.0.
 
 ## What this is
 
 16 parts, mostly TypeScript (68 files), Rust (57), CSS (3), Astro (2), JavaScript (2), HTML (1) and PowerShell (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).
 
-## What changed since 2026-10-03 (4ce0e20)
+## What changed since 2026-10-04 (7f9a89e)
 
-- CI's push trigger now also names `**/tsconfig*.json`, `.cargo/**`, `main`, `packaging/**`, `pnpm-workspace.yaml`, `rust-toolchain*` and `tsconfig.base.json`.
-- CI now also runs apps/console/src/app.rs, apps/console/src/event_sink.rs, apps/console/src/stderr_guard.rs and 19 more.
-- CI now also checks apps/desktop/src/, packages/api-contract/src/, packages/domain/src/ and 2 more.
-- And 3 more changes to doors.
-- Cargo.toml is now read by packaging/check-release-version.mjs.
-- apps/desktop/package.json is now read by packaging/check-release-version.mjs.
-- apps/desktop/src-tauri/Cargo.toml is now read by packaging/check-release-version.mjs.
-- And 7 more new writers and readers of places.
-- 46 files added and 85 changed content, across 13 parts.
+Nothing structural changed since 2026-10-04; 3 files added, 3 removed and 2 changed content.
 
 ## What comes in
 
@@ -92,7 +84,7 @@ No two parts export a helper that looks alike.
 
 ## Hand-authored
 
-People write .claude/, .github/, docs/, packaging/, the repository root, site/ and winget/; 1 write with a path built at run time may land here.
+People write .claude/, .github/, docs/, packaging/, the repository root, site/ and winget/; 2 writes with paths built at run time may land here.
 
 ## Where to start
 
@@ -102,10 +94,9 @@ Read those in order to follow one run of commandui-desktop end to end. This path
 
 ## What this map cannot see
 
-- 1 write and 3 reads use paths built at run time and are not named here.
+- 2 writes and 3 reads use paths built at run time and are not named here.
 - 2 writes and 1 read go to a path their caller passes, not to this repository.
 - 3 writes go to a temporary directory, not to this repository.
-- 1 write goes to the home directory, not to this repository.
 - Statistics confidence is low: fewer than 25 source files reach 10 revisions in the window.
 
 Regenerate with `npx --yes @dogfood-lab/atlas map`.

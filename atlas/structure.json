@@ -691,7 +691,7 @@
       "dynamicReads": 2,
       "dynamicSpawns": 0,
       "dynamicSpawnsInTests": 0,
-      "dynamicWrites": 0,
+      "dynamicWrites": 1,
       "entryPoints": [
         "apps/desktop/src-tauri/src/lib.rs",
         "apps/desktop/src-tauri/src/main.rs"
@@ -1104,7 +1104,7 @@
         {
           "entry": "main",
           "entryRule": 1,
-          "hash": "819aba5ac44bb5c3b3f5681de1c81ed759fce11a48726eb98c9b71ce54359f74",
+          "hash": "b781f1d2d507e48c1b6d1623097229ae095cea60599452193f078456e5ba7433",
           "importsFiles": [
             "apps/desktop/src-tauri/src/commands/history.rs",
             "apps/desktop/src-tauri/src/commands/memory.rs",
@@ -1148,14 +1148,14 @@
                   }
                 },
                 {
-                  "line": 34,
+                  "line": 36,
                   "name": "open_database",
                   "target": {
                     "file": "apps/desktop/src-tauri/src/db/sqlite.rs"
                   }
                 },
                 {
-                  "line": 36,
+                  "line": 39,
                   "name": "init_schema",
                   "target": {
                     "file": "apps/desktop/src-tauri/src/db/schema.rs"
@@ -1930,20 +1930,13 @@
         {
           "reads": 0,
           "where": [
-            "home"
-          ],
-          "writes": 1
-        },
-        {
-          "reads": 0,
-          "where": [
             "temp"
           ],
           "writes": 1
         }
       ],
       "outsideReads": 1,
-      "outsideWrites": 4,
+      "outsideWrites": 3,
       "role": "code",
       "testRunners": [
         "cargo test",
@@ -2848,7 +2841,7 @@
           "testsInside": true
         },
         {
-          "hash": "11227941a24168850e4d87cccf62dc01fce0688994c4289123d0e66918f5ff6c",
+          "hash": "c9e3294675c83f58adc16fda7581fa0f78614bed7d6a2babb416b2de49ae3ee7",
           "importOrder": [
             "crates/runtime-core/src/events.rs",
             "crates/runtime-core/src/services/session_service.rs",
@@ -3564,16 +3557,16 @@
       "externals": 0,
       "files": [
         {
-          "hash": "3aab639d338b3cea55fe660d077bc94fa950812727c39a411f56387f6c1536ac",
-          "path": "winget/manifests/m/mcp-tool-shop/CommandUI/1.0.0/mcp-tool-shop.CommandUI.installer.yaml"
+          "hash": "b0256b474454b9f2bcb1c9b91a80f36d107e240fc3ced6b7a54df2b2a2a773b0",
+          "path": "winget/manifests/m/mcp-tool-shop/CommandUI/1.0.2/mcp-tool-shop.CommandUI.installer.yaml"
         },
         {
-          "hash": "3637ed2306254bedd7658a13264d6207f118933f95ca4cfd3bb60e163fbc739b",
-          "path": "winget/manifests/m/mcp-tool-shop/CommandUI/1.0.0/mcp-tool-shop.CommandUI.locale.en-US.yaml"
+          "hash": "7d55531eb54f77e2869fd4872a5ce837648a5605cb1ac7d0587a34defb05725d",
+          "path": "winget/manifests/m/mcp-tool-shop/CommandUI/1.0.2/mcp-tool-shop.CommandUI.locale.en-US.yaml"
         },
         {
-          "hash": "d835305cc20363f9eb9c976c54114cb9e3fa5e4fba44e9a3c681d046a48078b3",
-          "path": "winget/manifests/m/mcp-tool-shop/CommandUI/1.0.0/mcp-tool-shop.CommandUI.yaml"
+          "hash": "d570c00731ae4f7026025f170120e7028d7b5bbb1233b02351ccbfdba3442180",
+          "path": "winget/manifests/m/mcp-tool-shop/CommandUI/1.0.2/mcp-tool-shop.CommandUI.yaml"
         }
       ],
       "globs": [
@@ -4960,7 +4953,7 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "7f9a89e7d114a54e07f5c3d81da430fda3c34ef4",
+    "commit": "334a5b3d74c9cd3aa3c05bf049819fcdc455368c",
     "tracked": 385
   },
   "landings": [

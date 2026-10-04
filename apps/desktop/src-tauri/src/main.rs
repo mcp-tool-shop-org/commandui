@@ -27,14 +27,17 @@ fn main() {
             let app_data = app
                 .path()
                 .app_data_dir()
-                .expect("failed to resolve app data dir");
-            std::fs::create_dir_all(&app_data).ok();
+                .map_err(|e| format!("Failed to resolve app data directory: {e}"))?;
+            std::fs::create_dir_all(&app_data).map_err(|e| {
+                format!("Failed to create app data directory at {}: {e}", app_data.display())
+            })?;
 
             let db_path = app_data.join("commandui.sqlite");
-            let conn = commandui_desktop::db::sqlite::open_database(&db_path)
-                .expect("failed to open SQLite database");
+            let conn = commandui_desktop::db::sqlite::open_database(&db_path).map_err(|e| {
+                format!("Failed to open database at {}: {e}", db_path.display())
+            })?;
             commandui_desktop::db::schema::init_schema(&conn)
-                .expect("failed to initialize database schema");
+                .map_err(|e| format!("Failed to initialize database schema: {e}"))?;
 
             {
                 let mut path = state.db_path.lock().unwrap();

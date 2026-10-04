@@ -173,7 +173,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "runtime-core",
-      "qualifyingSourceCommits": 15,
+      "qualifyingSourceCommits": 16,
       "rebaseline": null
     },
     {
@@ -1256,28 +1256,28 @@
         "path": "apps/desktop/vite.config.ts"
       },
       {
-        "commits": 2,
-        "lines": 150,
+        "commits": 3,
+        "lines": 207,
         "path": "atlas/README.md"
       },
       {
-        "commits": 2,
-        "lines": 66,
+        "commits": 3,
+        "lines": 68,
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 2,
-        "lines": 796,
+        "commits": 3,
+        "lines": 1078,
         "path": "atlas/page.json"
       },
       {
-        "commits": 2,
-        "lines": 2123,
+        "commits": 3,
+        "lines": 2868,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 2,
-        "lines": 4306,
+        "commits": 3,
+        "lines": 6065,
         "path": "atlas/structure.json"
       },
       {
@@ -1331,8 +1331,8 @@
         "path": "crates/runtime-core/src/session.rs"
       },
       {
-        "commits": 6,
-        "lines": 1477,
+        "commits": 7,
+        "lines": 1488,
         "path": "crates/runtime-core/tests/live_shell.rs"
       },
       {
@@ -2246,9 +2246,9 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-10-04T06:57:30.858Z",
+  "generatedAt": "2026-10-04T08:09:20.836Z",
   "generatedFrom": {
-    "commit": "7f9a89e7d114a54e07f5c3d81da430fda3c34ef4"
+    "commit": "334a5b3d74c9cd3aa3c05bf049819fcdc455368c"
   },
   "pairs": [
     {
@@ -2381,16 +2381,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-10-04T02:06:09-04:00",
+    "headDate": "2026-10-04T03:22:39-04:00",
     "inScopeFiles": 390,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 57,
+    "qualifyingCommits": 58,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-07T06:06:09.000Z",
+    "since": "2026-04-07T07:22:39.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

@@ -93,106 +93,24 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 46,
-      "changed": 85,
+      "added": 3,
+      "changed": 2,
       "moved": 0,
-      "parts": 13,
-      "removed": 0
+      "parts": 3,
+      "removed": 3
     },
     "items": [
       {
-        "kind": "door",
-        "sentence": "CI's push trigger now also names `**/tsconfig*.json`, `.cargo/**`, `main`, `packaging/**`, `pnpm-workspace.yaml`, `rust-toolchain*` and `tsconfig.base.json`.",
-        "subjects": [
-          ".github/workflows/ci.yml"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "CI now also runs apps/console/src/app.rs, apps/console/src/event_sink.rs, apps/console/src/stderr_guard.rs and 19 more.",
-        "subjects": [
-          ".github/workflows/ci.yml",
-          "apps/console/src/app.rs",
-          "apps/console/src/event_sink.rs",
-          "apps/console/src/stderr_guard.rs",
-          "apps/desktop/src-tauri/src/commands/ipc_tests.rs",
-          "apps/desktop/src-tauri/src/commands/terminal.rs",
-          "apps/desktop/src-tauri/src/events/tauri_sink.rs",
-          "apps/desktop/src-tauri/src/navigation.rs",
-          "apps/desktop/src-tauri/src/state.rs",
-          "apps/desktop/src/app/workflowStepWait.test.ts",
-          "apps/desktop/src/components/CommandPalette.test.tsx",
-          "apps/desktop/src/components/HistoryDrawer.test.tsx",
-          "apps/desktop/src/components/TerminalPane.test.tsx",
-          "apps/desktop/src/lib/persistInBackground.test.ts",
-          "crates/runtime-core/src/errors.rs",
-          "crates/runtime-core/src/pty.rs",
-          "crates/runtime-core/tests/",
-          "crates/runtime-persistence/src/db.rs",
-          "crates/runtime-persistence/src/history.rs",
-          "crates/runtime-persistence/src/memory.rs",
-          "crates/runtime-persistence/src/settings.rs",
-          "crates/runtime-persistence/src/workflow.rs",
-          "packaging/check-release-version.mjs"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "CI now also checks apps/desktop/src/, packages/api-contract/src/, packages/domain/src/ and 2 more.",
-        "subjects": [
-          ".github/workflows/ci.yml",
-          "apps/desktop/src/",
-          "packages/api-contract/src/",
-          "packages/domain/src/",
-          "packages/state/src/",
-          "packages/ui/src/"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "And 3 more changes to doors.",
-        "subjects": []
-      },
-      {
-        "kind": "landing",
-        "sentence": "Cargo.toml is now read by packaging/check-release-version.mjs.",
-        "subjects": [
-          "Cargo.toml",
-          "packaging/check-release-version.mjs"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "apps/desktop/package.json is now read by packaging/check-release-version.mjs.",
-        "subjects": [
-          "apps/desktop/package.json",
-          "packaging/check-release-version.mjs"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "apps/desktop/src-tauri/Cargo.toml is now read by packaging/check-release-version.mjs.",
-        "subjects": [
-          "apps/desktop/src-tauri/Cargo.toml",
-          "packaging/check-release-version.mjs"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "And 7 more new writers and readers of places.",
-        "subjects": []
-      },
-      {
         "kind": "counts",
-        "sentence": "46 files added and 85 changed content, across 13 parts.",
+        "sentence": "Nothing structural changed since 2026-10-04; 3 files added, 3 removed and 2 changed content.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "4ce0e200efba303011b5072252c335a418e97b8a",
-      "generatedAt": "2026-10-03T17:55:57.745Z"
+      "commit": "7f9a89e7d114a54e07f5c3d81da430fda3c34ef4",
+      "generatedAt": "2026-10-04T06:57:30.858Z"
     },
-    "unchanged": false
+    "unchanged": true
   },
   "changesTogether": [
     {
@@ -276,7 +194,7 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 3 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "7f9a89e7d114a54e07f5c3d81da430fda3c34ef4",
+  "commit": "334a5b3d74c9cd3aa3c05bf049819fcdc455368c",
   "defaultBranch": "main",
   "derived": "16 parts, mostly TypeScript (68 files), Rust (57), CSS (3), Astro (2), JavaScript (2), HTML (1) and PowerShell (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
@@ -677,12 +595,11 @@
       ]
     }
   ],
-  "generatedAt": "2026-10-04T06:57:30.858Z",
+  "generatedAt": "2026-10-04T08:09:20.836Z",
   "limits": [
-    "1 write and 3 reads use paths built at run time and are not named here.",
+    "2 writes and 3 reads use paths built at run time and are not named here.",
     "2 writes and 1 read go to a path their caller passes, not to this repository.",
     "3 writes go to a temporary directory, not to this repository.",
-    "1 write goes to the home directory, not to this repository.",
     "Statistics confidence is low: fewer than 25 source files reach 10 revisions in the window."
   ],
   "mainDoor": ".github/workflows/ci.yml",
@@ -743,7 +660,7 @@
     "runtime-persistence",
     "runtime-planner"
   ],
-  "unnamedWrites": 1,
+  "unnamedWrites": 2,
   "unread": [
     {
       "place": "apps/desktop/src-tauri/gen/schemas/",
