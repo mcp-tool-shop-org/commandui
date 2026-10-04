@@ -260,7 +260,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "0cc129a9e5f503da536ac4d8ee100be0f97f11f0aaae2025e3fd06451866531a",
+          "hash": "436a64ef4a96f140e9086d9611b75b4198e60b99b5f2a96f565f41ef46ead5ea",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -699,12 +699,20 @@
       "externals": 0,
       "files": [
         {
+          "hash": "b4b6a0b9368e3157c185e669b38184172ada9f660ff50784005a164f9ae4bc13",
+          "path": "apps/desktop/e2e/large-text.browser.ts"
+        },
+        {
           "hash": "8aa81188a73f4d3fe439c487f77527055838327fc326be493ddd9ea86e423089",
           "path": "apps/desktop/index.html"
         },
         {
-          "hash": "170680360e871be04e934354b3e71adc0f45647e135a4e15fcfe93d8cd43ed92",
+          "hash": "d45734a0bc7f1d1ba2059576269c997dc58ca55bfbe94bbe294be7d8d462fb1b",
           "path": "apps/desktop/package.json"
+        },
+        {
+          "hash": "e9fa39225e8c87ef022203227a24b62d8d550a38181f875ab8a2594358024b07",
+          "path": "apps/desktop/playwright.config.ts"
         },
         {
           "hash": "3e8f864c0c5b17b9450ce1360eb41b0f03cff6634a857ac841c6eafac207f20e",
@@ -2269,7 +2277,7 @@
             "layoutIsNarrow",
             "layoutWidth"
           ],
-          "hash": "0a0b13d299f95b62c18041482cf057bbcf167c25cd8899c9ffa818e50e0e5e83",
+          "hash": "b57e26544b500d385757103d92c7e08d3cf13a930692e20f21490501c9bcc954",
           "path": "apps/desktop/src/lib/layoutWidth.ts"
         },
         {
@@ -2483,7 +2491,7 @@
           "path": "apps/desktop/src/main.tsx"
         },
         {
-          "hash": "b46aa04646af11b5c745b34c201969c1f3ae30576fd10b33765868c87500348f",
+          "hash": "802946c2632c8e2e9eedd88057c566108bcddc5fcd3461935a773bc8d44d06e4",
           "importsFiles": [
             "apps/desktop/src/lib/terminalTheme.ts"
           ],
@@ -2491,7 +2499,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "61dd83cadedbb9dbc93d85c9d96b31ff0dff8682b26822dd1685362bf6f5c8f9",
+          "hash": "8cb29d362e41dbb55505a3e212beb841ef93b1a4f6b9e696d25652cc10fe31ba",
           "path": "apps/desktop/src/styles/globals.css"
         },
         {
@@ -2512,7 +2520,7 @@
           "path": "apps/desktop/tsconfig.json"
         },
         {
-          "hash": "efc34bfccd6cb4f83bd488fc25b78b0c82b4bc2ef749e814444fd56260ef4e73",
+          "hash": "f11937ece1ae2c85d31f7d5c072f46657a7a3e92de0a5a4f8fa933b9e8402678",
           "path": "apps/desktop/vite.config.ts"
         }
       ],
@@ -2800,7 +2808,7 @@
           "path": "packages/domain/src/memory.ts"
         },
         {
-          "hash": "ca57bb1f26cff3d0e4d83c7145e82492362c36a0683991abdc7c2fd1b022ef79",
+          "hash": "15ba304f31f1ea3ee3c1b655e4d28bae8087724a241b77d445c576ac36e0f095",
           "importsFiles": [
             "packages/domain/src/history.ts",
             "packages/domain/src/memory.ts",
@@ -2817,7 +2825,7 @@
             "normalizeCommand",
             "runDetectors"
           ],
-          "hash": "1b26ac31e1babae5e22a4c79d03276dc4d6defc88ff7e5f4c07b1c9060484f17",
+          "hash": "86d48c74887143177e8638e0a05d534a8c85388d2dc15a2f4fbde1b5e5a18a2a",
           "importsFiles": [
             "packages/domain/src/history.ts",
             "packages/domain/src/memory.ts"
@@ -3082,7 +3090,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "c2b1103e7238a110218d2426ced0448449aacdf6742f151ec2a57655a7033643",
+          "hash": "b990b11c68ab8d9c75b65ac9290079ce470f77e0725824b5a3b3e717851607fa",
           "path": ".gitignore"
         },
         {
@@ -3154,7 +3162,7 @@
           "path": "package.json"
         },
         {
-          "hash": "4bd6ab1526b060bad2567fb39e817f01b573b496814fb0fdc284b934fb62b0f5",
+          "hash": "6bffbabdacd7349d4afb536f47a8bde6fa94f070a166476dfa7533bfd1965cc3",
           "path": "pnpm-lock.yaml"
         },
         {
@@ -4265,7 +4273,7 @@
   ],
   "doors": [
     {
-      "checksCount": 5,
+      "checksCount": 4,
       "commands": [
         {
           "dir": "",
@@ -4330,6 +4338,14 @@
             "pnpm"
           ],
           "step": "pnpm test"
+        },
+        {
+          "dir": "apps/desktop",
+          "job": "check-and-test",
+          "programs": [
+            "pnpm"
+          ],
+          "step": "Large-text layout in Chromium"
         },
         {
           "dir": "",
@@ -4419,7 +4435,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 100
+          "files": 101
         },
         {
           "boundary": "domain",
@@ -4562,239 +4578,15 @@
           "job": "check-and-test",
           "matched": true,
           "path": "apps/desktop/src/",
-          "runKind": "checks",
+          "runKind": "executes",
           "via": "tsc apps/desktop/tsconfig.json"
         },
         {
           "job": "check-and-test",
           "matched": true,
-          "path": "apps/desktop/src/app/AppShell.honesty.test.tsx",
+          "path": "apps/desktop/vite.config.ts",
           "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/app/AppShell.result.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/app/a11y.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/app/bannedWords.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/app/execState.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/app/workflowMaking.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/app/workflowStepWait.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/components/CommandPalette.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/components/HistoryDrawer.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/components/InputComposer.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/components/MemorySuggestions.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/components/OutputView.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/components/PlanPanel.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/components/PlannerStatusCard.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/components/ResultLine.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/components/TerminalPane.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/components/WelcomeScreen.test.tsx",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/features/persistence/persistenceClient.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/commandError.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/commandResult.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/displayPath.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/displaySafe.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/fontScale.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/layoutWidth.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/persistInBackground.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/planLanguage.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/plannerSource.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/relativeTime.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/shortcuts.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/tauriInvoke.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/lib/welcomePref.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/styles/contrast.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/styles/reflow.test.ts",
-          "runKind": "executes",
-          "via": "vitest apps/desktop/vite.config.ts"
+          "via": "vite build"
         },
         {
           "job": "check-and-test",
@@ -5081,7 +4873,7 @@
           "runKind": "executes"
         }
       ],
-      "runsCount": 79,
+      "runsCount": 47,
       "secrets": [],
       "sends": {
         "deploysPages": false,
@@ -5155,6 +4947,15 @@
           "through": [
             "pnpm test",
             "pnpm test (packages/ui)"
+          ]
+        },
+        {
+          "dir": "apps/desktop",
+          "job": "check-and-test",
+          "runner": "playwright test",
+          "step": "Large-text layout in Chromium",
+          "through": [
+            "pnpm run test:layout (apps/desktop)"
           ]
         },
         {
@@ -5833,8 +5634,8 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "f9a0f0759785568b2640746ae4193e2d0d5b64fb",
-    "tracked": 435
+    "commit": "ae587f870048fb49365b2c0cfafdb3c0fda9c8cd",
+    "tracked": 437
   },
   "landings": [
     {

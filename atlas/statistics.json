@@ -84,7 +84,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "desktop",
-      "qualifyingSourceCommits": 28,
+      "qualifyingSourceCommits": 29,
       "rebaseline": null
     },
     {
@@ -120,7 +120,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "domain",
-      "qualifyingSourceCommits": 8,
+      "qualifyingSourceCommits": 9,
       "rebaseline": null
     },
     {
@@ -579,8 +579,8 @@
         "path": ".claude/workflows/ship-feature.md"
       },
       {
-        "commits": 11,
-        "lines": 190,
+        "commits": 12,
+        "lines": 198,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -594,8 +594,8 @@
         "path": ".github/workflows/release-desktop.yml"
       },
       {
-        "commits": 3,
-        "lines": 13,
+        "commits": 4,
+        "lines": 16,
         "path": ".gitignore"
       },
       {
@@ -745,13 +745,23 @@
       },
       {
         "commits": 1,
+        "lines": 64,
+        "path": "apps/desktop/e2e/large-text.browser.ts"
+      },
+      {
+        "commits": 1,
         "lines": 12,
         "path": "apps/desktop/index.html"
       },
       {
-        "commits": 3,
-        "lines": 47,
+        "commits": 4,
+        "lines": 49,
         "path": "apps/desktop/package.json"
+      },
+      {
+        "commits": 1,
+        "lines": 23,
+        "path": "apps/desktop/playwright.config.ts"
       },
       {
         "commits": 1,
@@ -1379,8 +1389,8 @@
         "path": "apps/desktop/src/lib/layoutWidth.test.ts"
       },
       {
-        "commits": 1,
-        "lines": 20,
+        "commits": 2,
+        "lines": 27,
         "path": "apps/desktop/src/lib/layoutWidth.ts"
       },
       {
@@ -1484,13 +1494,13 @@
         "path": "apps/desktop/src/main.tsx"
       },
       {
-        "commits": 1,
-        "lines": 111,
+        "commits": 2,
+        "lines": 120,
         "path": "apps/desktop/src/styles/contrast.test.ts"
       },
       {
-        "commits": 13,
-        "lines": 2011,
+        "commits": 14,
+        "lines": 2030,
         "path": "apps/desktop/src/styles/globals.css"
       },
       {
@@ -1514,13 +1524,13 @@
         "path": "apps/desktop/tsconfig.json"
       },
       {
-        "commits": 1,
-        "lines": 11,
+        "commits": 2,
+        "lines": 22,
         "path": "apps/desktop/vite.config.ts"
       },
       {
-        "commits": 14,
-        "lines": 369,
+        "commits": 15,
+        "lines": 383,
         "path": "atlas/README.md"
       },
       {
@@ -1529,18 +1539,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 14,
-        "lines": 1758,
+        "commits": 15,
+        "lines": 1815,
         "path": "atlas/page.json"
       },
       {
-        "commits": 14,
-        "lines": 4746,
+        "commits": 15,
+        "lines": 4900,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 14,
-        "lines": 8273,
+        "commits": 15,
+        "lines": 8495,
         "path": "atlas/structure.json"
       },
       {
@@ -1999,13 +2009,13 @@
         "path": "packages/domain/src/memory.ts"
       },
       {
-        "commits": 3,
-        "lines": 521,
+        "commits": 4,
+        "lines": 525,
         "path": "packages/domain/src/memoryDetectors.test.ts"
       },
       {
-        "commits": 3,
-        "lines": 375,
+        "commits": 4,
+        "lines": 377,
         "path": "packages/domain/src/memoryDetectors.ts"
       },
       {
@@ -2309,8 +2319,8 @@
         "path": "packaging/pack-msix.ps1"
       },
       {
-        "commits": 3,
-        "lines": 2447,
+        "commits": 4,
+        "lines": 2475,
         "path": "pnpm-lock.yaml"
       },
       {
@@ -2534,17 +2544,17 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-10-04T23:20:50.030Z",
+  "generatedAt": "2026-10-04T23:41:42.617Z",
   "generatedFrom": {
-    "commit": "f9a0f0759785568b2640746ae4193e2d0d5b64fb"
+    "commit": "ae587f870048fb49365b2c0cfafdb3c0fda9c8cd"
   },
   "pairs": [
     {
       "a": ".github/workflows/ci.yml",
       "b": ".github/workflows/release-desktop.yml",
-      "either": 10,
+      "either": 11,
       "shared": 6,
-      "strength": 0.6
+      "strength": 0.545455
     },
     {
       "a": "apps/console/src/app.rs",
@@ -2591,57 +2601,57 @@
     {
       "a": "apps/desktop/src/app/AppShell.tsx",
       "b": "apps/desktop/src/styles/globals.css",
-      "either": 17,
+      "either": 18,
       "shared": 11,
-      "strength": 0.647059
+      "strength": 0.611111
     },
     {
       "a": "apps/desktop/src/components/HistoryDrawer.tsx",
       "b": "apps/desktop/src/styles/globals.css",
-      "either": 12,
+      "either": 13,
       "shared": 7,
-      "strength": 0.583333
+      "strength": 0.538462
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/page.json",
-      "either": 13,
-      "shared": 13,
+      "either": 14,
+      "shared": 14,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/statistics.json",
-      "either": 13,
-      "shared": 13,
+      "either": 14,
+      "shared": 14,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/structure.json",
-      "either": 13,
-      "shared": 13,
+      "either": 14,
+      "shared": 14,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/statistics.json",
-      "either": 13,
-      "shared": 13,
+      "either": 14,
+      "shared": 14,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/structure.json",
-      "either": 13,
-      "shared": 13,
+      "either": 14,
+      "shared": 14,
       "strength": 1
     },
     {
       "a": "atlas/statistics.json",
       "b": "atlas/structure.json",
-      "either": 13,
-      "shared": 13,
+      "either": 14,
+      "shared": 14,
       "strength": 1
     },
     {
@@ -2725,16 +2735,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-10-04T19:20:41-04:00",
-    "inScopeFiles": 440,
+    "headDate": "2026-10-04T19:41:35-04:00",
+    "inScopeFiles": 442,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 81,
+    "qualifyingCommits": 83,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-07T23:20:41.000Z",
+    "since": "2026-04-07T23:41:35.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",
