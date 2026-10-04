@@ -265,7 +265,7 @@ fn database_commands_round_trip() {
         json!({ "request": { "historyId": "missing-history", "status": "gone" } }),
     )
     .unwrap_err();
-    assert_api_error(&missing, "DATABASE_ERROR", "no history item");
+    assert_api_error(&missing, "NOT_FOUND", "no history item");
     let listed = ipc(
         &webview,
         "history_list",
@@ -352,7 +352,7 @@ fn database_commands_round_trip() {
         json!({ "request": { "suggestionId": "missing-suggestion" } }),
     )
     .unwrap_err();
-    assert_api_error(&missing, "DATABASE_ERROR", "suggestion not found");
+    assert_api_error(&missing, "NOT_FOUND", "suggestion not found");
 
     // A second accept of an already accepted suggestion is rejected, not a silent no-op.
     let repeated = ipc(
@@ -361,7 +361,7 @@ fn database_commands_round_trip() {
         json!({ "request": { "suggestionId": "sg1" } }),
     )
     .unwrap_err();
-    assert_api_error(&repeated, "DATABASE_ERROR", "suggestion not pending");
+    assert_api_error(&repeated, "NOT_FOUND", "suggestion not pending");
 
     let second = json!({
         "id": "sg2",
@@ -406,7 +406,7 @@ fn database_commands_round_trip() {
         json!({ "request": { "suggestionId": "missing-suggestion" } }),
     )
     .unwrap_err();
-    assert_api_error(&missing, "DATABASE_ERROR", "no suggestion");
+    assert_api_error(&missing, "NOT_FOUND", "no suggestion");
 
     assert_ok(
         &ipc(
@@ -431,7 +431,7 @@ fn database_commands_round_trip() {
         json!({ "request": { "memoryId": "missing-memory" } }),
     )
     .unwrap_err();
-    assert_api_error(&missing, "DATABASE_ERROR", "no memory item");
+    assert_api_error(&missing, "NOT_FOUND", "no memory item");
 
     let workflow = json!({
         "id": "w1",
@@ -454,7 +454,7 @@ fn database_commands_round_trip() {
         json!({ "request": { "id": "missing-workflow" } }),
     )
     .unwrap_err();
-    assert_api_error(&missing, "DATABASE_ERROR", "no workflow");
+    assert_api_error(&missing, "NOT_FOUND", "no workflow");
     let workflows = ipc(&webview, "workflow_list", json!({})).unwrap();
     assert!(workflows["workflows"].as_array().unwrap().is_empty());
 

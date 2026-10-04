@@ -36,11 +36,11 @@ pub struct WorkflowDeleteResponse {
 }
 
 fn get_conn(state: &State<'_, AppState>) -> Result<rusqlite::Connection, ApiError> {
-    let path_guard = state.db_path.lock().map_err(|e| ApiError::database(e.to_string()))?;
+    let path_guard = state.db_path.lock().map_err(|e| ApiError::from_persistence(e.to_string()))?;
     let path = path_guard
         .as_ref()
-        .ok_or_else(|| ApiError::database("Database not initialized"))?;
-    open_database(path).map_err(ApiError::database)
+        .ok_or_else(|| ApiError::from_persistence("Database not initialized"))?;
+    open_database(path).map_err(ApiError::from_persistence)
 }
 
 #[tauri::command]
@@ -49,14 +49,14 @@ pub fn workflow_add(
     state: State<'_, AppState>,
 ) -> Result<WorkflowAddResponse, ApiError> {
     let conn = get_conn(&state)?;
-    workflow::add(&conn, &request.workflow).map_err(ApiError::database)?;
+    workflow::add(&conn, &request.workflow).map_err(ApiError::from_persistence)?;
     Ok(WorkflowAddResponse { ok: true })
 }
 
 #[tauri::command]
 pub fn workflow_list(state: State<'_, AppState>) -> Result<WorkflowListResponse, ApiError> {
     let conn = get_conn(&state)?;
-    let workflows = workflow::list(&conn).map_err(ApiError::database)?;
+    let workflows = workflow::list(&conn).map_err(ApiError::from_persistence)?;
     Ok(WorkflowListResponse { workflows })
 }
 
@@ -66,6 +66,6 @@ pub fn workflow_delete(
     state: State<'_, AppState>,
 ) -> Result<WorkflowDeleteResponse, ApiError> {
     let conn = get_conn(&state)?;
-    workflow::delete(&conn, &request.id).map_err(ApiError::database)?;
+    workflow::delete(&conn, &request.id).map_err(ApiError::from_persistence)?;
     Ok(WorkflowDeleteResponse { ok: true })
 }

@@ -95,7 +95,7 @@ pub async fn session_create(
             cwd: request.cwd,
             shell: request.shell,
         })
-        .map_err(ApiError::execution)?;
+        .map_err(ApiError::from_execution)?;
 
     Ok(SessionCreateResponse {
         session: to_payload(summary, &state),
@@ -107,7 +107,7 @@ pub fn session_list(state: State<'_, AppState>) -> Result<SessionListResponse, A
     let summaries = state
         .session_service
         .list()
-        .map_err(ApiError::execution)?;
+        .map_err(ApiError::from_execution)?;
 
     Ok(SessionListResponse {
         sessions: summaries.into_iter().map(|s| to_payload(s, &state)).collect(),
@@ -122,7 +122,7 @@ pub fn session_close(
     state
         .session_service
         .close(&request.session_id)
-        .map_err(ApiError::execution)?;
+        .map_err(ApiError::from_execution)?;
 
     Ok(SessionCloseResponse { ok: true })
 }

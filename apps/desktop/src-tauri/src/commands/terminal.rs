@@ -110,7 +110,7 @@ pub async fn terminal_execute(
             source: request.source,
             linked_plan_id: request.linked_plan_id,
         })
-        .map_err(ApiError::execution)?;
+        .map_err(ApiError::from_execution)?;
 
     Ok(TerminalExecuteResponse { execution: summary })
 }
@@ -123,7 +123,7 @@ pub async fn terminal_interrupt(
     state
         .terminal_service
         .interrupt(&request.session_id)
-        .map_err(ApiError::execution)?;
+        .map_err(ApiError::from_execution)?;
 
     Ok(TerminalInterruptResponse { ok: true })
 }
@@ -136,7 +136,7 @@ pub async fn terminal_resync(
     state
         .terminal_service
         .resync(&request.session_id)
-        .map_err(ApiError::execution)?;
+        .map_err(ApiError::from_execution)?;
 
     Ok(TerminalResyncResponse { ok: true })
 }
@@ -149,7 +149,7 @@ pub async fn terminal_resize(
     state
         .terminal_service
         .resize(&request.session_id, request.cols, request.rows)
-        .map_err(ApiError::execution)?;
+        .map_err(ApiError::from_execution)?;
 
     Ok(TerminalResizeResponse { ok: true })
 }
@@ -163,7 +163,7 @@ pub async fn terminal_write(
         state
             .terminal_service
             .write(&request.session_id, chunk)
-            .map_err(ApiError::execution)?;
+            .map_err(ApiError::from_execution)?;
     }
 
     Ok(TerminalWriteResponse { ok: true })

@@ -87,6 +87,9 @@ import { WorkflowDrawer } from "../components/WorkflowDrawer";
 import { WorkflowEditor } from "../components/WorkflowEditor";
 import { WorkflowRunBanner } from "../components/WorkflowRunBanner";
 import { isTauriRuntime } from "../lib/tauriInvoke";
+import { errorText, isNotFoundError, isSessionExitedError } from "../lib/commandError";
+import { recordedPlannerSource } from "../lib/plannerSource";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { onMockEvent } from "../lib/mockBridge";
 import { displayPath } from "../lib/displayPath";
 import { readShowWelcome, writeShowWelcome } from "../lib/welcomePref";
@@ -101,6 +104,22 @@ import {
 } from "./execState";
 
 const APP_VERSION = "1.0.2";
+/** How long a delete can be undone, in milliseconds. */
+const UNDO_MS = 10_000;
+
+type ConfirmRequest = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+};
+
+type UndoRequest = {
+  token: string;
+  message: string;
+  restore: () => void;
+  commit: () => void;
+};
 // The model Ask calls; the default of OllamaConfig in crates/runtime-planner/src/types.rs.
 const PLANNER_MODEL = "qwen2.5:14b";
 /** How long a session may stay in "booting" before the UI offers Resync and Close. */
@@ -283,6 +302,11 @@ export function AppShell() {
   // The welcome opens at launch until the user turns it off.
   const [showWelcomeAtStartup, setShowWelcomeAtStartup] = useState(() => readShowWelcome());
   const [welcomeOpen, setWelcomeOpen] = useState(showWelcomeAtStartup);
+  const [pendingConfirm, setPendingConfirm] = useState<ConfirmRequest | null>(null);
+  const confirmResolveRef = useRef<((accepted: boolean) => void) | null>(null);
+  const pendingUndoRef = useRef<UndoRequest | null>(null);
+  const undoTimerRef = useRef<number | null>(null);
+  const [undoMessage, setUndoMessage] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [workflowEditorData, setWorkflowEditorData] = useState<{
     workflowId: string;
@@ -744,7 +768,7 @@ export function AppShell() {
         }
         setBootPhase("ready");
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorText(e);
         setBootError(msg);
         setBootPhase("failed");
         setError(`Boot failed: ${msg}`);
@@ -894,7 +918,7 @@ export function AppShell() {
         if (!disposed) void reconcileSessionStates();
       })
       .catch((e: unknown) => {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorText(e);
         console.error("[AppShell] Listener setup failed:", msg);
         setError(`A background initialization step failed: ${msg}. Some features may not work correctly.`);
       });
@@ -907,7 +931,7 @@ export function AppShell() {
             unlisten();
           })
           .catch((e: unknown) => {
-            const msg = e instanceof Error ? e.message : String(e);
+            const msg = errorText(e);
             console.warn("[AppShell] Unsubscribe failed:", msg);
           });
       }
@@ -973,7 +997,7 @@ export function AppShell() {
               setStalledBoot((prev) => (prev.has(sid) ? prev : new Set(prev).add(sid)));
             })
             .catch((e: unknown) => {
-              const msg = e instanceof Error ? e.message : String(e);
+              const msg = errorText(e);
               console.error("[AppShell] Reconcile session states failed during stall check:", msg);
               setError(`Session sync failed: ${msg}. Click Resync if a session appears stuck.`);
             });
@@ -1018,6 +1042,68 @@ export function AppShell() {
     return () => window.removeEventListener("commandui:persist-failed", handler);
   }, []);
 
+  function cancelConfirm() {
+    const resolve = confirmResolveRef.current;
+    confirmResolveRef.current = null;
+    setPendingConfirm(null);
+    resolve?.(false);
+  }
+
+  function askConfirm(choice: Omit<ConfirmRequest, "onConfirm">): Promise<boolean> {
+    cancelConfirm();
+    return new Promise((resolve) => {
+      confirmResolveRef.current = resolve;
+      setPendingConfirm({
+        ...choice,
+        onConfirm: () => {
+          confirmResolveRef.current = null;
+          setPendingConfirm(null);
+          resolve(true);
+        },
+      });
+    });
+  }
+
+  function clearUndoTimer() {
+    if (undoTimerRef.current !== null) {
+      window.clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+  }
+
+  function armUndo(next: UndoRequest) {
+    const previous = pendingUndoRef.current;
+    if (previous && previous.token !== next.token) previous.commit();
+    pendingUndoRef.current = next;
+    setUndoMessage(next.message);
+    clearUndoTimer();
+    undoTimerRef.current = window.setTimeout(() => {
+      if (pendingUndoRef.current?.token !== next.token) return;
+      pendingUndoRef.current = null;
+      undoTimerRef.current = null;
+      setUndoMessage(null);
+      next.commit();
+    }, UNDO_MS);
+  }
+
+  function undoPending() {
+    const current = pendingUndoRef.current;
+    if (!current) return;
+    pendingUndoRef.current = null;
+    clearUndoTimer();
+    setUndoMessage(null);
+    current.restore();
+  }
+
+  useEffect(() => {
+    return () => {
+      clearUndoTimer();
+      const current = pendingUndoRef.current;
+      pendingUndoRef.current = null;
+      current?.commit();
+    };
+  }, []);
+
   // --- Centralized keyboard shortcuts ---
   const overlayRef = useRef({
     historyOpen: false,
@@ -1053,11 +1139,7 @@ export function AppShell() {
       });
       return;
     }
-    // Escape at the shell prompt belongs to the shell (readline, completion): it must not
-    // also reject the pending plan. Reject stays on the plan's R key and button.
-    if (overlay.planOpen && useFocusStore.getState().currentZone !== "terminal") {
-      handleRejectPlan();
-    }
+    // Escape never rejects a plan. Reject stays on the plan's R key and its button.
   }
 
   function closeWelcome() {
@@ -1292,7 +1374,7 @@ export function AppShell() {
           status: "planned",
           createdAt: new Date().toISOString(),
           cwd: session.cwd,
-          plannerSource: browserPreview ? "mock" : "ollama",
+          plannerSource: recordedPlannerSource(String(res.plan.source)),
         };
         appendHistoryItem(historyItem);
 
@@ -1305,7 +1387,7 @@ export function AppShell() {
         appendAppNote(session.id, `[plan] ${escapeForTerminal(res.plan.command)}\r\n`);
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorText(e);
       setError(msg);
       accepted = false;
     } finally {
@@ -1471,7 +1553,7 @@ export function AppShell() {
           setMemorySuggestions((prev) => [toStore, ...prev]);
         } catch (storeErr) {
           setError(
-            `Could not save the memory suggestion: ${storeErr instanceof Error ? storeErr.message : String(storeErr)}`,
+            `Could not save the memory suggestion: ${errorText(storeErr)}`,
           );
         }
       }
@@ -1480,7 +1562,7 @@ export function AppShell() {
       setPlanNotice(null);
       setCurrentPlanHistoryId(null);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorText(e);
       setError(msg);
     } finally {
       approveInFlightRef.current = false;
@@ -1548,7 +1630,7 @@ export function AppShell() {
     try {
       await workflowAdd({ workflow });
     } catch (e: unknown) {
-      setError(`Could not save the workflow: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Could not save the workflow: ${errorText(e)}`);
       return;
     }
     addWorkflow(workflow);
@@ -1570,7 +1652,7 @@ export function AppShell() {
         if (kind === "write") terminalIoFailedRef.current.delete(sessionId);
       },
       (e: unknown) => {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorText(e);
         if (kind === "resize") {
           console.warn("[terminal] resize failed:", msg);
           return;
@@ -1617,7 +1699,7 @@ export function AppShell() {
     try {
       await interruptTerminal({ sessionId });
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorText(e);
       // The command ended between the press and the call: nothing left to interrupt.
       if (/no command is currently running/i.test(msg)) return;
       setError(msg);
@@ -1639,13 +1721,11 @@ export function AppShell() {
     try {
       await resyncTerminal({ sessionId: activeSessionId });
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (/has exited/i.test(msg)) {
-        // Not a desync: the shell is gone. Show it as exited instead of an error.
+      if (isSessionExitedError(e)) {
         markSessionExited(activeSessionId);
         return;
       }
-      setError(msg);
+      setError(errorText(e));
     }
   }
 
@@ -1659,17 +1739,19 @@ export function AppShell() {
       void reconcileSessionStates();
       appendAppNote(res.session.id, `[session] ${escapeForTerminal(res.session.label)}\r\n`);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
   /** Asks first when a command is running; used by the tab X and both close chords. */
-  function requestCloseSession(sessionId: string) {
-    if (
-      sessionIsRunning(sessionId) &&
-      !window.confirm("A command is still running in this session. Close it and stop the command?")
-    ) {
-      return;
+  async function requestCloseSession(sessionId: string) {
+    if (sessionIsRunning(sessionId)) {
+      const accepted = await askConfirm({
+        title: "Close this session?",
+        message: "A command is still running in this session. Close it and stop the command?",
+        confirmLabel: "Close session",
+      });
+      if (!accepted) return;
     }
     void handleCloseSession(sessionId);
   }
@@ -1704,7 +1786,7 @@ export function AppShell() {
       inFlightExecRef.current.delete(sessionId);
       unlockSession(sessionId);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -1735,14 +1817,15 @@ export function AppShell() {
     // A rerun skips the plan panel's risk checkbox, and the row does not record the risk it
     // was approved at: confirm when the directory differs or the command came from a plan.
     const cwdDiffers = item.cwd !== undefined && item.cwd !== session.cwd;
-    if (
-      (cwdDiffers || item.source === "semantic") &&
-      !window.confirm(
-        `Run again in "${session.label}" (${displayPath(session.cwd)})?\n\n${escapeForTerminal(command)}` +
+    if (cwdDiffers || item.source === "semantic") {
+      const accepted = await askConfirm({
+        title: "Run this again?",
+        message:
+          `Run again in "${session.label}" (${displayPath(session.cwd)})?\n\n${escapeForTerminal(command)}` +
           (cwdDiffers ? `\n\nIt first ran in ${displayPath(item.cwd)}.` : ""),
-      )
-    ) {
-      return;
+        confirmLabel: "Run again",
+      });
+      if (!accepted) return;
     }
 
     const sessionId = session.id;
@@ -1787,7 +1870,7 @@ export function AppShell() {
 
       setHistoryOpen(false);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       unlockSession(sessionId);
     }
@@ -1865,7 +1948,7 @@ export function AppShell() {
     try {
       await workflowAdd({ workflow });
     } catch (e: unknown) {
-      setError(`Could not save the workflow: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Could not save the workflow: ${errorText(e)}`);
       return;
     }
     addWorkflow(workflow);
@@ -1928,14 +2011,13 @@ export function AppShell() {
     }
     // A workflow records no risk; running it in a different directory than it was saved in is
     // the case worth a second look.
-    if (
-      workflow.projectRoot &&
-      workflow.projectRoot !== session.cwd &&
-      !window.confirm(
-        `Run "${escapeForTerminal(workflow.label)}" in "${session.label}" (${displayPath(session.cwd)})? It was saved for ${displayPath(workflow.projectRoot)}.\n\n${stepCommands.map(escapeForTerminal).join("\n")}`,
-      )
-    ) {
-      return;
+    if (workflow.projectRoot && workflow.projectRoot !== session.cwd) {
+      const accepted = await askConfirm({
+        title: "Run this workflow here?",
+        message: `Run "${escapeForTerminal(workflow.label)}" in "${session.label}" (${displayPath(session.cwd)})? It was saved for ${displayPath(workflow.projectRoot)}.\n\n${stepCommands.map(escapeForTerminal).join("\n")}`,
+        confirmLabel: "Run workflow",
+      });
+      if (!accepted) return;
     }
     lockSession(runSessionId);
     const controller = new AbortController();
@@ -2100,7 +2182,7 @@ export function AppShell() {
         }
       }
       completeActiveRun("failed");
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       if (workflowAbortBySessionRef.current.get(runSessionId) === controller) {
         workflowAbortBySessionRef.current.delete(runSessionId);
@@ -2111,17 +2193,27 @@ export function AppShell() {
 
   // --- Workflow delete handler ---
   async function handleDeleteWorkflow(workflowId: string) {
-    try {
-      await workflowDelete({ id: workflowId });
-      removeWorkflow(workflowId);
-    } catch (e: unknown) {
-      // The row never reached the database: it can only be removed from the UI.
-      if (isMissingIdError(e)) {
-        removeWorkflow(workflowId);
-        return;
-      }
-      setError(e instanceof Error ? e.message : String(e));
-    }
+    const workflow = useWorkflowStore.getState().items.find((item) => item.id === workflowId);
+    if (!workflow) return;
+    const accepted = await askConfirm({
+      title: "Delete this workflow?",
+      message: `Delete "${workflow.label}"? You can bring it back for 10 seconds.`,
+      confirmLabel: "Delete workflow",
+    });
+    if (!accepted) return;
+    removeWorkflow(workflowId);
+    armUndo({
+      token: `workflow:${workflowId}`,
+      message: `Deleted ${workflow.label}.`,
+      restore: () => addWorkflow(workflow),
+      commit: () => {
+        void workflowDelete({ id: workflowId }).catch((e: unknown) => {
+          if (isNotFoundError(e)) return;
+          addWorkflow(workflow);
+          setError(errorText(e));
+        });
+      },
+    });
   }
 
   // --- Cross-drawer navigation (Phase 6D) ---
@@ -2190,7 +2282,7 @@ export function AppShell() {
         ),
       );
     } catch (e: unknown) {
-      if (isMissingIdError(e)) {
+      if (isNotFoundError(e)) {
         // The database no longer holds it as pending (accepted or dismissed earlier, or never
         // stored). Stop offering it, but say plainly that nothing was created: an explicit
         // Accept must not read as success or as a quiet dismissal.
@@ -2204,7 +2296,7 @@ export function AppShell() {
         );
         return;
       }
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -2246,7 +2338,7 @@ export function AppShell() {
           ),
         );
       } catch (acceptErr: unknown) {
-        if (isMissingIdError(acceptErr)) {
+        if (isNotFoundError(acceptErr)) {
           setMemorySuggestions((prev) =>
             prev.map((s) =>
               s.id === suggestionId ? { ...s, status: "accepted" as const } : s,
@@ -2254,12 +2346,12 @@ export function AppShell() {
           );
         } else {
           setError(
-            `Workflow saved, but the suggestion could not be marked accepted: ${acceptErr instanceof Error ? acceptErr.message : String(acceptErr)}`,
+            `Workflow saved, but the suggestion could not be marked accepted: ${errorText(acceptErr)}`,
           );
         }
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       confirmingRef.current = false;
     }
@@ -2273,8 +2365,8 @@ export function AppShell() {
     try {
       await memoryDismissSuggestion({ suggestionId });
     } catch (e: unknown) {
-      if (!isMissingIdError(e)) {
-        setError(e instanceof Error ? e.message : String(e));
+      if (!isNotFoundError(e)) {
+        setError(errorText(e));
         return;
       }
       // Not stored or already handled: dismissing locally is the intended end state.
@@ -2288,23 +2380,27 @@ export function AppShell() {
   }
 
   async function handleDeleteMemory(memoryId: string) {
-    try {
-      await memoryDelete({ memoryId });
-      removeMemoryItem(memoryId);
-    } catch (e: unknown) {
-      if (isMissingIdError(e)) {
-        removeMemoryItem(memoryId);
-        return;
-      }
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  // The backend reports an id it does not hold (or a suggestion no longer pending) as an error.
-  // For the UI that is the state the user asked for, so callers reconcile instead of looping on it.
-  function isMissingIdError(e: unknown): boolean {
-    const msg = e instanceof Error ? e.message : String(e);
-    return /not found|not pending|no suggestion|no memory item|no workflow/i.test(msg);
+    const item = useMemoryStore.getState().items.find((entry) => entry.id === memoryId);
+    if (!item) return;
+    const accepted = await askConfirm({
+      title: "Delete this memory?",
+      message: `Delete "${item.key}"? You can bring it back for 10 seconds.`,
+      confirmLabel: "Delete memory",
+    });
+    if (!accepted) return;
+    removeMemoryItem(memoryId);
+    armUndo({
+      token: `memory:${memoryId}`,
+      message: `Deleted ${item.key}.`,
+      restore: () => addMemoryItem(item),
+      commit: () => {
+        void memoryDelete({ memoryId }).catch((e: unknown) => {
+          if (isNotFoundError(e)) return;
+          addMemoryItem(item);
+          setError(errorText(e));
+        });
+      },
+    });
   }
 
   // --- Suggestion generation ---
@@ -2393,7 +2489,7 @@ export function AppShell() {
             </button>
           </div>
           <p className="muted boot-failure-hint">
-            If this persists, check that your Tauri backend is running.
+            If this keeps happening, choose Retry. If CommandUI still does not start, choose Copy Error and include that text when you ask for help.
           </p>
         </div>
       </div>
@@ -2429,10 +2525,28 @@ export function AppShell() {
         </div>
       </header>
 
+      {undoMessage && (
+        <div className="undo-bar" role="status">
+          <span>{undoMessage}</span>
+          <button type="button" onClick={undoPending}>
+            Undo
+          </button>
+        </div>
+      )}
+
+      {pendingConfirm && (
+        <ConfirmDialog
+          title={pendingConfirm.title}
+          message={pendingConfirm.message}
+          confirmLabel={pendingConfirm.confirmLabel}
+          onConfirm={pendingConfirm.onConfirm}
+          onCancel={cancelConfirm}
+        />
+      )}
+
       {browserPreview && (
         <div className="preview-banner">
-          Browser preview mode — backend commands disabled. Run{" "}
-          <code>pnpm tauri:dev</code> for the full experience.
+          You are looking at CommandUI in a browser. Commands do not run here. Open the CommandUI application to use your terminal.
         </div>
       )}
 

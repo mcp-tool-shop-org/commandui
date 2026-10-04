@@ -24,17 +24,17 @@ pub struct SettingsUpdateResponse {
 }
 
 fn get_conn(state: &State<'_, AppState>) -> Result<rusqlite::Connection, ApiError> {
-    let path_guard = state.db_path.lock().map_err(|e| ApiError::database(e.to_string()))?;
+    let path_guard = state.db_path.lock().map_err(|e| ApiError::from_persistence(e.to_string()))?;
     let path = path_guard
         .as_ref()
-        .ok_or_else(|| ApiError::database("Database not initialized"))?;
-    open_database(path).map_err(ApiError::database)
+        .ok_or_else(|| ApiError::from_persistence("Database not initialized"))?;
+    open_database(path).map_err(ApiError::from_persistence)
 }
 
 #[tauri::command]
 pub fn settings_get(state: State<'_, AppState>) -> Result<SettingsGetResponse, ApiError> {
     let conn = get_conn(&state)?;
-    let s = settings::get(&conn).map_err(ApiError::database)?;
+    let s = settings::get(&conn).map_err(ApiError::from_persistence)?;
     Ok(SettingsGetResponse { settings: s })
 }
 
@@ -44,6 +44,6 @@ pub fn settings_update(
     state: State<'_, AppState>,
 ) -> Result<SettingsUpdateResponse, ApiError> {
     let conn = get_conn(&state)?;
-    settings::update(&conn, &request.settings).map_err(ApiError::database)?;
+    settings::update(&conn, &request.settings).map_err(ApiError::from_persistence)?;
     Ok(SettingsUpdateResponse { ok: true })
 }

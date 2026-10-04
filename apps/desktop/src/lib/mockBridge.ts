@@ -226,7 +226,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
 
     // Check if any workflow matches the intent
     let command = `echo "mock plan for: ${intent}"`;
-    let explanation = `[Browser Preview] This would execute a plan for "${intent}". In Tauri mode, the AI planner generates real commands.`;
+    let explanation = `This is a stand-in plan for "${intent}". Open the CommandUI application for a plan from your own model.`;
 
     const wfFact = projectFacts.find(
       (f) => f.kind === "workflow" && intent.toLowerCase().includes(f.label.toLowerCase()),
@@ -442,11 +442,22 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   },
 };
 
-export function mockInvoke<T>(command: string, args?: Record<string, unknown>): T {
+/** Drop browser-preview data so one test cannot leak into the next. */
+export function resetMockBridge(): void {
+  sessionCounter = 0;
+  for (const id of Object.keys(mockSessions)) delete mockSessions[id];
+  mockHistory.length = 0;
+  mockWorkflows.length = 0;
+  mockMemoryItems.length = 0;
+  mockMemorySuggestions.length = 0;
+  mockRunningExecs.clear();
+}
+
+export function mockInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const handler = handlers[command];
   if (handler) {
-    return handler(args ?? {}) as T;
+    return Promise.resolve(handler(args ?? {}) as T);
   }
   console.warn(`[mock-bridge] Unknown command: ${command}`);
-  return { ok: true } as T;
+  return Promise.resolve({ ok: true } as T);
 }
