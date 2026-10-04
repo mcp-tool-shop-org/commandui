@@ -4,8 +4,9 @@ A terminal shell with sidecar AI assistance. You play freely in a real PTY shell
 
 ## What it does
 
-- **Line-oriented shell play** — real PTY sessions in your shell of choice. Prompts and typed input appear before the line ends, and line edits (backspace, cursor moves, erase-to-end) are followed
-- **Raw Play mode** — fullscreen mode for ncurses apps, terminal games and editors (vim, htop, lazygit). Console leaves its own screen and forwards keys, resizes, paste, mouse and focus events to the app
+- **Line-oriented shell play** — real PTY sessions in your shell of choice (bash, zsh, PowerShell, pwsh, cmd). Prompts and typed input appear before the line ends, and edits on the current line (backspace, cursor moves, erase-to-end, and the Windows console's same-row redraws) are followed
+- **Raw Play mode** — fullscreen mode for terminal games and editors (vim, htop, lazygit). Console leaves its own screen and forwards keys, resizes, paste, mouse and focus events to the app. On Windows, apps that draw on the alternate screen (most full-screen apps) get their output byte for byte; an app that draws on the main screen has its cursor moves between rows turned into line breaks
+- **Knows what is in the foreground** — a command you typed yourself (`ssh`, `vim`, `make`) marks the session FOREGROUND until the shell's prompt comes back. While it runs, Review refuses to approve a command (it would be typed into that program), and closing or quitting asks first
 - **Ask / Review / Approve** — describe what you want in natural language, review the generated command and its risk assessment, then approve or cancel
 - **Multi-session** — run multiple shell sessions, switch between them with a run selector, see state badges and unread markers
 - **Session-bound proposals** — Ask records which session you're in, and approval runs the command there. Session switching is refused while Ask or Review is open
@@ -29,11 +30,11 @@ A terminal shell with sidecar AI assistance. You play freely in a real PTY shell
 | `^S` | Open run selector |
 | `^H` | Help overlay |
 | `^N` | New session |
-| `^W` | Close session (asks `y/n` if a command is running) |
+| `^W` | Close session (asks `y/n` if a command is running, approved or typed by you) |
 | `^]` / `^[` | Next / previous session (on Unix, a bare `Esc` is `^[` when more than one session is open) |
 | `^C` | Interrupt running command |
 | `^R` | Resync session |
-| `^Q` | Quit (asks `y/n` if any session has a running command) |
+| `^Q` | Quit (asks `y/n` if any session has a running command, approved or typed by you) |
 | `Shift+PgUp/PgDn` | Scroll terminal |
 
 At a `y/n` prompt only a plain `y` goes ahead; any other key cancels and is not sent to the shell.
@@ -73,7 +74,7 @@ Approval is refused while the command is clipped, while confirmation is pending,
 | Key | Action |
 |-----|--------|
 | `^\` (Ctrl+Backslash) | Exit Raw Play, return to Console |
-| `^Q` | Exit Raw Play, then quit (asking `y/n` first if a command is running) |
+| `^Q` | Exit Raw Play and ask `y/n` before quitting (always asks here, since full-screen apps use `^Q` themselves) |
 | Everything else | Forwarded to the game/app |
 
 ## Modes
@@ -84,9 +85,9 @@ Approval is refused while the command is clipped, while confirmation is pending,
 
 **Review** — Shows the generated command, risk level, confidence score, safety flags, and explanation. Approve to execute, cancel to go back and refine. If the local model can't be reached, the planner falls back to a mock proposal and the Review title says so.
 
-**Runs** — Run selector overlay. See all sessions with state badges (IDLE, RUN, BOOT, STOP, DONE, ERR!), unread markers, and CWD. Switch, create, or close sessions.
+**Runs** — Run selector overlay. See all sessions with state badges (IDLE, RUN, FOREGROUND, BOOT, STOP, DONE, ERR!), unread markers, and CWD. Switch, create, or close sessions.
 
-**Raw Play** — Fullscreen mode. Console leaves its alternate screen and the app draws to the host terminal directly. Keys, resizes, bracketed paste and focus events are forwarded in the encodings the app enabled. Mouse events reach apps that enable SGR mouse reporting (`?1006`), with drag and motion only when the app asks for them (`?1002` / `?1003`). Replies the host terminal sends to the app's own queries (cursor position, device attributes) are not forwarded yet. `^\` returns to Console and `^Q` returns and then quits. If writing to the app fails, the session is marked as an error and Console comes back. The transcript keeps the text with control sequences stripped; cursor movement is not replayed, so full-screen output reads out of order.
+**Raw Play** — Fullscreen mode. Console leaves its alternate screen and the app draws to the host terminal directly. Keys, resizes, bracketed paste and focus events are forwarded in the encodings the app enabled. Mouse events reach apps that enable SGR mouse reporting (`?1006`), with drag and motion only when the app asks for them (`?1002` / `?1003`). Replies the host terminal sends to the app's own queries (cursor position, device attributes) are not forwarded yet. `^\` returns to Console; `^Q` returns and asks before quitting. If writing to the app fails, the session is marked as an error and Console comes back. The transcript keeps the text with control sequences stripped; cursor movement is not replayed, so full-screen output reads out of order.
 
 ## Architecture
 
@@ -119,7 +120,8 @@ The integration seam is `RuntimeEventSink` — Console implements it via a tokio
 - **Session switching blocked during Raw Play** — exit with `^\` first
 - **Mouse in Raw Play needs SGR reporting** — apps that only use the older X10 or UTF-8 mouse encodings get no mouse events
 - **No persistence, workflow UI, memory UI, or history reopen yet** — these exist in the Desktop shell but are deferred for Console
-- **Console cannot detect child process exit** — if a fullscreen app quits, you may need to press `^\` manually
+- **Console cannot detect a full-screen app quitting** — when the app exits but the shell lives on, you may need to press `^\` manually. A shell that exits is detected and shown
+- **`Ctrl+]` is rebound inside sessions** — to clear a half-typed line before an approved command in every editing mode (including vi), CommandUI binds `Ctrl+]` in PowerShell and bash sessions to "discard the current line". Console itself uses `^]` for next session in Shell mode, so you only meet the shell binding in Raw Play
 
 ## Build and test
 

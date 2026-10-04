@@ -48,8 +48,13 @@ booting → ready ⇄ running
 - **booting:** PTY is starting, shell not yet responsive
 - **ready:** idle, accepting commands
 - **running:** a command is executing
+- **userRunning:** a command you typed yourself is running (`ssh`, `vim`, `make`): the session entered it when your keystrokes included Enter, and leaves it when the shell's prompt returns. Approved commands are refused while it lasts, since they would be typed into that program. The desktop shows a "running (typed)" badge; Interrupt works
 - **interrupting:** Ctrl+C sent, waiting for the process to exit
 - **desynced:** terminal state lost (e.g., after a long-running process that corrupts markers). A "Resync" button appears for manual recovery.
+
+A session that stays in `booting` for 20 seconds shows a banner with **Resync** and **Close Session**, so a shell that never starts is not a dead pane.
+
+Before an approved command, the runtime clears anything half-typed at the prompt so it cannot be joined to the command. In bash and PowerShell sessions it binds `Ctrl+]` to "discard the current line" (in every editing mode, vi included) and sends that chord; zsh gets `Ctrl+E Ctrl+U`, cmd gets `Ctrl+End Ctrl+Home`. Inside CommandUI sessions, `Ctrl+]` therefore no longer does the shell's usual character search.
 
 When the shell process itself exits (`exit`, a crash, a killed process), the session's status becomes `exited` and its execution state `desynced`, but this is not recoverable: `execute` and `resync` refuse the session. The desktop shows a banner with a **New Session** button in place of Resync. Exit is detected both from the end of the PTY output and by polling the child process, since a Windows ConPTY may not end the output stream.
 
