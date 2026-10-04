@@ -29,6 +29,48 @@ impl std::fmt::Display for SessionExecState {
     }
 }
 
+/// Per-session bookkeeping between the writers (execute, write, resync) and
+/// the reader. None of it is shell output; the shell's markers are invisible
+/// OSC sequences and nothing here depends on lines or on the console width.
+pub struct SessionTracking {
+    /// The exit code a cmd exit marker (`X`) reported for the execution that
+    /// is pending. cmd's prompt cannot expand ERRORLEVEL, so the command line
+    /// carries a tail that reports it just before the prompt is drawn.
+    pub pending_exit: Option<i32>,
+    /// How the pending cmd execution was written (see `crate::pty::CmdTail`).
+    pub pending_tail: crate::pty::CmdTail,
+    /// The runtime already sent the follow-up probe for a pending cmd
+    /// execution that had no tail.
+    pub probed: bool,
+    /// Prompts still owed to lines the user typed or pasted while the session
+    /// was Ready: a paste of two lines draws two prompts, and only the last
+    /// one returns the session to Ready.
+    pub user_prompts_owed: u32,
+    /// Whether the shell reported its clear-line chord as bound. Until it
+    /// says otherwise the chord is assumed to be there.
+    pub clear_chord: bool,
+    /// A tail of display text held back because it could be the start of cmd
+    /// plumbing the console echoes (see `crate::pty::strip_cmd_plumbing`).
+    pub display_hold: String,
+    /// The console width the reader sizes its display rewrite for. The resize
+    /// path updates it.
+    pub width: std::sync::Arc<std::sync::atomic::AtomicU16>,
+}
+
+impl Default for SessionTracking {
+    fn default() -> Self {
+        Self {
+            pending_exit: None,
+            pending_tail: crate::pty::CmdTail::Chained,
+            probed: false,
+            user_prompts_owed: 0,
+            clear_chord: true,
+            display_hold: String::new(),
+            width: std::sync::Arc::new(std::sync::atomic::AtomicU16::new(crate::pty::PTY_COLS)),
+        }
+    }
+}
+
 pub struct SessionRecord {
     pub id: String,
     pub label: String,
@@ -46,14 +88,12 @@ pub struct SessionRecord {
     pub exec_state: SessionExecState,
     pub boot_prompt_received: bool,
     pub command_sent_at: Option<String>,
-    // Incomplete reader line. Only complete lines are parsed.
-    pub read_buffer: String,
-    /// Bytes at the start of `read_buffer` already shown to the user (the
-    /// unterminated tail is displayed at once; marker parsing waits for the line).
-    pub emitted_tail: usize,
     /// Bumped by the reader on every prompt marker, so resync can tell that
     /// its probe was answered even if the state looks unchanged.
     pub marker_gen: u64,
+    /// What the reader and the writers keep about the line discipline of the
+    /// shell (see `SessionTracking`).
+    pub track: SessionTracking,
     /// The shell process, kept so close() can kill and reap it.
     pub child: Option<crate::pty::ShellChild>,
     pub created_at: String,
@@ -111,6 +151,7 @@ impl SessionRegistry {
                 pixel_height: 0,
             })
             .map_err(|e| format!("Resize error: {e}"))?;
+        record.track.width.store(cols, std::sync::atomic::Ordering::Relaxed);
 
         Ok(())
     }
@@ -195,9 +236,8 @@ mod tests {
             exec_state: SessionExecState::Booting,
             boot_prompt_received: false,
             command_sent_at: None,
-            read_buffer: String::new(),
-            emitted_tail: 0,
             marker_gen: 0,
+            track: SessionTracking::default(),
             child: None,
             created_at: "2026-01-01T00:00:00Z".into(),
             last_active_at: "2026-01-01T00:00:00Z".into(),

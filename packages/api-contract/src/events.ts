@@ -2,7 +2,10 @@ export type TerminalLineEvent = {
   id: string;
   sessionId: string;
   executionId?: string;
-  kind: "stdin" | "stdout" | "stderr" | "system";
+  /** "notice" is a line the runtime wrote (the shell exited):
+   *  not shell output, so a consumer that draws shell output into a full-screen
+   *  app must not draw it there. */
+  kind: "stdin" | "stdout" | "stderr" | "system" | "notice";
   text: string;
   timestamp: string;
 };

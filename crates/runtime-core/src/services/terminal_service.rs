@@ -9,7 +9,7 @@ use crate::events::{
     ExecutionFinishedEvent, ExecutionStartedEvent, ExecutionSummary, RuntimeEvent, RuntimeEventSink,
     SessionExecStateChangedEvent,
 };
-use crate::pty::{command_line_for_shell, resync_input, write_raw};
+use crate::pty::{command_line_for_shell, resync_input, submitted_lines, write_raw};
 use crate::session::{SessionExecState, SessionRegistry};
 use std::sync::{Arc, Mutex};
 
@@ -138,7 +138,13 @@ impl TerminalService {
             record.exec_state = SessionExecState::Running;
             record.pending_execution_id = Some(request.execution_id.clone());
             record.command_sent_at = Some(now.clone());
-            let line = command_line_for_shell(&record.shell, &record.marker_nonce, &request.command);
+            let (line, tail) =
+                command_line_for_shell(&record.shell, &request.command, record.track.clear_chord);
+            // A fresh execution: nothing a previous one left behind counts.
+            record.track.pending_exit = None;
+            record.track.pending_tail = tail;
+            record.track.probed = false;
+            record.track.user_prompts_owed = 0;
             (record.writer.clone(), line)
         };
 
@@ -291,7 +297,7 @@ impl TerminalService {
                 record.pending_execution_id.clone(),
                 record.exec_state.clone(),
                 record.marker_gen,
-                resync_input(&record.shell, &record.marker_nonce),
+                resync_input(&record.shell, record.track.clear_chord),
             )
         };
 
@@ -313,6 +319,9 @@ impl TerminalService {
                 let pending = record.pending_execution_id.take();
                 record.exec_state = SessionExecState::Booting;
                 record.command_sent_at = None;
+                record.track.pending_exit = None;
+                record.track.probed = false;
+                record.track.user_prompts_owed = 0;
                 Some(pending)
             } else {
                 None
@@ -332,8 +341,12 @@ impl TerminalService {
 
     /// The user's own keystrokes. Enter at a prompt starts a command the
     /// runtime did not run, so the session leaves Ready (UserRunning) until
-    /// the next prompt marker: `execute` must not type an approved command
-    /// into an ssh session or an editor. Ctrl+C during a command the runtime
+    /// the prompt marker comes back: `execute` must not type an approved
+    /// command into an ssh session or an editor. A write that submits several
+    /// lines (a paste) is owed that many prompts, and the session is Ready only
+    /// after the last one: an earlier prompt must not make a still-running
+    /// pasted command look finished. Line breaks inside a bracketed paste are
+    /// not submitted and count for nothing. Ctrl+C during a command the runtime
     /// ran is an interrupt.
     pub fn write(&self, session_id: &str, data: &str) -> Result<(), String> {
         let (writer, changed) = {
@@ -345,12 +358,15 @@ impl TerminalService {
 
             let mut changed = None;
             if record.status != "exited" {
-                if record.exec_state == SessionExecState::Ready
-                    && (data.contains('\r') || data.contains('\n'))
-                {
+                let submitted = submitted_lines(data);
+                if record.exec_state == SessionExecState::Ready && submitted > 0 {
+                    record.track.user_prompts_owed = submitted;
                     changed = Some((SessionExecState::Ready, SessionExecState::UserRunning));
                 } else if record.exec_state == SessionExecState::Running && data.contains('\x03') {
                     changed = Some((SessionExecState::Running, SessionExecState::Interrupting));
+                } else if record.exec_state == SessionExecState::UserRunning && data.contains('\x03') {
+                    // Ctrl+C ends what is running; the next prompt is the last one owed.
+                    record.track.user_prompts_owed = record.track.user_prompts_owed.min(1);
                 }
             }
             // Before the write, and announced under the lock, so a prompt that
@@ -703,9 +719,8 @@ mod tests {
                 boot_prompt_received: true,
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
-            read_buffer: String::new(),
-            emitted_tail: 0,
             marker_gen: 0,
+            track: crate::session::SessionTracking::default(),
             child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -745,9 +760,8 @@ mod tests {
                 boot_prompt_received: true,
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
-            read_buffer: String::new(),
-            emitted_tail: 0,
             marker_gen: 0,
+            track: crate::session::SessionTracking::default(),
             child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -970,9 +984,8 @@ mod tests {
                 boot_prompt_received: true,
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
-                read_buffer: String::new(),
-                emitted_tail: 0,
                 marker_gen: 0,
+                track: crate::session::SessionTracking::default(),
                 child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -1015,9 +1028,8 @@ mod tests {
                 boot_prompt_received: true,
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
-                read_buffer: String::new(),
-                emitted_tail: 0,
                 marker_gen: 0,
+                track: crate::session::SessionTracking::default(),
                 child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -1072,9 +1084,8 @@ mod tests {
                 boot_prompt_received: true,
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
-                read_buffer: String::new(),
-                emitted_tail: 0,
                 marker_gen: 0,
+                track: crate::session::SessionTracking::default(),
                 child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -1121,9 +1132,8 @@ mod tests {
                 boot_prompt_received: true,
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
-                read_buffer: String::new(),
-                emitted_tail: 0,
                 marker_gen: 0,
+                track: crate::session::SessionTracking::default(),
                 child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -1267,9 +1277,8 @@ mod tests {
                 boot_prompt_received: true,
                 command_sent_at: None,
                 marker_nonce: "test-nonce".to_string(),
-                read_buffer: String::new(),
-                emitted_tail: 0,
                 marker_gen: 0,
+                track: crate::session::SessionTracking::default(),
                 child: None,
                 created_at: "2026-01-01T00:00:00Z".to_string(),
                 last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -1308,9 +1317,8 @@ mod tests {
             boot_prompt_received: true,
             command_sent_at: None,
             marker_nonce: "test-nonce".to_string(),
-            read_buffer: String::new(),
-            emitted_tail: 0,
             marker_gen: 0,
+            track: crate::session::SessionTracking::default(),
             child: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -1442,6 +1450,136 @@ mod tests {
         }
     }
 
+    // ---- Paste, chord and resync ----
+
+    #[test]
+    fn a_paste_of_two_lines_is_owed_two_prompts_and_execute_waits_for_both() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+        insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+        svc.write("s1", "sleep 1; echo A\rsleep 6; echo B\r").unwrap();
+        {
+            let reg = sessions.lock().unwrap();
+            let record = reg.get("s1").unwrap();
+            assert_eq!(record.exec_state, SessionExecState::UserRunning);
+            assert_eq!(record.track.user_prompts_owed, 2);
+        }
+        let written = captured.lock().unwrap().len();
+        assert_eq!(svc.execute(exec_request("e1")).unwrap_err(), USER_RUNNING_ERROR);
+        assert_eq!(captured.lock().unwrap().len(), written, "nothing was typed into the busy shell");
+        // One prompt: the second pasted command is still running, so the
+        // approved command is still refused.
+        let sink_dyn: Arc<dyn RuntimeEventSink> = sink.clone();
+        let marker = crate::pty::marker_osc('P', "test-nonce", Some(0), None, "/tmp");
+        crate::services::session_service::SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
+        assert_eq!(svc.execute(exec_request("e1")).unwrap_err(), USER_RUNNING_ERROR);
+        // The second prompt: now it runs, and it finishes on ITS marker with ITS exit code.
+        crate::services::session_service::SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
+        svc.execute(exec_request("e1")).expect("Ready after both prompts");
+        let failing = crate::pty::marker_osc('P', "test-nonce", Some(5), None, "/tmp");
+        crate::services::session_service::SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &failing);
+        let finished: Vec<(i32, String)> = sink
+            .events()
+            .into_iter()
+            .filter_map(|e| match e {
+                RuntimeEvent::ExecutionFinished(f) => Some((f.exit_code, f.status)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(finished, vec![(5, "failure".to_string())]);
+    }
+
+    #[test]
+    fn a_bracketed_paste_alone_submits_nothing_and_the_enter_after_it_does() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+        insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+        let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+        svc.write("s1", "\x1b[200~a\rb\r\x1b[201~").unwrap();
+        assert_eq!(sessions.lock().unwrap().get("s1").unwrap().exec_state, SessionExecState::Ready);
+        svc.write("s1", "\r").unwrap();
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.exec_state, SessionExecState::UserRunning);
+        assert_eq!(record.track.user_prompts_owed, 1);
+    }
+
+    #[test]
+    fn ctrl_c_while_pasted_commands_run_leaves_one_prompt_owed() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+        insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+        let svc = TerminalService::new(sessions.clone(), sink as Arc<dyn RuntimeEventSink>);
+        svc.write("s1", "a\rb\rc\r").unwrap();
+        assert_eq!(sessions.lock().unwrap().get("s1").unwrap().track.user_prompts_owed, 3);
+        svc.write("s1", "\x03").unwrap();
+        assert_eq!(sessions.lock().unwrap().get("s1").unwrap().track.user_prompts_owed, 1);
+    }
+
+    #[test]
+    fn execute_uses_the_fallback_clear_when_the_shell_says_the_chord_is_not_bound() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+        insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+        sessions.lock().unwrap().get_mut("s1").unwrap().track.clear_chord = false;
+        let svc = TerminalService::new(sessions, sink as Arc<dyn RuntimeEventSink>);
+        svc.execute(exec_request("e1")).unwrap();
+        assert_eq!(String::from_utf8(captured.lock().unwrap().clone()).unwrap(), "\x05\x15ls\r");
+    }
+
+    #[test]
+    fn resync_clears_the_half_typed_line_before_its_enter() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        for (shell, expect) in [
+            ("bash", "\x1d\r"),
+            ("zsh", "\x05\x15\r"),
+            ("pwsh.exe", "\x1d\x1b[1;5F\x1b[1;5H\r"),
+            ("cmd.exe", "\x1b[1;5F\x1b[1;5H\r"),
+        ] {
+            sessions.lock().unwrap().remove("s1");
+            let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+            insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+            sessions.lock().unwrap().get_mut("s1").unwrap().shell = shell.to_string();
+            let svc = TerminalService::new(sessions.clone(), sink.clone() as Arc<dyn RuntimeEventSink>);
+            svc.resync("s1").unwrap();
+            assert_eq!(String::from_utf8(captured.lock().unwrap().clone()).unwrap(), expect, "{shell}");
+        }
+    }
+
+    #[test]
+    fn execute_forgets_what_a_previous_cmd_command_left_behind() {
+        let sessions = Arc::new(Mutex::new(SessionRegistry::new()));
+        let sink = Arc::new(CollectingSink::new());
+        let captured = Arc::new(Mutex::new(Vec::<u8>::new()));
+        insert_ready(&sessions, "s1", capture_writer(&captured, &sessions));
+        {
+            let mut reg = sessions.lock().unwrap();
+            let record = reg.get_mut("s1").unwrap();
+            record.shell = "cmd.exe".to_string();
+            record.track.pending_exit = Some(9);
+            record.track.probed = true;
+        }
+        let svc = TerminalService::new(sessions.clone(), sink as Arc<dyn RuntimeEventSink>);
+        let mut req = exec_request("e1");
+        req.command = "echo a &".to_string();
+        svc.execute(req).unwrap();
+        let reg = sessions.lock().unwrap();
+        let record = reg.get("s1").unwrap();
+        assert_eq!(record.track.pending_exit, None);
+        assert!(!record.track.probed);
+        assert_eq!(record.track.pending_tail, crate::pty::CmdTail::None);
+        assert_eq!(
+            String::from_utf8(captured.lock().unwrap().clone()).unwrap(),
+            "\x1b[1;5F\x1b[1;5H%__cuz% & echo a &\r"
+        );
+    }
+
     struct FinishDuringWrite {
         sessions: Arc<Mutex<SessionRegistry>>,
         sink: Arc<CollectingSink>,
@@ -1455,7 +1593,7 @@ mod tests {
                 })?;
                 reg.get("s1").unwrap().marker_nonce.clone()
             };
-            let marker = format!("{}|{nonce}|/tmp|0\n", crate::pty::PROMPT_MARKER);
+            let marker = crate::pty::marker_osc('P', &nonce, Some(0), None, "/tmp");
             let sink_dyn: Arc<dyn RuntimeEventSink> = self.sink.clone();
             crate::services::session_service::SessionService::process_reader_chunk(
                 &sink_dyn,

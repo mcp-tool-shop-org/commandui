@@ -6,8 +6,11 @@
 //! command the user typed is running, and reports when it exits.
 //!
 //! A shell that is not installed on this machine is skipped with a message on
-//! stderr, never silently, unless `COMMANDUI_REQUIRE_SHELLS=1` is set (CI):
-//! then a missing shell fails the test.
+//! stderr, never silently, unless it is required (CI): `COMMANDUI_REQUIRE_SHELLS=1`
+//! requires every shell, and a comma-separated list (`bash,cmd`) requires just
+//! those (`cmd`, `powershell`, `pwsh`, `gitbash`, `bash`, `zsh`), so a job that
+//! only has some of them can still insist on the ones it has.
+//! A required shell that is missing fails the test.
 //!
 //! The tests take a lock so one real shell runs at a time: a shell that has to
 //! start while three others are starting (or while the machine is busy) is slow
@@ -59,6 +62,9 @@ struct Live {
     n: u32,
     kind: Kind,
     shell: String,
+    /// Index of the SessionReady event: what the user sees from here on is
+    /// not the shell's banner or the echo of the bootstrap.
+    ready_at: usize,
     _guard: MutexGuard<'static, ()>,
 }
 
@@ -83,20 +89,30 @@ fn wait_for<F: Fn(&[RuntimeEvent]) -> bool>(sink: &Collect, limit: Duration, f: 
     wait_until(limit, || f(&sink.0.lock().unwrap()))
 }
 
-/// What a terminal would show: escape sequences dropped, a cursor-position
-/// escape starts a new row, a carriage return overwrites the row so far, and a
-/// backspace moves the cursor left so that what is written next overwrites
-/// (bash redraws a cleared line as backspaces, spaces, backspaces: the text it
-/// erased is not on screen).
+/// What a terminal would show: escape sequences dropped (a cursor-position
+/// escape starts a new row; erase-in-line `K`, delete-character `P` and
+/// erase-character `X` are applied), a carriage return moves the cursor to the
+/// start of the row and what is written next overwrites from there (the tail of
+/// the row stays until it is written over), and a backspace moves the cursor
+/// left so that what is written next overwrites (bash redraws a cleared line as
+/// backspaces, spaces, backspaces: the text it erased is not on screen).
 fn visible_lines(raw: &str) -> Vec<String> {
     let chars: Vec<char> = raw.chars().collect();
-    let mut rows: Vec<String> = vec![String::new()];
-    // After a bare carriage return the cursor is at column 0: what is already
-    // on the row stays until something is written over it.
-    let mut carriage = false;
-    // How many characters the cursor is to the left of the end of the row.
-    let mut back = 0usize;
+    let mut rows: Vec<Vec<char>> = vec![Vec::new()];
+    let mut cursor = 0usize;
     let mut i = 0;
+    let put = |rows: &mut Vec<Vec<char>>, cursor: &mut usize, c: char| {
+        let row = rows.last_mut().unwrap();
+        while row.len() < *cursor {
+            row.push(' ');
+        }
+        if *cursor < row.len() {
+            row[*cursor] = c;
+        } else {
+            row.push(c);
+        }
+        *cursor += 1;
+    };
     while i < chars.len() {
         let c = chars[i];
         match c {
@@ -104,13 +120,50 @@ fn visible_lines(raw: &str) -> Vec<String> {
                 i += 1;
                 match chars.get(i) {
                     Some('[') => {
+                        let start = i + 1;
                         i += 1;
                         while i < chars.len() && ('\u{20}'..='\u{3f}').contains(&chars[i]) {
                             i += 1;
                         }
-                        if matches!(chars.get(i), Some('H') | Some('f')) {
-                            rows.push(String::new());
-                            back = 0;
+                        let params: String = chars[start..i.min(chars.len())].iter().collect();
+                        let n = params.split(';').next().and_then(|p| p.parse::<usize>().ok());
+                        match chars.get(i) {
+                            Some('H') | Some('f') => {
+                                rows.push(Vec::new());
+                                cursor = 0;
+                            }
+                            Some('C') => cursor += n.unwrap_or(1),
+                            Some('D') => cursor = cursor.saturating_sub(n.unwrap_or(1)),
+                            Some('K') => {
+                                let row = rows.last_mut().unwrap();
+                                match n.unwrap_or(0) {
+                                    0 => row.truncate(cursor),
+                                    1 => {
+                                        for cell in row.iter_mut().take(cursor + 1) {
+                                            *cell = ' ';
+                                        }
+                                    }
+                                    _ => row.clear(),
+                                }
+                            }
+                            Some('P') => {
+                                let row = rows.last_mut().unwrap();
+                                let count = n.unwrap_or(1);
+                                if cursor < row.len() {
+                                    let end = (cursor + count).min(row.len());
+                                    row.drain(cursor..end);
+                                }
+                            }
+                            Some('X') => {
+                                let row = rows.last_mut().unwrap();
+                                let count = n.unwrap_or(1);
+                                for at in cursor..cursor + count {
+                                    if at < row.len() {
+                                        row[at] = ' ';
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                     Some(']') => {
@@ -130,41 +183,18 @@ fn visible_lines(raw: &str) -> Vec<String> {
                     _ => {}
                 }
             }
-            '\r' => {
-                if chars.get(i + 1) != Some(&'\n') {
-                    carriage = true;
-                }
-            }
+            '\r' => cursor = 0,
             '\n' => {
-                carriage = false;
-                back = 0;
-                rows.push(String::new());
+                cursor = 0;
+                rows.push(Vec::new());
             }
             '\u{7}' => {}
-            '\u{8}' => {
-                back = (back + 1).min(rows.last().unwrap().chars().count());
-            }
-            _ => {
-                if carriage {
-                    rows.last_mut().unwrap().clear();
-                    carriage = false;
-                    back = 0;
-                }
-                let row = rows.last_mut().unwrap();
-                if back > 0 {
-                    let mut cells: Vec<char> = row.chars().collect();
-                    let at = cells.len() - back;
-                    cells[at] = c;
-                    *row = cells.into_iter().collect();
-                    back -= 1;
-                } else {
-                    row.push(c);
-                }
-            }
+            '\u{8}' => cursor = cursor.saturating_sub(1),
+            _ => put(&mut rows, &mut cursor, c),
         }
         i += 1;
     }
-    rows.into_iter().map(|r| r.trim().to_string()).collect()
+    rows.into_iter().map(|r| r.into_iter().collect::<String>().trim().to_string()).collect()
 }
 
 fn lines_since(sink: &Collect, from: usize) -> Vec<String> {
@@ -207,6 +237,23 @@ fn work_dir(tag: &str) -> PathBuf {
     dir
 }
 
+/// A working directory of 300 characters (Windows cannot have one of more than
+/// about 250: the longest it can have, which is wider than any console).
+fn long_work_dir(tag: &str) -> PathBuf {
+    let target: usize = if cfg!(windows) { 245 } else { 300 };
+    let mut dir = std::env::temp_dir().join(format!("commandui-long-{}-{tag}", std::process::id()));
+    let mut n = 0;
+    while dir.to_string_lossy().len() + 2 < target {
+        let room = target - dir.to_string_lossy().len() - 1;
+        let name = format!("segment{n:02}-{}", "x".repeat(40));
+        let take = room.min(name.len()).max(1);
+        dir = dir.join(&name[..take]);
+        n += 1;
+    }
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
 fn start(shell: &str, kind: Kind, cwd: &Path) -> Live {
     let guard = ONE_SHELL_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     let sink = Arc::new(Collect(Mutex::new(Vec::new())));
@@ -232,6 +279,13 @@ fn start(shell: &str, kind: Kind, cwd: &Path) -> Live {
     }
     // Let the shell finish drawing its first prompt.
     std::thread::sleep(Duration::from_millis(800));
+    let ready_at = sink
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .position(|e| matches!(e, RuntimeEvent::SessionReady(r) if r.session_id == id))
+        .expect("a SessionReady event");
     Live {
         sink,
         sessions,
@@ -240,6 +294,7 @@ fn start(shell: &str, kind: Kind, cwd: &Path) -> Live {
         n: 0,
         kind,
         shell: shell.to_string(),
+        ready_at,
         _guard: guard,
     }
 }
@@ -313,6 +368,51 @@ impl Live {
         (finished.exit, lines_since(&self.sink, before))
     }
 
+    /// Like `run`, without the pause that looks for a duplicate finish: for the
+    /// commands of a long sequence (the duplicate check is made at the end).
+    fn run_fast(&mut self, command: &str) -> (i32, Vec<String>) {
+        let before = self.event_count();
+        let exec_id = self.start_command(command);
+        let done = wait_for(&self.sink, TIMEOUT, |ev| {
+            ev.iter()
+                .any(|e| matches!(e, RuntimeEvent::ExecutionFinished(f) if f.execution_id == exec_id))
+        });
+        assert!(done, "{}: `{command}` never finished; output: {:?}", self.shell, output_lines(&self.sink));
+        let exit = self
+            .sink
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .find_map(|e| match e {
+                RuntimeEvent::ExecutionFinished(f) if f.execution_id == exec_id => Some(f.exit_code),
+                _ => None,
+            })
+            .unwrap();
+        (exit, lines_since(&self.sink, before))
+    }
+
+    fn debug_events(&self, upto: usize) -> String {
+        self.sink.0.lock().unwrap().iter().take(upto).enumerate().map(|(i, e)| match e {
+            RuntimeEvent::TerminalLine(l) => format!("{i}: line {:?}", l.text.chars().take(50).collect::<String>()),
+            RuntimeEvent::SessionReady(_) => format!("{i}: READY"),
+            RuntimeEvent::SessionCwdChanged(_) => format!("{i}: cwd"),
+            _ => format!("{i}: other"),
+        }).collect::<Vec<_>>().join("
+")
+    }
+
+    /// Everything the user was shown since the session became ready, raw.
+    fn shown_since_ready(&self) -> String {
+        self.sink.0.lock().unwrap()[self.ready_at..]
+            .iter()
+            .filter_map(|e| match e {
+                RuntimeEvent::TerminalLine(l) if l.kind == "stdout" => Some(l.text.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
     fn state_events(&self, from: usize) -> Vec<String> {
         self.sink.0.lock().unwrap()[from..]
             .iter()
@@ -353,6 +453,13 @@ impl Live {
     /// Type half a line, optionally followed by more keystrokes, wait for the
     /// shell to take it, then run an approved command. The typed text must be
     /// gone: not glued to the command, not run, not shown again.
+    ///
+    /// (The echo of the typed text before the clear is deliberately not
+    /// scanned: ConPTY repaints a cleared PSReadLine line by cursor position,
+    /// and `visible_lines` cannot model a screen, so a line that was erased
+    /// would be reported as one that survived. What survives is what the
+    /// approved command ran with, and that is checked below: the `xyz` and
+    /// `xhalf` words, a not-recognized line, and the bare output word.)
     fn half_typed_then_run(&mut self, typed: &[&str], marker_word: &str, what: &str) {
         for part in typed {
             self.terminal.write(&self.id, part).expect("type");
@@ -436,6 +543,163 @@ fn contains_in_order(lines: &[String], wanted: &[String]) -> bool {
     true
 }
 
+/// A block of two lines as one write, the way a paste without bracketed paste
+/// arrives (cmd, and Windows PowerShell without PSReadLine's 2004 mode).
+fn pasted_block(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Bash | Kind::Zsh => "sleep 1; echo pasted-A\rsleep 3; echo pasted-B\r",
+        Kind::Cmd => "ping -n 2 127.0.0.1 >nul & echo pasted-A\rping -n 4 127.0.0.1 >nul & echo pasted-B\r",
+        Kind::PowerShell => "Start-Sleep 1; 'pasted-A'\rStart-Sleep 3; 'pasted-B'\r",
+    }
+}
+
+/// An approved command that prints a line and fails with a known code.
+fn approved_failure(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Bash | Kind::Zsh => "echo approved-out; bash -c 'exit 7'",
+        Kind::Cmd => "echo approved-out & cmd /c exit 7",
+        Kind::PowerShell => "'approved-out'; cmd /c exit 7",
+    }
+}
+
+fn paste_then_approved(live: &mut Live) {
+    let shell = live.shell.clone();
+    let from = live.event_count();
+    live.terminal.write(&live.id, pasted_block(live.kind)).expect("paste");
+    live.wait_state(from, "userRunning");
+    // The first command's output arrives; its prompt has been drawn, and the
+    // second command is running for another few seconds.
+    assert!(
+        wait_until(TIMEOUT, || lines_since(&live.sink, from).iter().any(|l| l == "pasted-A")),
+        "{shell}: the first pasted command never printed; {:?}",
+        lines_since(&live.sink, from)
+    );
+    std::thread::sleep(Duration::from_millis(300));
+    let (_, refused) = live.try_start("echo should-not-run");
+    assert_eq!(
+        refused.expect_err("execute accepted while the second pasted command runs"),
+        USER_RUNNING_ERROR,
+        "{shell}: the first prompt of a two-line paste returned the session to Ready"
+    );
+    // Ready comes only with the last prompt, after the second command's output.
+    live.wait_state(from, "ready");
+    let lines = lines_since(&live.sink, from);
+    assert!(lines.iter().any(|l| l == "pasted-B"), "{shell}: Ready before the second pasted command finished: {lines:?}");
+    std::thread::sleep(Duration::from_millis(500));
+    let before = live.event_count();
+    let command = approved_failure(live.kind);
+    let (exit, approved) = live.run(command);
+    assert_eq!(exit, 7, "{shell}: the approved command's own exit code after a paste; {approved:?}");
+    assert!(approved.iter().any(|l| l == "approved-out"), "{shell}: {approved:?}");
+    assert!(!approved.iter().any(|l| l == "should-not-run" || l == "pasted-B"), "{shell}: {approved:?}");
+    // Order, over the whole interaction.
+    let all = lines_since(&live.sink, from);
+    assert!(
+        contains_in_order(&all, &["pasted-A".to_string(), "pasted-B".to_string(), "approved-out".to_string()]),
+        "{shell}: output out of order: {all:?}"
+    );
+    assert!(!all.iter().any(|l| l == "should-not-run"), "{shell}: a refused command ran: {all:?}");
+    let _ = before;
+}
+
+/// A long working directory, the console at 80 and then 120 columns, and more
+/// commands than a screen holds: the marker is not a row of text, so the width
+/// of the console, wraps, and the first screen fill have no bearing on whether
+/// a command finishes (F-a13c07e1, F-86921478, F-84f2740d).
+fn exercise_long_cwd(shell: &str, kind: Kind, tag: &str) {
+    let dir = long_work_dir(tag);
+    let dir_len = dir.to_string_lossy().len();
+    let mut live = start(shell, kind, &dir);
+    assert!(
+        live.last_cwd().len() + 40 >= dir_len,
+        "{shell}: ready cwd {:?} is not the long directory ({dir_len} characters)",
+        live.last_cwd()
+    );
+    // A resize makes ConPTY repaint the screen, boot echo included: start from
+    // a clean screen so what is checked below is what the commands showed.
+    let clear = match kind {
+        Kind::Cmd => "cls",
+        Kind::PowerShell => "Clear-Host",
+        Kind::Bash | Kind::Zsh => "clear",
+    };
+    let (exit, _) = live.run(clear);
+    assert_eq!(exit, 0, "{shell}: clear the screen");
+    std::thread::sleep(Duration::from_millis(500));
+    live.ready_at = live.event_count();
+    for cols in [80u16, 120] {
+        live.terminal.resize(&live.id, cols, 30).expect("resize");
+        std::thread::sleep(Duration::from_millis(500));
+        for n in 1..=38 {
+            let word = format!("w{cols}n{n}");
+            let (exit, lines) = live.run_fast(&format!("echo {word}"));
+            assert_eq!(exit, 0, "{shell} at {cols} columns: command {n}; lines {lines:?}");
+            assert!(
+                lines.iter().any(|l| *l == word),
+                "{shell} at {cols} columns: command {n} lost its output; {lines:?}"
+            );
+        }
+        let (exit, lines) = live.run_fast(exit_seven(kind));
+        assert_eq!(exit, 7, "{shell} at {cols} columns: exact exit code; {lines:?}");
+        assert!(
+            live.last_cwd().len() + 40 >= dir_len,
+            "{shell} at {cols} columns: cwd {:?} lost its length",
+            live.last_cwd()
+        );
+    }
+    // The finish was reported once for every command.
+    std::thread::sleep(Duration::from_millis(500));
+    let finishes = live
+        .sink
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|e| matches!(e, RuntimeEvent::ExecutionFinished(_)))
+        .count();
+    assert_eq!(finishes, 2 * 39 + 1, "{shell}: every command finished exactly once");
+    let shown = live.shown_since_ready();
+    for needle in ["7733", "COMMANDUI", "__cu"] {
+        assert!(!shown.contains(needle), "{shell}: `{needle}` was displayed; ready_at {}; events:
+{}", live.ready_at, live.debug_events(live.ready_at + 6));
+    }
+    drop(live);
+    let _ = std::fs::remove_dir_all(std::env::temp_dir().join(format!("commandui-long-{}-{tag}", std::process::id())));
+}
+
+/// A working directory whose name is double-width characters, wider than one
+/// console row in cells (and not in characters): the cwd travels in a marker
+/// as percent-escaped UTF-8 and must come back whole (F-84f2740d).
+fn exercise_wide_cwd(shell: &str, kind: Kind, tag: &str) {
+    let root = std::env::temp_dir().join(format!("commandui-wide-{}-{tag}", std::process::id()));
+    let mut dir = root.clone();
+    for n in 0..3 {
+        dir = dir.join(format!("{n}-{}", "\u{65e5}\u{672c}\u{8a9e}".repeat(8)));
+    }
+    std::fs::create_dir_all(&dir).unwrap();
+    let cells: usize = dir
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .chars()
+        .map(|c| if c.is_ascii() { 1 } else { 2 })
+        .sum();
+    assert!(cells > 40);
+    let mut live = start(shell, kind, &dir);
+    let wanted = last_component(&dir.to_string_lossy());
+    assert_eq!(last_component(&live.last_cwd()), wanted, "{shell}: the wide cwd came back whole");
+    for n in 1..=6 {
+        let word = format!("wide{n}");
+        let (exit, lines) = live.run_fast(&format!("echo {word}"));
+        assert_eq!(exit, 0, "{shell}: command {n} in a wide cwd; {lines:?}");
+        assert!(lines.iter().any(|l| *l == word), "{shell}: {lines:?}");
+    }
+    assert_eq!(last_component(&live.last_cwd()), wanted, "{shell}: the wide cwd after the commands");
+    let shown = live.shown_since_ready();
+    assert!(!shown.contains("7733"), "{shell}: marker displayed");
+    drop(live);
+    let _ = std::fs::remove_dir_all(root);
+}
+
 /// The whole contract, against one real shell.
 fn exercise(shell: &str, kind: Kind, tag: &str) {
     let dir = work_dir(tag);
@@ -452,7 +716,8 @@ fn exercise(shell: &str, kind: Kind, tag: &str) {
     assert!(lines.iter().any(|l| l == "probe-ok"), "{shell}: no bare probe-ok line in {lines:?}");
     let shown = lines.join("\n");
     assert!(!shown.contains("COMMANDUI"), "{shell}: marker plumbing was displayed: {shown}");
-    assert!(!shown.contains("__cui"), "{shell}: marker plumbing was displayed: {shown}");
+    assert!(!shown.contains("__cu"), "{shell}: marker plumbing was displayed: {shown}");
+    assert!(!shown.contains("7733"), "{shell}: marker plumbing was displayed: {shown}");
 
     // Half-typed input is discarded, with the cursor at the end of the line...
     live.half_typed_then_run(&["xyz"], "probe-two", "cursor at end");
@@ -505,13 +770,45 @@ fn exercise(shell: &str, kind: Kind, tag: &str) {
     assert_eq!(exit, 0, "{shell}: second command after the alternate screen");
 
     // cmd specifics: `!` in a command, a trailing rem, a program that flushes
-    // the console input buffer.
+    // the console input buffer, lines that cannot carry the exit-code tail.
     if kind == Kind::Cmd {
         let (exit, lines) = live.run("echo hello!");
         assert_eq!(exit, 0, "{shell}: bang exit; {lines:?}");
         assert!(lines.iter().any(|l| l == "hello!"), "{shell}: `!` was eaten: {lines:?}");
         let (exit, lines) = live.run("echo rem-ok & rem");
         assert_eq!(exit, 0, "{shell}: trailing rem; {lines:?}");
+        // Two built-ins in a row: neither may report a code the command
+        // before it left behind. The exit-code tail ends in `set /p` on empty
+        // input, which leaves ERRORLEVEL at 1: only the `(call )` reset in
+        // front of every approved line makes the next echo report 0.
+        let (exit, lines) = live.run("echo first-builtin");
+        assert_eq!(exit, 0, "{shell}: first built-in; {lines:?}");
+        let (exit, lines) = live.run("echo second-builtin");
+        assert_eq!(exit, 0, "{shell}: a built-in after another command reported its leftover code; {lines:?}");
+        let (exit, _) = live.run("cd .");
+        assert_eq!(exit, 0, "{shell}: cd after a command");
+        let (exit, _) = live.run("cd ..");
+        assert_eq!(exit, 0, "{shell}: cd .. after a command");
+        // `if` and `for` take the rest of the line, and a trailing operator
+        // does not parse with the tail after it (F-108e81bd): none of them may
+        // leave the session Running, and the exit codes they have are kept.
+        let (exit, lines) = live.run("if 1==1 cmd /c exit 3");
+        assert_eq!(exit, 3, "{shell}: if keeps the exit code; {lines:?}");
+        let (exit, lines) = live.run("echo end-amp &");
+        assert_eq!(exit, 0, "{shell}: trailing &; {lines:?}");
+        assert!(lines.iter().any(|l| l == "end-amp"), "{shell}: {lines:?}");
+        let (_exit, lines) = live.run("echo end-pipe |");
+        assert!(!lines.is_empty(), "{shell}: trailing |; {lines:?}");
+        let (exit, lines) = live.run("echo end-redir >");
+        assert_ne!(exit, 0, "{shell}: a redirection with no target is an error; {lines:?}");
+        let (exit, lines) = live.run("echo end-and &&");
+        assert_ne!(exit, 0, "{shell}: a trailing && is an error; {lines:?}");
+        let (exit, lines) = live.run("echo for you");
+        assert_eq!(exit, 0, "{shell}: `for` as an argument; {lines:?}");
+        assert!(lines.iter().any(|l| l == "for you"), "{shell}: {lines:?}");
+        let (exit, lines) = live.run("echo after-operators");
+        assert_eq!(exit, 0, "{shell}: the session works after the odd lines; {lines:?}");
+        assert!(lines.iter().any(|l| l == "after-operators"), "{shell}: {lines:?}");
         let exec = live.start_command("pause");
         assert!(
             wait_until(TIMEOUT, || output_lines(&live.sink).iter().any(|l| l.contains("Press any key"))),
@@ -570,7 +867,12 @@ fn exercise(shell: &str, kind: Kind, tag: &str) {
     assert_eq!(exit, 0, "{shell}: execute after interrupting a typed command");
 
     // A built-in that does not touch ERRORLEVEL (cmd's echo) must not report
-    // the code the command before it left behind.
+    // the code the command before it left behind. (Every approved cmd line ends
+    // in a tail whose `set /p` on empty input leaves ERRORLEVEL at 1, so the
+    // `(call )` reset in front of the line is what makes the consecutive
+    // built-ins above, and the ones here, report 0. Verified on a scratch copy,
+    // 2026-10-03: with the reset removed from command_line_for_shell, live_cmd
+    // is red at the first echo after another approved command.)
     let (exit, _) = live.run(exit_seven(kind));
     assert_eq!(exit, 7, "{shell}: a failing command before the built-in");
     let (exit, lines) = live.run("echo after-failure");
@@ -584,6 +886,12 @@ fn exercise(shell: &str, kind: Kind, tag: &str) {
     std::thread::sleep(Duration::from_millis(500));
     let (exit, lines) = live.run("echo after-second-interrupt");
     assert_eq!(exit, 0, "{shell}: a built-in after Ctrl+C reported the interrupt code; {lines:?}");
+
+    // A pasted block of two lines: the first prompt must not return the
+    // session to Ready while the second command still runs, and an approved
+    // command written afterwards finishes on ITS OWN prompt with ITS exit code,
+    // after both pasted commands (F-8792debb, F-d4a95b36).
+    paste_then_approved(&mut live);
 
     // Editing modes: the approved command must replace whatever is typed,
     // whichever mode the line editor is in.
@@ -614,6 +922,18 @@ fn exercise(shell: &str, kind: Kind, tag: &str) {
             live.half_typed_then_run(&["echo Xhalf"], "probe-emacs", "emacs mode");
         }
         Kind::Cmd | Kind::Zsh => {}
+    }
+
+    // Nothing of the marker machinery was ever shown after the session became
+    // ready: no sequence, no plumbing, in any display line.
+    let shown = live.shown_since_ready();
+    for needle in ["7733", "COMMANDUI", "__cu", "ERRORLEVEL"] {
+        assert!(!shown.contains(needle), "{shell}: `{needle}` was displayed; ready_at {}; events:
+{}", live.ready_at, live.debug_events(live.ready_at + 6));
+    }
+    assert!(!shown.contains("\x1b]7733"), "{shell}: a marker sequence reached the display");
+    for line in output_lines(&live.sink).iter().skip(1) {
+        assert!(!line.contains("__COMMANDUI"), "{shell}: marker text in a display line: {line:?}");
     }
 
     // The shell exits: the watcher notices (ConPTY never closes its pipe), the
@@ -654,16 +974,25 @@ fn on_path(exe: &str) -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
+/// Is `key` required by a `COMMANDUI_REQUIRE_SHELLS` value? `1` (or `all`)
+/// requires every shell; a comma-separated list requires the named ones.
+fn required_in(value: &str, key: &str) -> bool {
+    let value = value.trim().to_lowercase();
+    value == "1" || value == "all" || value.split(',').any(|k| k.trim() == key)
+}
+
 /// A shell that is not here is skipped with a message, or fails the test when
-/// the environment says every shell must be present.
-fn skip(shell: &str, why: &str) {
-    let required = std::env::var("COMMANDUI_REQUIRE_SHELLS").map(|v| v == "1").unwrap_or(false);
+/// the environment says it must be present.
+fn skip(key: &str, shell: &str, why: &str) {
+    let required = std::env::var("COMMANDUI_REQUIRE_SHELLS")
+        .map(|v| required_in(&v, key))
+        .unwrap_or(false);
     skip_if(required, shell, why);
 }
 
 fn skip_if(required: bool, shell: &str, why: &str) {
     if required {
-        panic!("live shell test for {shell} cannot run ({why}) and COMMANDUI_REQUIRE_SHELLS=1");
+        panic!("live shell test for {shell} cannot run ({why}) and COMMANDUI_REQUIRE_SHELLS requires it");
     }
     eprintln!("SKIPPED live shell test for {shell}: {why}");
 }
@@ -682,10 +1011,64 @@ fn live_windows_powershell() {
 
 #[cfg(windows)]
 #[test]
+fn live_cmd_wide_cwd() {
+    exercise_wide_cwd("cmd.exe", Kind::Cmd, "cmdwide");
+}
+
+#[cfg(windows)]
+#[test]
+fn live_windows_powershell_wide_cwd() {
+    exercise_wide_cwd("powershell.exe", Kind::PowerShell, "ps5wide");
+}
+
+#[cfg(windows)]
+#[test]
+fn live_pwsh_wide_cwd() {
+    match on_path("pwsh.exe") {
+        Some(path) => exercise_wide_cwd(&path, Kind::PowerShell, "pwshwide"),
+        None => skip("pwsh", "pwsh.exe", "not on PATH"),
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn live_git_bash_wide_cwd() {
+    match first_existing(&[
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+    ]) {
+        Some(path) => exercise_wide_cwd(&path, Kind::Bash, "gitbashwide"),
+        None => skip("gitbash", "Git Bash", "not installed"),
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn live_cmd_long_cwd() {
+    exercise_long_cwd("cmd.exe", Kind::Cmd, "cmdlong");
+}
+
+#[cfg(windows)]
+#[test]
+fn live_windows_powershell_long_cwd() {
+    exercise_long_cwd("powershell.exe", Kind::PowerShell, "ps5long");
+}
+
+#[cfg(windows)]
+#[test]
 fn live_pwsh() {
     match on_path("pwsh.exe") {
         Some(path) => exercise(&path, Kind::PowerShell, "pwsh"),
-        None => skip("pwsh.exe", "not on PATH"),
+        None => skip("pwsh", "pwsh.exe", "not on PATH"),
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn live_pwsh_long_cwd() {
+    match on_path("pwsh.exe") {
+        Some(path) => exercise_long_cwd(&path, Kind::PowerShell, "pwshlong"),
+        None => skip("pwsh", "pwsh.exe", "not on PATH"),
     }
 }
 
@@ -697,7 +1080,19 @@ fn live_git_bash_on_windows() {
         r"C:\Program Files (x86)\Git\bin\bash.exe",
     ]) {
         Some(path) => exercise(&path, Kind::Bash, "gitbash"),
-        None => skip("Git Bash", "not installed"),
+        None => skip("gitbash", "Git Bash", "not installed"),
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn live_git_bash_long_cwd() {
+    match first_existing(&[
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+    ]) {
+        Some(path) => exercise_long_cwd(&path, Kind::Bash, "gitbashlong"),
+        None => skip("gitbash", "Git Bash", "not installed"),
     }
 }
 
@@ -711,7 +1106,31 @@ fn live_bash() {
     candidates.extend(["/bin/bash", "/usr/bin/bash"]);
     match first_existing(&candidates) {
         Some(path) => exercise(&path, Kind::Bash, "bash"),
-        None => skip("bash", "not installed"),
+        None => skip("bash", "bash", "not installed"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn live_bash_wide_cwd() {
+    let chosen = std::env::var("COMMANDUI_LIVE_BASH").ok();
+    let mut candidates: Vec<&str> = chosen.iter().map(|s| s.as_str()).collect();
+    candidates.extend(["/bin/bash", "/usr/bin/bash"]);
+    match first_existing(&candidates) {
+        Some(path) => exercise_wide_cwd(&path, Kind::Bash, "bashwide"),
+        None => skip("bash", "bash", "not installed"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn live_bash_long_cwd() {
+    let chosen = std::env::var("COMMANDUI_LIVE_BASH").ok();
+    let mut candidates: Vec<&str> = chosen.iter().map(|s| s.as_str()).collect();
+    candidates.extend(["/bin/bash", "/usr/bin/bash"]);
+    match first_existing(&candidates) {
+        Some(path) => exercise_long_cwd(&path, Kind::Bash, "bashlong"),
+        None => skip("bash", "bash", "not installed"),
     }
 }
 
@@ -720,7 +1139,7 @@ fn live_bash() {
 fn live_zsh() {
     match first_existing(&["/bin/zsh", "/usr/bin/zsh", "/opt/homebrew/bin/zsh"]) {
         Some(path) => exercise(&path, Kind::Zsh, "zsh"),
-        None => skip("zsh", "not installed"),
+        None => skip("zsh", "zsh", "not installed"),
     }
 }
 
@@ -739,22 +1158,53 @@ fn visible_lines_follows_a_terminal() {
 }
 
 #[test]
+fn visible_lines_keeps_what_an_overwrite_does_not_reach() {
+    // A tail-preserving overwrite: the surviving tail is on screen.
+    assert_eq!(visible_lines("abc\u{8}\u{8}X"), vec!["aXc"]);
+    // CR then shorter text: the rest of the row stays.
+    assert_eq!(visible_lines("echo xyz\rabcd"), vec!["abcd xyz"]);
+    assert_eq!(visible_lines("echo xyz\r\n"), vec!["echo xyz", ""]);
+    // Backspace at column 0 goes nowhere.
+    assert_eq!(visible_lines("\u{8}\u{8}ab"), vec!["ab"]);
+    assert_eq!(visible_lines("x\r\u{8}y"), vec!["y"]);
+    // Erase in line, delete character, erase character.
+    assert_eq!(visible_lines("hello world\r\u{1b}[5C\u{1b}[K"), vec!["hello"]);
+    assert_eq!(visible_lines("hello\u{8}\u{8}\u{8}\u{1b}[K"), vec!["he"]);
+    assert_eq!(visible_lines("abcdef\r\u{1b}[2P"), vec!["cdef"]);
+    assert_eq!(visible_lines("abcdef\r\u{1b}[3X"), vec!["def"]);
+    assert_eq!(visible_lines("abcdef\u{1b}[2K"), vec![""]);
+    // A short overwrite that leaves part of a typed line behind is visible.
+    assert_eq!(visible_lines("> echo xhalf\r> echo\u{1b}[K\r\n"), vec!["> echo", ""]);
+    assert_eq!(visible_lines("> echo xhalf\r> echo ok\r\n"), vec!["> echo okalf", ""]);
+}
+
+#[test]
 fn skipped_shells_fail_when_they_are_required() {
     skip_if(false, "nonexistent-shell", "this is a probe of skip_if()");
     let required = std::panic::catch_unwind(|| {
         skip_if(true, "nonexistent-shell", "this is a probe of skip_if()");
     });
-    assert!(required.is_err(), "a skipped shell did not fail with COMMANDUI_REQUIRE_SHELLS=1");
+    assert!(required.is_err(), "a skipped shell did not fail when it was required");
+}
+
+#[test]
+fn require_shells_takes_all_or_a_list() {
+    assert!(required_in("1", "bash") && required_in("1", "zsh"));
+    assert!(required_in("all", "cmd"));
+    assert!(required_in("bash", "bash"));
+    assert!(!required_in("bash", "zsh"), "a job that has bash must not be made to have zsh");
+    assert!(required_in("bash, cmd ,pwsh", "cmd") && required_in("Bash,CMD", "cmd"));
+    assert!(!required_in("", "bash") && !required_in("0", "bash"));
 }
 
 #[cfg(windows)]
 #[test]
 fn default_shell_prefers_pwsh_on_path_over_windows_powershell() {
     if std::env::var_os("COMMANDUI_WINDOWS_SHELL").is_some() {
-        return skip("default_shell", "COMMANDUI_WINDOWS_SHELL overrides it");
+        return skip("default_shell", "default_shell", "COMMANDUI_WINDOWS_SHELL overrides it");
     }
     let Some(on_path_pwsh) = on_path("pwsh.exe") else {
-        return skip("default_shell", "pwsh.exe is not on PATH, so 5.1 is the right answer");
+        return skip("default_shell", "default_shell", "pwsh.exe is not on PATH, so 5.1 is the right answer");
     };
     let chosen = commandui_runtime_core::pty::default_shell();
     assert!(chosen.to_lowercase().ends_with("pwsh.exe"), "chose {chosen}, pwsh is at {on_path_pwsh}");

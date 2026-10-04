@@ -53,9 +53,8 @@ mod tests {
             boot_prompt_received: false,
             command_sent_at: None,
             marker_nonce: "parity-nonce".to_string(),
-            read_buffer: String::new(),
-            emitted_tail: 0,
             marker_gen: 0,
+            track: crate::session::SessionTracking::default(),
             child: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -81,9 +80,8 @@ mod tests {
             boot_prompt_received: true,
             command_sent_at: None,
             marker_nonce: "parity-nonce".to_string(),
-            read_buffer: String::new(),
-            emitted_tail: 0,
             marker_gen: 0,
+            track: crate::session::SessionTracking::default(),
             child: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
@@ -109,17 +107,12 @@ mod tests {
             boot_prompt_received: true,
             command_sent_at: None,
             marker_nonce: "parity-nonce".to_string(),
-            read_buffer: String::new(),
-            emitted_tail: 0,
             marker_gen: 0,
+            track: crate::session::SessionTracking::default(),
             child: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             last_active_at: "2026-01-01T00:00:00Z".to_string(),
         });
-    }
-
-    fn prompt_marker() -> &'static str {
-        crate::pty::PROMPT_MARKER
     }
 
     // ---- Boot sequence parity ----
@@ -131,7 +124,7 @@ mod tests {
         let sessions = make_sessions();
         insert_booting_session(&sessions, "s1");
 
-        let marker = format!("{}|parity-nonce|/home/user|0\n", prompt_marker());
+        let marker = crate::pty::marker_osc('P',"parity-nonce", Some(0), None, "/home/user");
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
 
         let events = sink.events();
@@ -151,7 +144,7 @@ mod tests {
         let sessions = make_sessions();
         insert_running_session(&sessions, "s1", "exec-1");
 
-        let marker = format!("{}|parity-nonce|/tmp|0\n", prompt_marker());
+        let marker = crate::pty::marker_osc('P',"parity-nonce", Some(0), None, "/tmp");
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
 
         let events = sink.events();
@@ -172,7 +165,7 @@ mod tests {
         let sessions = make_sessions();
         insert_running_session(&sessions, "s1", "exec-2");
 
-        let marker = format!("{}|parity-nonce|/tmp|1\n", prompt_marker());
+        let marker = crate::pty::marker_osc('P',"parity-nonce", Some(1), None, "/tmp");
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
 
         let events = sink.events();
@@ -194,7 +187,7 @@ mod tests {
         let sessions = make_sessions();
         insert_interrupting_session(&sessions, "s1", "exec-3");
 
-        let marker = format!("{}|parity-nonce|/home/user|130\n", prompt_marker());
+        let marker = crate::pty::marker_osc('P',"parity-nonce", Some(130), None, "/home/user");
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
 
         let events = sink.events();
@@ -216,7 +209,7 @@ mod tests {
         let sessions = make_sessions();
         insert_running_session(&sessions, "s1", "exec-4");
 
-        let marker = format!("{}|parity-nonce|/new/dir|0\n", prompt_marker());
+        let marker = crate::pty::marker_osc('P',"parity-nonce", Some(0), None, "/new/dir");
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &marker);
 
         let events = sink.events();

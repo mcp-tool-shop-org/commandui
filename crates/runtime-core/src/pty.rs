@@ -1,14 +1,54 @@
+//! Shell processes on a pty, and the markers their prompts emit.
+//!
+//! # Markers are invisible OSC sequences
+//!
+//! Every shell is bootstrapped with a prompt hook that writes one operating
+//! system command to the terminal, the way VS Code's shell integration does:
+//!
+//! ```text
+//! ESC ] 7733 ; <kind> ; <nonce> ; <exit> ; <chord> ; <cwd> ( BEL | ESC \ )
+//! ```
+//!
+//! * `7733` is a vendor number nothing else here uses (VS Code is 633,
+//!   FinalTerm 133, iTerm 1337, ConEmu 9, Windows Terminal 9001). A private
+//!   number keeps a shell that also has VS Code's integration (inherited
+//!   `TERM_PROGRAM=vscode`) from emitting sequences that look like ours.
+//! * `kind` is `P` (a prompt was drawn) or `X` (cmd only: the exit code of the
+//!   command that just ran, written just before its prompt).
+//! * `nonce` is per session. `exit` is an integer or empty (cmd's prompt cannot
+//!   expand ERRORLEVEL). `chord` is `1`/`0` when the shell says whether the
+//!   clear-line chord is bound, else empty.
+//! * `cwd` is last and percent-encoded: `%`, `;`, ESC, BEL, CR and LF never
+//!   appear in it raw, so it cannot end the sequence or split a field.
+//!
+//! An OSC takes no columns and is never wrapped, repainted or split by the
+//! console, so the reader recovers a marker from the raw byte stream
+//! (`MarkerScanner`) before any line handling, display rewrite or console
+//! width is involved, and never displays it. Verified live against ConPTY on
+//! cmd, Windows PowerShell 5.1, PowerShell 7 and Git Bash (it arrives
+//! byte-for-byte, in order with the text around it).
+//!
+//! Residual risk: the nonce lives in shell-readable state (the prompt hook, the
+//! echoed cmd line), so a command running in the session can print a forged
+//! marker and finish itself. The nonce stops stale or unrelated output, not a
+//! hostile command in the same shell.
 use portable_pty::{native_pty_system, CommandBuilder, PtyPair, PtySize};
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
-
-pub const PROMPT_MARKER: &str = "__COMMANDUI_PROMPT__";
 
 /// The key that submits a line to a PTY. A Windows ConPTY submits on CR
 /// (Enter); LF is Ctrl+J there and never runs the line. Unix ptys translate
 /// CR to LF (ICRNL) and readline/zle accept it. Every line runtime-core builds
 /// itself ends in this; `write_raw` (the user's own keystrokes) never adds it.
 pub(crate) const ENTER: &str = "\r";
+
+/// Columns and rows of a new pty.
+pub(crate) const PTY_COLS: u16 = 120;
+const PTY_ROWS: u16 = 30;
+
+/// What every marker starts with.
+const OSC_MARKER_OPEN: &str = "\x1b]7733;";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ShellFamily {
@@ -95,8 +135,8 @@ pub fn spawn_shell(
     let pty_system = native_pty_system();
     let pair = pty_system
         .openpty(PtySize {
-            rows: 30,
-            cols: 120,
+            rows: PTY_ROWS,
+            cols: PTY_COLS,
             pixel_width: 0,
             pixel_height: 0,
         })
@@ -131,122 +171,394 @@ pub fn write_raw(handle: &PtyHandle, data: &str) -> Result<(), String> {
 fn prepare_shell_command(shell: &str, cwd: Option<&str>) -> CommandBuilder {
     let mut cmd = CommandBuilder::new(shell);
     // Delayed expansion is deliberately NOT enabled for cmd: it would rewrite
-    // every `!` in the user's commands and paths. The marker uses a one-shot
-    // `cmd /v:on /c` child instead (see `cmd_marker_value`).
+    // every `!` in the user's commands and paths.
     if let Some(dir) = cwd {
         cmd.cwd(dir);
     }
     cmd
 }
 
-/// Exit-code field of a marker that only says "a prompt was drawn" (cmd's
-/// PROMPT cannot expand ERRORLEVEL). It finishes nothing; it returns a session
-/// that was booting, resynced or running a command the user typed to Ready.
-pub(crate) const PROMPT_ONLY_EXIT: i32 = i32::MIN;
-/// How that marker spells its exit-code field. One character: a marker row
-/// that wraps at the console width cannot be parsed.
-pub(crate) const PROMPT_ONLY_FIELD: &str = "P";
+// ---------------------------------------------------------------------------
+// Markers
+// ---------------------------------------------------------------------------
 
-/// Name of the cmd variable that holds the marker plumbing, so the line the
-/// console echoes for an executed command ends in a short ` & %__cui%`.
-const CMD_VAR: &str = "__cui";
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MarkerKind {
+    /// A prompt was drawn: the shell is idle. Carries the exit code of the
+    /// command that ended, when the shell knows it.
+    Prompt,
+    /// cmd only: the exit code of the command that just ran, written before
+    /// its prompt.
+    Exit,
+}
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Marker {
+    pub kind: MarkerKind,
+    pub nonce: String,
+    pub exit: Option<i32>,
+    /// Whether the shell reports its clear-line chord as bound.
+    pub chord: Option<bool>,
+    /// Decoded; empty for an exit marker.
+    pub cwd: String,
+}
+
+/// Undo `encode_cwd`: every `%HH` becomes that byte; the result is read as
+/// UTF-8 (lossily). A `%` not followed by two hex digits is kept as written.
+pub(crate) fn decode_cwd(raw: &str) -> String {
+    let bytes = raw.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = |b: u8| (b as char).to_digit(16);
+            if let (Some(h), Some(l)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                out.push((h * 16 + l) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// What the shell hooks do to a cwd: `%`, `;`, ESC, BEL, CR and LF are written
+/// as `%25`, `%3B`, `%1B`, `%07`, `%0D`, `%0A`.
+#[cfg(test)]
+pub(crate) fn encode_cwd(cwd: &str) -> String {
+    let mut out = String::with_capacity(cwd.len());
+    for c in cwd.chars() {
+        match c {
+            '%' => out.push_str("%25"),
+            ';' => out.push_str("%3B"),
+            '\x1b' => out.push_str("%1B"),
+            '\x07' => out.push_str("%07"),
+            '\r' => out.push_str("%0D"),
+            '\n' => out.push_str("%0A"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Parse the part of a marker after `ESC ] 7733 ;`. Anything malformed is not
+/// a marker: a bad exit code, an unknown kind, a missing field.
+pub(crate) fn parse_marker(body: &str) -> Option<Marker> {
+    let mut fields = body.splitn(5, ';');
+    let kind = match fields.next()? {
+        "P" => MarkerKind::Prompt,
+        "X" => MarkerKind::Exit,
+        _ => return None,
+    };
+    let nonce = fields.next()?;
+    if nonce.is_empty() {
+        return None;
+    }
+    let exit = match fields.next()? {
+        "" => None,
+        code => Some(code.parse::<i32>().ok()?),
+    };
+    let chord = match fields.next()? {
+        "1" => Some(true),
+        "0" => Some(false),
+        _ => None,
+    };
+    let cwd = decode_cwd(fields.next()?);
+    Some(Marker { kind, nonce: nonce.to_string(), exit, chord, cwd })
+}
+
+/// A marker as the hooks write it, for tests.
+#[cfg(test)]
+pub(crate) fn marker_osc(kind: char, nonce: &str, exit: Option<i32>, chord: Option<bool>, cwd: &str) -> String {
+    let exit = exit.map(|c| c.to_string()).unwrap_or_default();
+    let chord = match chord {
+        Some(true) => "1",
+        Some(false) => "0",
+        None => "",
+    };
+    format!("{OSC_MARKER_OPEN}{kind};{nonce};{exit};{chord};{}\x07", encode_cwd(cwd))
+}
+
+/// What the reader hands on, in stream order.
+#[derive(Debug, PartialEq)]
+pub(crate) enum ReaderEvent {
+    Text(String),
+    Marker(Marker),
+}
+
+/// The longest OSC the scanner waits for the end of. A longer one is not a
+/// marker and is released as text.
+const MAX_OSC_LEN: usize = 8192;
+
+/// Takes marker sequences out of the text stream. Everything else, including
+/// every other escape sequence, passes through in order. An OSC cut in half by
+/// a read is held for the next one (bounded by `MAX_OSC_LEN`).
+///
+/// Window-title OSCs (`0`, `1`, `2`) are dropped as well: cmd retitles its
+/// console with the command line it is running, which would show the plumbing.
+#[derive(Default)]
+pub(crate) struct MarkerScanner {
+    carry: String,
+}
+
+/// Where an OSC that starts at `rest[0]` (`ESC ]`) ends: `(end of body, end of
+/// sequence)`, or None when it is not complete yet. A line break or an ESC that
+/// is not the start of ST also ends one, as in a terminal; neither is part of
+/// the sequence.
+fn osc_end(rest: &str) -> Option<(usize, usize)> {
+    let b = rest.as_bytes();
+    let mut j = 2;
+    while j < b.len() {
+        match b[j] {
+            0x07 => return Some((j, j + 1)),
+            0x1b if b.get(j + 1) == Some(&b'\\') => return Some((j, j + 2)),
+            0x1b if j + 1 >= b.len() => return None,
+            // Any other ESC starts a new sequence and aborts this one, as in a
+            // terminal: a half-received OSC cannot swallow the marker after it.
+            0x1b | b'\r' | b'\n' => return Some((j, j)),
+            _ => j += 1,
+        }
+    }
+    None
+}
+
+impl MarkerScanner {
+    pub(crate) fn push(&mut self, text: &str) -> Vec<ReaderEvent> {
+        let mut input = std::mem::take(&mut self.carry);
+        input.push_str(text);
+        let mut events = Vec::new();
+        let mut plain = String::new();
+        let mut i = 0;
+        while i < input.len() {
+            let Some(rel) = input[i..].find('\x1b') else {
+                plain.push_str(&input[i..]);
+                break;
+            };
+            plain.push_str(&input[i..i + rel]);
+            i += rel;
+            let rest = &input[i..];
+            if rest.len() == 1 {
+                // A lone ESC at the end of the read: the next one says what it is.
+                self.carry = rest.to_string();
+                break;
+            }
+            if !rest.starts_with("\x1b]") {
+                plain.push('\x1b');
+                i += 1;
+                continue;
+            }
+            let Some((body_end, total)) = osc_end(rest) else {
+                if rest.len() > MAX_OSC_LEN {
+                    plain.push('\x1b');
+                    i += 1;
+                    continue;
+                }
+                self.carry = rest.to_string();
+                break;
+            };
+            let body = &rest[2..body_end];
+            if let Some(marker_body) = body.strip_prefix("7733;") {
+                if !plain.is_empty() {
+                    events.push(ReaderEvent::Text(std::mem::take(&mut plain)));
+                }
+                // A malformed marker is dropped, never shown.
+                if let Some(marker) = parse_marker(marker_body) {
+                    events.push(ReaderEvent::Marker(marker));
+                }
+            } else if body.starts_with("0;") || body.starts_with("1;") || body.starts_with("2;") {
+                // A window title: not output.
+            } else {
+                plain.push_str(&rest[..total]);
+            }
+            i += total;
+        }
+        if !plain.is_empty() {
+            events.push(ReaderEvent::Text(plain));
+        }
+        events
+    }
+
+    /// Whatever is still held when the stream ends. A half-received marker or
+    /// title is dropped; anything else is text.
+    pub(crate) fn finish(&mut self) -> String {
+        let carry = std::mem::take(&mut self.carry);
+        if carry.starts_with("\x1b]") {
+            let body = &carry[2..];
+            let ours = OSC_MARKER_OPEN[2..].starts_with(body) || body.starts_with("7733;");
+            let title = body.starts_with("0;") || body.starts_with("1;") || body.starts_with("2;");
+            if ours || title {
+                return String::new();
+            }
+        }
+        carry
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shell hooks
+// ---------------------------------------------------------------------------
+
+/// Name of the cmd variable holding an ESC character.
+const CMD_ESC_VAR: &str = "__cue";
+/// Name of the cmd variable that holds the exit-code tail.
+const CMD_TAIL_VAR: &str = "__cui";
 /// Name of the cmd variable holding `(call )`, which sets ERRORLEVEL to 0.
-/// cmd's built-ins (echo, cd, set) never reset ERRORLEVEL, so without it an
-/// approved `echo` after a failure, or after Ctrl+C, would report that old code.
+/// cmd's built-ins (echo, cd, set) never reset ERRORLEVEL, and the tail's own
+/// `set /p` leaves it at 1, so without it an approved `echo` would report
+/// whatever the command before it left behind.
 const CMD_RESET_VAR: &str = "__cuz";
 
 /// What the console echoes in front of an executed cmd command: the
 /// ERRORLEVEL reset. It is dropped from what is shown.
 pub(crate) const CMD_RESET_ECHO: &str = "%__cuz% & ";
+/// What it echoes after an executed cmd command: the exit-code tail.
+pub(crate) const CMD_TAIL_ECHO: &str = " & %__cui%";
+/// The tail alone, as a line of its own (the probe after a command that could
+/// not carry it).
+pub(crate) const CMD_PROBE_ECHO: &str = "%__cui%";
 
-/// What the console echoes after an executed cmd command: the chained marker
-/// plumbing. It is dropped from what is shown.
-pub(crate) const CMD_PLUMBING_ECHO: &str = " & %__cui%";
-/// The same, as a line of its own (the fallback for commands that cannot be
-/// chained).
-pub(crate) const CMD_MARKER_VAR_ECHO: &str = "%__cui%";
+const CMD_PLUMBING: [&str; 3] = [CMD_RESET_ECHO, CMD_TAIL_ECHO, CMD_PROBE_ECHO];
 
-/// The text of `%__cui%` for cmd: capture the exit code, then print the marker
-/// from a one-shot `cmd /v:on /c` child so delayed expansion never touches the
-/// interactive session. `!CD!` is expanded by the child and its value is not
-/// re-parsed, so a path containing `& ! ^ |` is safe. The carets are tripled
-/// because the parent shell consumes one level. The value is set inside quotes
-/// (where `&`, `^` and `|` are literal) and is expanded when a typed line
-/// containing `%__cui%` is parsed.
-fn cmd_marker_value(nonce: &str) -> String {
+/// Take the cmd plumbing the console echoes out of display text. `hold` keeps
+/// the tail of the text that could still turn into plumbing once more arrives
+/// (the console echoes a line in pieces: `%__` then `cuz% & dir`). With
+/// `flush` nothing is held. Only used for cmd, and only while a command it ran
+/// is pending.
+pub(crate) fn strip_cmd_plumbing(hold: &mut String, text: &str, flush: bool) -> String {
+    let mut s = std::mem::take(hold);
+    s.push_str(text);
+    for plumbing in CMD_PLUMBING {
+        if s.contains(plumbing) {
+            s = s.replace(plumbing, "");
+        }
+    }
+    if !flush {
+        // The longest suffix that is a proper prefix of some plumbing string.
+        let mut keep = 0;
+        for plumbing in CMD_PLUMBING {
+            for len in (1..plumbing.len()).rev() {
+                if len > keep && len <= s.len() && s.is_char_boundary(s.len() - len) && s.ends_with(&plumbing[..len]) {
+                    keep = len;
+                    break;
+                }
+            }
+        }
+        if keep > 0 {
+            *hold = s.split_off(s.len() - keep);
+        }
+    }
+    s
+}
+
+fn bootstrap_powershell(nonce: &str) -> String {
+    // The prompt function writes the marker with [Console]::Write, as one
+    // write per prompt (a string returned from `prompt` would be measured by
+    // PSReadLine as part of the prompt and drawn again on a full redraw).
+    //
+    // The cwd is written as UTF-8 bytes, every byte outside printable ASCII
+    // (and `%` and `;`) as `%HH`: [Console]::Write encodes with the console's
+    // output code page, which turns a non-ASCII character into `?`.
+    //
+    // The clear chord (Ctrl+]) is bound once per editing mode (PSReadLine's
+    // default there is GotoBrace or CharacterSearch, which swallows the next
+    // key), only when the chord is unbound or still has its default, and read
+    // back; the marker says whether it took. It is not re-bound at every
+    // prompt, so a binding the user makes later is left alone.
+    let script = r#"$global:__cui_n = '@NONCE@'; $global:__cui_mode = $null; $global:__cui_chord = '0'; function global:prompt { $__cui_ok = $?; $__cui_code = $global:LASTEXITCODE; if ($__cui_ok) { $__cui_code = 0 } elseif (-not ($__cui_code -is [int]) -or $__cui_code -eq 0) { $__cui_code = 1 }; try { $__cui_m = [string](Get-PSReadLineOption).EditMode; if ($__cui_m -ne $global:__cui_mode) { $global:__cui_mode = $__cui_m; $__cui_h = @(Get-PSReadLineKeyHandler -Bound | Where-Object { $_.Key -eq 'Ctrl+]' } | ForEach-Object { [string]$_.Function }); if (@($__cui_h | Where-Object { $_ -notin 'GotoBrace','CharacterSearch','RevertLine' }).Count -eq 0) { if ($__cui_m -eq 'Vi') { Set-PSReadLineKeyHandler -ViMode Insert -Chord 'Ctrl+]' -Function RevertLine; Set-PSReadLineKeyHandler -ViMode Command -Chord 'Ctrl+]' -ScriptBlock { [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine(); [Microsoft.PowerShell.PSConsoleReadLine]::ViInsertMode() } } else { Set-PSReadLineKeyHandler -Chord 'Ctrl+]' -Function RevertLine }; $global:__cui_chord = if (@(Get-PSReadLineKeyHandler -Bound | Where-Object { $_.Key -eq 'Ctrl+]' -and [string]$_.Function -eq 'RevertLine' }).Count -gt 0) { '1' } else { '0' } } else { $global:__cui_chord = '0' } } } catch { $global:__cui_chord = '0' }; $__cui_cwd = -join ([System.Text.Encoding]::UTF8.GetBytes((Get-Location).Path) | ForEach-Object { if ($_ -lt 32 -or $_ -gt 126 -or $_ -eq 37 -or $_ -eq 59) { '%{0:X2}' -f $_ } else { [string][char]$_ } }); [Console]::Write([string][char]27 + ']7733;P;' + $global:__cui_n + ';' + $__cui_code + ';' + $global:__cui_chord + ';' + $__cui_cwd + [string][char]7); '> ' }"#;
+    format!("{}{ENTER}", script.replace("@NONCE@", nonce))
+}
+
+fn bootstrap_bash(nonce: &str) -> String {
+    // `bind` is only used when Ctrl+] is unbound or still readline's default
+    // (character-search), in all three keymaps, and the result is read back.
+    // The marker carries the answer; a runtime that is told 0 clears a line
+    // with Ctrl+E Ctrl+U instead.
+    let script = r#"__cui_nonce='@NONCE@'; __cui_chord=0; __cui_prompt() { local ec=$? cwd=$PWD; cwd=${cwd//\%/%25}; cwd=${cwd//;/%3B}; cwd=${cwd//$'\e'/%1B}; cwd=${cwd//$'\a'/%07}; cwd=${cwd//$'\n'/%0A}; cwd=${cwd//$'\r'/%0D}; printf '\033]7733;P;%s;%s;%s;%s\007' "$__cui_nonce" "$ec" "$__cui_chord" "$cwd"; }; __cui_free() { local l; l=$( { bind -m "$1" -p; bind -m "$1" -s; bind -m "$1" -X; } 2>/dev/null | grep -F '"\C-]":' ); [ -z "$l" ] || [ "$l" = '"\C-]": character-search' ] || [ "$l" = '"\C-]": self-insert' ]; }; if __cui_free emacs && __cui_free vi-insert && __cui_free vi-command; then bind -m emacs '"\C-]": kill-whole-line' 2>/dev/null; bind -m vi-insert '"\C-]": kill-whole-line' 2>/dev/null; bind -m vi-command '"\C-]": "A\C-u"' 2>/dev/null; if bind -m emacs -p 2>/dev/null | grep -qF '"\C-]": kill-whole-line' && bind -m vi-insert -p 2>/dev/null | grep -qF '"\C-]": kill-whole-line' && bind -m vi-command -s 2>/dev/null | grep -qF '"\C-]": "A\C-u"'; then __cui_chord=1; fi; fi; PROMPT_COMMAND=__cui_prompt"#;
+    format!("{}{ENTER}", script.replace("@NONCE@", nonce))
+}
+
+fn bootstrap_zsh(nonce: &str) -> String {
+    let script = r#"precmd() { local __cui_ec=$? __cui_cwd=${PWD}; __cui_cwd=${__cui_cwd//\%/%25}; __cui_cwd=${__cui_cwd//;/%3B}; __cui_cwd=${__cui_cwd//$'\e'/%1B}; __cui_cwd=${__cui_cwd//$'\a'/%07}; __cui_cwd=${__cui_cwd//$'\n'/%0A}; __cui_cwd=${__cui_cwd//$'\r'/%0D}; print -rn -- $'\e]7733;P;@NONCE@;'"${__cui_ec}"';;'"${__cui_cwd}"$'\a' }"#;
+    format!("{}{ENTER}", script.replace("@NONCE@", nonce))
+}
+
+fn bootstrap_cmd(nonce: &str) -> String {
+    // 1. An ESC character in %__cue% (the classic `prompt $E` capture).
+    // 2. `(call )`, which sets ERRORLEVEL to 0.
+    // 3. The tail that reports the exit code of the command before it: `call`
+    //    expands %ERRORLEVEL% a second time, after the command has run, and
+    //    `set /p` with no input writes the OSC without a line break.
+    // 4. cmd's own prompt, which writes the prompt marker before every prompt,
+    //    typed or approved. PROMPT cannot expand ERRORLEVEL, which is why 3
+    //    exists. Last, so the first prompt that carries a marker is the one
+    //    after the whole bootstrap.
+    let esc = CMD_ESC_VAR;
     format!(
-        "call set __cui_ec=%^ERRORLEVEL% & \"%ComSpec%\" /v:on /c echo. ^& echo {PROMPT_MARKER}^^^|{nonce}^^^|!CD!^^^|!__cui_ec!"
+        "for /F \"tokens=1,2 delims=#\" %a in ('\"prompt #$H#$E# & echo on & for %b in (1) do rem\"') do @set \"{esc}=%b\"{ENTER}\
+         @set \"{CMD_RESET_VAR}=(call )\"{ENTER}\
+         @set \"{CMD_TAIL_VAR}=call <nul set /p=%{esc}%]7733;X;{nonce};%^ERRORLEVEL%;;%{esc}%\\\"{ENTER}\
+         @prompt $e]7733;P;{nonce};;;$P$e\\$P$G{ENTER}"
     )
 }
 
-/// cmd's own prompt: a marker line with the cwd, then the usual `$P$G`.
-fn cmd_prompt_command(nonce: &str) -> String {
-    format!("prompt {PROMPT_MARKER}^|{nonce}^|$P^|{PROMPT_ONLY_FIELD}$_$P$G")
-}
-
-/// Marker line is `\nmarker|nonce|cwd|exit\n`. The nonce is per session.
-/// The leading newline guarantees the marker starts its own line even when
-/// the previous command left the cursor mid-line.
-/// cwd is the shell's full path (`$PWD`, `%CD%`, `Get-Location`), never `~`.
-/// cwd is the only field that may contain `|`; `%`, CR and LF in it are
-/// written as `%25`, `%0D`, `%0A` and undone by the parser.
-///
-/// Residual risk: the nonce lives in shell-readable state (PROMPT_COMMAND, the
-/// prompt function, the echoed cmd line), so a command running in the session
-/// can still print a forged marker and finish itself. The nonce stops stale
-/// or unrelated output, not a hostile command in the same shell.
+/// The prompt hook for a shell: typed into the shell once it has started.
 pub fn bootstrap_prompt(shell: &str, nonce: &str) -> Option<String> {
     match shell_family(shell) {
-        ShellFamily::PowerShell => Some(format!(
-            "function prompt {{ $__cui_ok = $?; $__cui_code = $global:LASTEXITCODE; if ($__cui_ok) {{ $__cui_code = 0 }} elseif (-not ($__cui_code -is [int]) -or $__cui_code -eq 0) {{ $__cui_code = 1 }}; try {{ if ((Get-PSReadLineOption).EditMode -eq 'Vi') {{ Set-PSReadLineKeyHandler -ViMode Insert -Chord 'Ctrl+]' -Function RevertLine; Set-PSReadLineKeyHandler -ViMode Command -Chord 'Ctrl+]' -ScriptBlock {{ [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine(); [Microsoft.PowerShell.PSConsoleReadLine]::ViInsertMode() }} }} else {{ Set-PSReadLineKeyHandler -Chord 'Ctrl+]' -Function RevertLine }} }} catch {{ }}; $__cui_cwd = (Get-Location).Path.Replace('%','%25').Replace([string][char]13,'%0D').Replace([string][char]10,'%0A'); $__cui_line = ([string][char]10) + '{PROMPT_MARKER}|{nonce}|' + $__cui_cwd + '|' + $__cui_code; \"$__cui_line`n> \" }}{ENTER}"
-        )),
-        ShellFamily::Cmd => Some(format!(
-            "set \"{CMD_VAR}={}\"{ENTER}set \"{CMD_RESET_VAR}=(call )\"{ENTER}{}{ENTER}",
-            cmd_marker_value(nonce),
-            cmd_prompt_command(nonce)
-        )),
-        ShellFamily::Bash => Some(format!(
-            "bind -m emacs '\"\\C-]\": kill-whole-line'; bind -m vi-insert '\"\\C-]\": kill-whole-line'; bind -m vi-command '\"\\C-]\": \"A\\C-u\"'; __cui_nl=$'\\n'; __cui_cr=$'\\r'; PROMPT_COMMAND='__cui_ec=$?; __cui_cwd=${{PWD//\\%/%25}}; __cui_cwd=${{__cui_cwd//$__cui_nl/%0A}}; __cui_cwd=${{__cui_cwd//$__cui_cr/%0D}}; printf \"\\n{PROMPT_MARKER}|{nonce}|%s|%s\\n\" \"$__cui_cwd\" \"$__cui_ec\"'{ENTER}"
-        )),
-        ShellFamily::Zsh => Some(format!(
-            "precmd() {{ local __cui_ec=$? __cui_cwd=\"${{PWD}}\"; __cui_cwd=${{__cui_cwd//\\%/%25}}; __cui_cwd=${{__cui_cwd//$'\\n'/%0A}}; __cui_cwd=${{__cui_cwd//$'\\r'/%0D}}; print -r -- \"\"; print -r -- \"{PROMPT_MARKER}|{nonce}|${{__cui_cwd}}|${{__cui_ec}}\" }}{ENTER}"
-        )),
+        ShellFamily::PowerShell => Some(bootstrap_powershell(nonce)),
+        ShellFamily::Cmd => Some(bootstrap_cmd(nonce)),
+        ShellFamily::Bash => Some(bootstrap_bash(nonce)),
+        ShellFamily::Zsh => Some(bootstrap_zsh(nonce)),
         ShellFamily::Unsupported => None,
     }
 }
 
-/// Bytes written for one executed command. cmd chains a marker after the
-/// command on the same line because its prompt cannot expand ERRORLEVEL. The
-/// command text is the command, not a format string.
-pub(crate) fn command_line_for_shell(shell: &str, _nonce: &str, command: &str) -> String {
-    let clear = clear_input_line(shell);
+/// How an approved cmd line ends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CmdTail {
+    /// ` & %__cui%` on the same line reports the exit code before the prompt.
+    Chained,
+    /// The command could swallow or break the tail (a trailing `rem`, `::`,
+    /// `^`, an open quote or paren, an if/for, a trailing operator): the line
+    /// is the command alone. Its prompt comes without an exit code, and the
+    /// runtime then sends the tail as a line of its own once the shell is idle.
+    None,
+}
+
+/// Bytes written for one executed command, and how it ends. cmd chains an
+/// exit-code tail after the command on the same line because its prompt cannot
+/// expand ERRORLEVEL. The command text is the command, not a format string.
+pub(crate) fn command_line_for_shell(shell: &str, command: &str, chord: bool) -> (String, CmdTail) {
+    let clear = clear_input_line(shell, chord);
     if shell_family(shell) == ShellFamily::Cmd {
-        // `%__cui%` (set at bootstrap) captures the exit code with `call`
-        // after the command ran, then prints the marker. On the same line so
-        // a program that flushes the console input buffer (pause, choice,
-        // set /p) cannot eat it.
         if cmd_can_chain(command) {
-            format!("{clear}%{CMD_RESET_VAR}% & {command} & %{CMD_VAR}%{ENTER}")
+            (format!("{clear}%{CMD_RESET_VAR}% & {command} & %{CMD_TAIL_VAR}%{ENTER}"), CmdTail::Chained)
         } else {
-            // A trailing rem, ::, ^, an open quote or paren, or an if/for
-            // that would take the chained marker into its own body: the
-            // marker goes on a line of its own instead.
-            format!("{clear}%{CMD_RESET_VAR}% & {command}{ENTER}%{CMD_VAR}%{ENTER}")
+            (format!("{clear}%{CMD_RESET_VAR}% & {command}{ENTER}"), CmdTail::None)
         }
     } else {
-        format!("{clear}{command}{ENTER}")
+        (format!("{clear}{command}{ENTER}"), CmdTail::Chained)
     }
 }
 
-/// Can ` & marker` be appended to this cmd line and still run once, always,
-/// after the command? Not when the command could swallow or capture it.
+/// The follow-up line for a cmd command that could not carry the tail: the
+/// tail on its own, written once the shell is idle at a prompt (ERRORLEVEL is
+/// still what the command left).
+pub(crate) fn cmd_probe_line(chord: bool) -> String {
+    format!("{}%{CMD_TAIL_VAR}%{ENTER}", clear_input_line("cmd.exe", chord))
+}
+
+/// Can ` & tail` be appended to this cmd line and still run once, always,
+/// after the command? Not when the command could swallow or break it.
 fn cmd_can_chain(command: &str) -> bool {
     if command.matches('"').count() % 2 != 0 {
         return false;
     }
     let trimmed = command.trim_end();
-    if trimmed.ends_with('^') || trimmed.contains("::") {
+    // A trailing operator or redirection: `echo a &` works alone, but
+    // `echo a & & tail` does not parse, and `echo a >` has no target.
+    if trimmed.ends_with(['^', '&', '|', '<', '>']) {
         return false;
     }
     let mut depth: i32 = 0;
@@ -265,28 +577,74 @@ fn cmd_can_chain(command: &str) -> bool {
     if depth != 0 {
         return false;
     }
-    !command
-        .to_ascii_lowercase()
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .any(|word| matches!(word, "rem" | "if" | "for"))
+    !cmd_segment_swallows_tail(command)
 }
 
-/// The key chord that clears the input line whatever the editor is doing. It
-/// is bound at bootstrap, in every editing mode, to "throw away the line and
-/// be ready to insert": PowerShell binds it to RevertLine in the emacs, windows
-/// and both vi keymaps (re-bound at each prompt, so a later
-/// `Set-PSReadLineOption -EditMode` does not lose it), bash binds it with
-/// `bind` in the emacs, vi-insert and vi-command keymaps. A vi command mode
-/// has no key that clears a line, so no fixed run of ordinary keys could work
-/// there.
+/// Is `if`, `for`, `rem` or `::` the first word of a command segment (the start
+/// of the line, or after an unquoted `&`, `|` or `(`)? An `if` or `for` takes
+/// the rest of the line into its body and a `rem` or `::` comments it out, tail
+/// included. The same word elsewhere (`echo for you`, a quoted `"fix for bug"`,
+/// `findstr if x`) is an argument and takes nothing.
+fn cmd_segment_swallows_tail(command: &str) -> bool {
+    let mut quoted = false;
+    let mut at_start = true;
+    let mut word = String::new();
+    let mut chars = command.chars().peekable();
+    // Finish a word that began a segment.
+    let swallows = |w: &str| matches!(w.to_ascii_lowercase().as_str(), "if" | "for" | "rem");
+    while let Some(c) = chars.next() {
+        if quoted {
+            if c == '"' {
+                quoted = false;
+            }
+            continue;
+        }
+        match c {
+            '"' => {
+                quoted = true;
+                at_start = false;
+            }
+            '&' | '|' | '(' => {
+                if at_start && swallows(&word) {
+                    return true;
+                }
+                word.clear();
+                at_start = true;
+            }
+            ' ' | '\t' if at_start && word.is_empty() => {}
+            '@' if at_start && word.is_empty() => {}
+            ':' if at_start && word.is_empty() && chars.peek() == Some(&':') => return true,
+            c if at_start && (c.is_ascii_alphanumeric()) => word.push(c),
+            _ => {
+                if at_start && swallows(&word) {
+                    return true;
+                }
+                word.clear();
+                at_start = false;
+            }
+        }
+    }
+    at_start && swallows(&word)
+}
+
+/// The key chord that clears the input line whatever the editor is doing. The
+/// shell binds it at bootstrap, only when it is unbound or still the default,
+/// in every editing mode, to "throw away the line and be ready to insert":
+/// PowerShell binds it to RevertLine (once per editing mode; vi command mode
+/// gets a handler that also returns to insert), bash binds it with `bind` in
+/// the emacs, vi-insert and vi-command keymaps. A vi command mode has no key
+/// that clears a line, so no fixed run of ordinary keys could work there. The
+/// marker tells the runtime whether the binding took (see `Marker::chord`).
 pub(crate) const CLEAR_CHORD: &str = "\x1d";
 
 /// Bytes that discard whatever the user already typed at the prompt, written
 /// in the same write as an approved command so it cannot be appended to a
 /// half-typed line (`rm -rf ` + approved `ls` must not run `rm -rf ls`).
 ///
-/// bash and PowerShell: the bound chord above (PowerShell then also gets
-/// Ctrl+End, Ctrl+Home for a console without PSReadLine).
+/// bash and PowerShell: the bound chord above when the shell says it took
+/// (PowerShell then also gets Ctrl+End, Ctrl+Home for a console without
+/// PSReadLine); otherwise PowerShell gets only the Ctrl+End, Ctrl+Home pair
+/// and bash falls back to Ctrl+E, Ctrl+U (which a vi command mode cannot use).
 /// zsh (zle): Ctrl+E (end of line) then Ctrl+U (kill to start).
 ///
 /// cmd: Ctrl+End then Ctrl+Home, as the VT input sequences `CSI 1;5 F` and
@@ -295,36 +653,87 @@ pub(crate) const CLEAR_CHORD: &str = "\x1d";
 /// usable: a ConPTY reads ESC followed by more bytes in the same write as
 /// Alt+<key>, so the first letter of the command was swallowed (`xyz` + ESC +
 /// `echo ok` ran `xyzecho ok`). The CSI forms are unambiguous in a single write.
-pub(crate) fn clear_input_line(shell: &str) -> String {
+pub(crate) fn clear_input_line(shell: &str, chord: bool) -> String {
     match shell_family(shell) {
-        ShellFamily::Bash => CLEAR_CHORD.to_string(),
+        ShellFamily::Bash if chord => CLEAR_CHORD.to_string(),
+        ShellFamily::Bash => "\x05\x15".to_string(),
         ShellFamily::Zsh => "\x05\x15".to_string(),
-        ShellFamily::PowerShell => format!("{CLEAR_CHORD}\x1b[1;5F\x1b[1;5H"),
+        ShellFamily::PowerShell if chord => format!("{CLEAR_CHORD}\x1b[1;5F\x1b[1;5H"),
+        ShellFamily::PowerShell => "\x1b[1;5F\x1b[1;5H".to_string(),
         ShellFamily::Cmd => "\x1b[1;5F\x1b[1;5H".to_string(),
         ShellFamily::Unsupported => String::new(),
     }
 }
 
-/// What is written to make a session report a prompt again. cmd's PROMPT and
-/// the other shells' prompt hooks print the marker on their own.
-pub(crate) fn resync_input(_shell: &str, _nonce: &str) -> String {
-    ENTER.to_string()
+/// What is written to make a session report a prompt again: the line is
+/// cleared first (a half-typed line must not be submitted by the Enter), then
+/// Enter draws a fresh prompt.
+pub(crate) fn resync_input(shell: &str, chord: bool) -> String {
+    format!("{}{ENTER}", clear_input_line(shell, chord))
 }
+
+/// Number of lines a write submits: each CR, LF, or CR LF counts once, outside
+/// a bracketed paste (`ESC [ 200 ~ ... ESC [ 201 ~`), where a shell inserts
+/// line breaks instead of running them. A paste whose end has not arrived
+/// counts nothing after its start.
+pub(crate) fn submitted_lines(data: &str) -> u32 {
+    const START: &str = "\x1b[200~";
+    const END: &str = "\x1b[201~";
+    let mut outside = String::new();
+    let mut rest = data;
+    loop {
+        match rest.find(START) {
+            None => {
+                outside.push_str(rest);
+                break;
+            }
+            Some(start) => {
+                outside.push_str(&rest[..start]);
+                match rest[start + START.len()..].find(END) {
+                    Some(end) => rest = &rest[start + START.len() + end + END.len()..],
+                    None => break,
+                }
+            }
+        }
+    }
+    let mut count = 0;
+    let mut prev_cr = false;
+    for c in outside.chars() {
+        match c {
+            '\r' => count += 1,
+            '\n' if !prev_cr => count += 1,
+            _ => {}
+        }
+        prev_cr = c == '\r';
+    }
+    count
+}
+
+// ---------------------------------------------------------------------------
+// Display rewrite (Windows)
+// ---------------------------------------------------------------------------
 
 /// A Windows ConPTY repaints by position: instead of `\r\n` it moves to the
 /// start of the next row with a cursor-position escape (`CSI row;col H`), so a
-/// finished line (the output of a command, the prompt marker) can arrive with
-/// no line break at all. The runtime reads output by line, so this turns such
-/// a cursor-position escape into a line break when the row it leaves has text
-/// on it and the cursor moves to a different row, and drops it otherwise.
-/// A cursor-position escape that stays on the row the cursor is already on
-/// (an in-line redraw) passes through, as does every other escape. The row is
-/// followed from the escapes seen and from line feeds (a ConPTY soft wrap is
-/// not a new row: see "Soft wraps" below; an unknown row counts as different).
+/// finished line (the output of a command) can arrive with no line break at
+/// all. A consumer that shows output as lines (the console transcript) needs
+/// the break, so this turns such a cursor-position escape into a line break
+/// when the row it leaves has text on it and the cursor moves to a different
+/// row, and drops it otherwise. A cursor-position escape that stays on the row
+/// the cursor is already on (an in-line redraw) passes through, as does every
+/// other escape. The row is followed from the escapes seen and from line feeds
+/// (a ConPTY soft wrap is not a new row: see "Soft wraps" below; an unknown row
+/// counts as different).
 /// While the alternate screen is active (`CSI ? 1049/1047/47 h`, alone or
 /// combined with other modes) nothing is rewritten: vim, less and htop need
-/// their cursor positioning. Prompts and markers never appear there.
+/// their cursor positioning. A prompt marker ends it (`end_alt_screen`): a
+/// program that was killed never sent its `?1049l`.
 /// An escape sequence cut in half by a read is held for the next one.
+///
+/// **This is display only.** Prompt markers are OSC sequences taken out of the
+/// stream before the text gets here, so whether a row was wrapped, split or
+/// repainted has no bearing on whether a command finishes. A wrong guess here
+/// shows a long output line as two, or two as one.
 ///
 /// Soft wraps. When a row is filled to the last column of a console that is
 /// already at the bottom of its screen, ConPTY does not leave the wrap to the
@@ -335,10 +744,12 @@ pub(crate) fn resync_input(_shell: &str, _nonce: &str) -> String {
 /// and the next cursor-position escape (after only colour or cursor-visibility
 /// escapes) lands on column N: the break and the escape are dropped, and the
 /// repainted character, which is the character already shown, is dropped
-/// too. The column is followed from the text written, so this holds at any
-/// console width and needs no width to be told. A `CR` or `LF` on a row this
-/// wide is held until the next read shows which it is (`flush_held` releases
-/// it when nothing follows).
+/// too. The column is followed in display cells from the text written (a wide
+/// character takes two), and the console width is seeded from the pty size and
+/// follows resizes, so a line of several rows is recognised too. A `CR` or `LF`
+/// on a row this wide is held until the next read shows which it is
+/// (`flush_held` releases it when the reader has been idle for
+/// `HELD_BREAK_FLUSH`, and a prompt marker releases it at once).
 #[derive(Default)]
 pub(crate) struct RowNormalizer {
     carry: String,
@@ -354,8 +765,8 @@ pub(crate) struct RowNormalizer {
     drop_dup: Option<char>,
     /// `carry` starts with a CR/LF that waits for the next read.
     holding: bool,
-    /// The console width, once a soft wrap has shown it. Text written past it
-    /// continues on the next row, as the terminal does.
+    /// The console width in cells. Text written past it continues on the next
+    /// row, as the terminal does.
     width: Option<usize>,
 }
 
@@ -369,8 +780,9 @@ enum Wrap {
 }
 
 /// Is the line break at `i` (`CR LF` or `LF`) a soft wrap of a row filled to
-/// column `cand`? See `RowNormalizer`.
-fn wrap_lookahead(input: &str, i: usize, cand: usize) -> Wrap {
+/// column `cand`? See `RowNormalizer`. With no known width, a column that
+/// divides `cand` counts too (a logical line of several rows).
+fn wrap_lookahead(input: &str, i: usize, cand: usize, width_known: bool) -> Wrap {
     let b = input.as_bytes();
     let mut j = i;
     if b.get(j) == Some(&b'\r') {
@@ -405,7 +817,7 @@ fn wrap_lookahead(input: &str, i: usize, cand: usize) -> Wrap {
                         let row = it.next().and_then(|r| if r.is_empty() { Some(1) } else { r.parse::<u32>().ok() });
                         let col = it.next().and_then(|c| if c.is_empty() { Some(1) } else { c.parse::<usize>().ok() });
                         return match col {
-                            Some(c) if c == cand && c > 1 => {
+                            Some(c) if c > 1 && (c == cand || (!width_known && cand >= c && cand % c == 0)) => {
                                 Wrap::Yes { pass: (pass_start, j), end: k + 1, row, col: c }
                             }
                             _ => Wrap::No,
@@ -441,6 +853,39 @@ fn csi_column(seq: &str, col: usize) -> usize {
 
 const MAX_ESCAPE_CARRY: usize = 256;
 
+/// How many cells a character takes: 0 for combining marks and joiners, 2 for
+/// the East Asian Wide and Fullwidth blocks and emoji, else 1. A small table,
+/// enough for column tracking; a wrong guess here is cosmetic.
+fn char_cells(c: char) -> usize {
+    let u = c as u32;
+    if u < 0x300 {
+        return 1;
+    }
+    if matches!(
+        u,
+        0x0300..=0x036F | 0x0483..=0x0489 | 0x0591..=0x05BD | 0x200B..=0x200F | 0x2060..=0x2064
+            | 0x20D0..=0x20FF | 0xFE00..=0xFE0F | 0xFE20..=0xFE2F | 0xE0100..=0xE01EF
+    ) {
+        return 0;
+    }
+    if matches!(
+        u,
+        0x1100..=0x115F | 0x231A..=0x231B | 0x2329..=0x232A | 0x23E9..=0x23EC | 0x25FD..=0x25FE
+            | 0x2614..=0x2615 | 0x2648..=0x2653 | 0x267F | 0x2693 | 0x26A1 | 0x26AA..=0x26AB
+            | 0x26BD..=0x26BE | 0x26C4..=0x26C5 | 0x26CE | 0x26D4 | 0x26EA | 0x26F2..=0x26F3
+            | 0x26F5 | 0x26FA | 0x26FD | 0x2705 | 0x270A..=0x270B | 0x2728 | 0x274C | 0x274E
+            | 0x2753..=0x2755 | 0x2757 | 0x2795..=0x2797 | 0x27B0 | 0x27BF | 0x2B1B..=0x2B1C
+            | 0x2B50 | 0x2B55 | 0x2E80..=0x303E | 0x3041..=0x33FF | 0x3400..=0x4DBF
+            | 0x4E00..=0x9FFF | 0xA000..=0xA4CF | 0xA960..=0xA97F | 0xAC00..=0xD7A3
+            | 0xF900..=0xFAFF | 0xFE10..=0xFE19 | 0xFE30..=0xFE6F | 0xFF00..=0xFF60
+            | 0xFFE0..=0xFFE6 | 0x1F300..=0x1F64F | 0x1F680..=0x1F6FF | 0x1F900..=0x1F9FF
+            | 0x1FA70..=0x1FAFF | 0x20000..=0x3FFFD
+    ) {
+        return 2;
+    }
+    1
+}
+
 /// `Some(true)` / `Some(false)` when `seq` is a private-mode set / reset that
 /// includes the alternate screen (1049, 1047 or 47), alone or combined.
 fn alt_screen_switch(seq: &str) -> Option<bool> {
@@ -457,6 +902,18 @@ fn alt_screen_switch(seq: &str) -> Option<bool> {
 }
 
 impl RowNormalizer {
+    /// A normalizer for a console `cols` wide.
+    pub(crate) fn with_width(cols: u16) -> Self {
+        let mut rows = Self::default();
+        rows.set_width(cols);
+        rows
+    }
+
+    /// The console was resized (or is being seeded).
+    pub(crate) fn set_width(&mut self, cols: u16) {
+        self.width = (cols as usize >= MIN_WRAP_COL).then_some(cols as usize);
+    }
+
     pub(crate) fn push(&mut self, text: &str) -> String {
         self.push_inner(text, false)
     }
@@ -471,6 +928,20 @@ impl RowNormalizer {
         }
     }
 
+    /// A prompt was drawn, so no full-screen program is running: leave the
+    /// alternate screen, and start the prompt on a row of its own if the
+    /// screen's text is still on this one.
+    pub(crate) fn end_alt_screen(&mut self) -> String {
+        let was = self.alt_screen;
+        self.alt_screen = false;
+        if was && self.row_has_text {
+            self.row_has_text = false;
+            self.col = 0;
+            return "\n".to_string();
+        }
+        String::new()
+    }
+
     fn push_inner(&mut self, text: &str, force: bool) -> String {
         let mut input = std::mem::take(&mut self.carry);
         self.holding = false;
@@ -480,30 +951,12 @@ impl RowNormalizer {
         let mut i = 0;
         while i < bytes.len() {
             if bytes[i] != 0x1b {
-                // A prompt marker always starts its own row, in or out of the
-                // alternate screen, and always ends the alternate screen: a
-                // program that was killed never sent its `?1049l`.
                 let rest = &input[i..];
-                if rest.starts_with(PROMPT_MARKER) {
-                    self.alt_screen = false;
-                    if self.row_has_text {
-                        out.push('\n');
-                        self.row_has_text = false;
-                        self.col = 0;
-                    }
-                } else if self.alt_screen
-                    && rest.len() < PROMPT_MARKER.len()
-                    && PROMPT_MARKER.starts_with(rest)
-                {
-                    // Possibly the start of a marker cut by the read.
-                    self.carry = rest.to_string();
-                    break;
-                }
                 let ch = rest.chars().next().unwrap();
                 if (ch == '\r' || ch == '\n') && !self.alt_screen {
                     let cand = if ch == '\n' && self.col == 0 { self.col_before_cr } else { self.col };
                     if cand >= MIN_WRAP_COL {
-                        match wrap_lookahead(&input, i, cand) {
+                        match wrap_lookahead(&input, i, cand, self.width.is_some()) {
                             Wrap::Yes { pass, end, row, col } => {
                                 out.push_str(&input[pass.0..pass.1]);
                                 i = end;
@@ -511,7 +964,7 @@ impl RowNormalizer {
                                 self.row_has_text = true;
                                 self.col = col - 1;
                                 self.width = Some(col);
-                                self.drop_dup = self.last_char.filter(|c| c.is_ascii());
+                                self.drop_dup = self.last_char;
                                 continue;
                             }
                             Wrap::More if !force => {
@@ -539,15 +992,16 @@ impl RowNormalizer {
                 } else if ch == '\t' {
                     self.col = (self.col / 8 + 1) * 8;
                 } else if !ch.is_control() {
+                    let cells = char_cells(ch);
                     if self.drop_dup.take() == Some(ch) {
-                        self.col += 1;
+                        self.col += cells;
                         i += ch.len_utf8();
                         continue;
                     }
                     if self.width.is_some_and(|w| self.col >= w) {
                         self.col = 0;
                     }
-                    self.col += 1;
+                    self.col += cells;
                     self.col_before_cr = 0;
                     self.last_char = Some(ch);
                 }
@@ -654,7 +1108,7 @@ impl RowNormalizer {
                     // Incomplete: keep it for the next read, unless it has
                     // grown too long to be an escape sequence at all. Then
                     // the ESC alone is text and scanning goes on after it, so
-                    // a marker or cursor jump later in the read still counts.
+                    // a cursor jump later in the read still counts.
                     if bytes.len() - i <= MAX_ESCAPE_CARRY {
                         self.carry = input[i..].to_string();
                         break;
@@ -675,31 +1129,47 @@ impl RowNormalizer {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Reader
+// ---------------------------------------------------------------------------
+
 pub(crate) fn clone_reader(pair: &PtyPair) -> Result<Box<dyn Read + Send>, String> {
     pair.master
         .try_clone_reader()
         .map_err(|e| format!("Failed to clone PTY reader: {e}"))
 }
 
-pub(crate) fn spawn_reader<R, F>(reader: R, on_chunk: F)
+/// Text only: markers are dropped. For callers that just want the output.
+pub(crate) fn spawn_reader<R, F>(reader: R, on_text: F)
 where
     R: Read + Send + 'static,
     F: Fn(String) + Send + 'static,
 {
-    spawn_reader_with_exit(reader, on_chunk, || {});
+    spawn_reader_with_exit(
+        reader,
+        Arc::new(AtomicU16::new(PTY_COLS)),
+        move |event| {
+            if let ReaderEvent::Text(text) = event {
+                on_text(text);
+            }
+        },
+        || {},
+    );
 }
 
-/// Like spawn_reader, and calls on_exit once the stream ends (EOF or a read
-/// error), which for a PTY means the shell is gone.
-pub(crate) fn spawn_reader_with_exit<R, F, E>(mut reader: R, on_chunk: F, on_exit: E)
+/// Reads the pty on a thread of its own and hands on text and markers in
+/// stream order. Calls `on_exit` once the stream ends (EOF or a read error),
+/// which for a PTY means the shell is gone. `width` is the console width in
+/// columns; it follows resizes.
+pub(crate) fn spawn_reader_with_exit<R, F, E>(mut reader: R, width: Arc<AtomicU16>, on_event: F, on_exit: E)
 where
     R: Read + Send + 'static,
-    F: Fn(String) + Send + 'static,
+    F: Fn(ReaderEvent) + Send + 'static,
     E: FnOnce() + Send + 'static,
 {
     std::thread::spawn(move || {
-        // The read blocks, and a CR/LF held back by the normalizer has to be
-        // released when nothing follows it, so the read gets a thread of its
+        // The read blocks, and a CR/LF held back by the display rewrite has to
+        // be released when nothing follows it, so the read gets a thread of its
         // own and this one waits on it with a short timeout.
         let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
         std::thread::spawn(move || {
@@ -715,35 +1185,75 @@ where
                 }
             }
         });
-        // A panic anywhere in here (a bug in the normalizer or a consumer)
-        // must not leave the session "running" forever: on_exit always runs.
+        // A panic anywhere in here (a bug in the display rewrite or a
+        // consumer) must not leave the session "running" forever: on_exit
+        // always runs.
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             // Bytes of a multibyte character that a read cut in half.
             let mut pending: Vec<u8> = Vec::new();
-            let mut rows = RowNormalizer::default();
+            let mut scanner = MarkerScanner::default();
+            let mut rows = RowNormalizer::with_width(width.load(Ordering::Relaxed));
+            // The display rewrite is only cosmetic: if it ever panics, keep
+            // reading and pass the text on as it came.
+            let display = |rows: &mut RowNormalizer, text: String| -> String {
+                if !cfg!(windows) {
+                    return text;
+                }
+                let raw = text.clone();
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| rows.push(&raw))).unwrap_or_else(|_| {
+                    *rows = RowNormalizer::with_width(width.load(Ordering::Relaxed));
+                    raw
+                })
+            };
+            // A marker is delivered once the stream has been quiet for
+            // MARKER_SETTLE, after any text that arrives in the meantime.
+            // ConPTY passes an OSC through at once but paints text on its own
+            // schedule, so text the shell wrote before its prompt can still be
+            // on its way when the marker arrives (seen at boot, where the echo
+            // of the bootstrap came after the first marker). Waiting for quiet
+            // puts the output first, as the shell wrote it.
+            let mut held_marker: Option<Marker> = None;
+            let deliver = |rows: &mut RowNormalizer, marker: Marker| {
+                // Output ends here: release a held break, and a prompt means
+                // no full-screen program is on the screen any more.
+                let mut shown = rows.flush_held();
+                if marker.kind == MarkerKind::Prompt {
+                    shown.push_str(&rows.end_alt_screen());
+                }
+                if !shown.is_empty() {
+                    on_event(ReaderEvent::Text(shown));
+                }
+                on_event(ReaderEvent::Marker(marker));
+            };
             loop {
-                match rx.recv_timeout(HELD_BREAK_FLUSH) {
+                let wait = if held_marker.is_some() { MARKER_SETTLE } else { HELD_BREAK_FLUSH };
+                match rx.recv_timeout(wait) {
                     Ok(bytes) => {
-                        let mut text = decode_utf8_stream(&mut pending, &bytes);
-                        if cfg!(windows) {
-                            let raw = text.clone();
-                            // The normalizer is only a cosmetic rewrite: if it
-                            // ever panics, keep reading and pass the text on.
-                            text = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| rows.push(&raw)))
-                                .unwrap_or_else(|_| {
-                                    rows = RowNormalizer::default();
-                                    raw
-                                });
-                        }
-                        if !text.is_empty() {
-                            on_chunk(text);
+                        let text = decode_utf8_stream(&mut pending, &bytes);
+                        rows.set_width(width.load(Ordering::Relaxed));
+                        for event in scanner.push(&text) {
+                            match event {
+                                ReaderEvent::Text(t) => {
+                                    let shown = display(&mut rows, t);
+                                    if !shown.is_empty() {
+                                        on_event(ReaderEvent::Text(shown));
+                                    }
+                                }
+                                ReaderEvent::Marker(marker) => {
+                                    if let Some(earlier) = held_marker.replace(marker) {
+                                        deliver(&mut rows, earlier);
+                                    }
+                                }
+                            }
                         }
                     }
                     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                        if cfg!(windows) {
+                        if let Some(marker) = held_marker.take() {
+                            deliver(&mut rows, marker);
+                        } else if cfg!(windows) {
                             let text = rows.flush_held();
                             if !text.is_empty() {
-                                on_chunk(text);
+                                on_event(ReaderEvent::Text(text));
                             }
                         }
                     }
@@ -752,22 +1262,40 @@ where
             }
             let mut rest = String::new();
             if !pending.is_empty() {
-                rest.push_str(&String::from_utf8_lossy(&pending));
-                if cfg!(windows) {
-                    rest = rows.push(&rest);
+                let tail = String::from_utf8_lossy(&pending).into_owned();
+                for event in scanner.push(&tail) {
+                    if let ReaderEvent::Text(t) = event {
+                        rest.push_str(&display(&mut rows, t));
+                    }
                 }
+            }
+            let held = scanner.finish();
+            if !held.is_empty() {
+                rest.push_str(&display(&mut rows, held));
             }
             rest.push_str(&rows.finish());
             if !rest.is_empty() {
-                on_chunk(rest);
+                on_event(ReaderEvent::Text(rest));
+            }
+            if let Some(marker) = held_marker.take() {
+                deliver(&mut rows, marker);
             }
         }));
         on_exit();
     });
 }
 
-/// How long a CR/LF held back by the normalizer waits for the next read.
-const HELD_BREAK_FLUSH: std::time::Duration = std::time::Duration::from_millis(40);
+/// How long a marker waits for text that ConPTY has yet to paint (see the
+/// reader). Short enough not to be noticed at the end of a command, longer than
+/// a paint interval.
+const MARKER_SETTLE: std::time::Duration = std::time::Duration::from_millis(40);
+
+/// How long a CR/LF held back by the display rewrite waits for the next read.
+/// Long enough for a loaded machine or a split write between ConPTY's CR LF and
+/// the cursor jump that follows it, short enough that the last line of output
+/// is not noticeably late. A wrong guess only splits a long line in two for
+/// display: markers do not depend on it.
+const HELD_BREAK_FLUSH: std::time::Duration = std::time::Duration::from_millis(250);
 
 /// Decode `incoming` after any bytes held in `pending`. Complete sequences are
 /// returned; an incomplete trailing sequence stays in `pending` for the next
@@ -832,57 +1360,6 @@ mod tests {
     }
 
     #[test]
-    fn supported_prompts_carry_nonce_exit_and_full_cwd() {
-        let pwsh = bootstrap_prompt("powershell.exe", NONCE).unwrap();
-        assert!(pwsh.contains(PROMPT_MARKER));
-        assert!(pwsh.contains(NONCE));
-        assert!(pwsh.contains("$?"));
-        assert!(pwsh.contains("LASTEXITCODE"));
-        assert!(pwsh.contains("Get-Location"));
-        assert!(pwsh.contains("$__cui_code = 1"));
-        assert!(pwsh.contains("if ($__cui_ok) { $__cui_code = 0 }"));
-        assert!(!pwsh.contains('~'));
-
-        let cmd = bootstrap_prompt("cmd.exe", NONCE).unwrap();
-        assert!(cmd.contains("%^ERRORLEVEL%"));
-        assert!(cmd.contains("!CD!"));
-        assert!(cmd.contains(NONCE));
-        assert!(cmd.contains("^|"));
-        // cmd's own prompt prints a prompt-only marker, so a command the user
-        // typed by hand is noticed to have ended.
-        assert!(cmd.contains(&format!("prompt {PROMPT_MARKER}^|{NONCE}^|$P^|P$_$P$G")), "{cmd}");
-
-        let bash = bootstrap_prompt("/bin/bash", NONCE).unwrap();
-        assert!(bash.contains("PWD"));
-        assert!(bash.contains("$?"));
-        assert!(bash.contains(NONCE));
-        assert!(!bash.contains("\\w"));
-
-        let zsh = bootstrap_prompt("/bin/zsh", NONCE).unwrap();
-        assert!(zsh.contains("${PWD}"));
-        assert!(zsh.contains("$?"));
-        assert!(zsh.contains(NONCE));
-        assert!(!zsh.contains("%~"));
-    }
-
-    #[test]
-    fn bootstrap_binds_the_clear_chord_in_every_editing_mode() {
-        let ps = bootstrap_prompt("pwsh", NONCE).unwrap();
-        assert!(ps.contains("-ViMode Insert -Chord 'Ctrl+]' -Function RevertLine"), "{ps}");
-        assert!(ps.contains("-ViMode Command -Chord 'Ctrl+]'"), "{ps}");
-        assert!(ps.contains("ViInsertMode()"), "{ps}");
-        assert!(ps.contains("-Chord 'Ctrl+]' -Function RevertLine"), "{ps}");
-        // Re-bound at every prompt, so a later -EditMode switch keeps it.
-        assert!(ps.find("Set-PSReadLineKeyHandler").unwrap() < ps.find(PROMPT_MARKER).unwrap());
-        let bash = bootstrap_prompt("/bin/bash", NONCE).unwrap();
-        for map in ["emacs", "vi-insert", "vi-command"] {
-            assert!(bash.contains(&format!("bind -m {map} ")), "{map}: {bash}");
-        }
-        assert!(bash.contains("kill-whole-line"));
-        assert_eq!(CLEAR_CHORD, "\x1d");
-    }
-
-    #[test]
     fn unsupported_shells_have_no_bootstrap() {
         assert!(bootstrap_prompt("/bin/sh", NONCE).is_none());
         assert!(bootstrap_prompt("dash", NONCE).is_none());
@@ -900,83 +1377,6 @@ mod tests {
     }
 
     #[test]
-    fn cmd_command_line_chains_the_marker_on_the_same_line() {
-        let nasty = "echo %CD% & del /q *";
-        let line = command_line_for_shell("cmd.exe", NONCE, nasty);
-        // One line, one Enter: a program that flushes the console input
-        // buffer (pause, choice, set /p) has no typed-ahead marker to eat.
-        assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H%__cuz% & {nasty} & %__cui%\r"));
-        assert_eq!(line.matches('\r').count(), 1);
-        assert!(!line.contains('\n'), "a Windows ConPTY submits on CR; LF is Ctrl+J");
-        // The marker plumbing is in the bootstrap's variable, with the nonce.
-        let boot = bootstrap_prompt("cmd.exe", NONCE).unwrap();
-        assert!(boot.contains(&format!("{PROMPT_MARKER}^^^|{NONCE}^^^|!CD!^^^|!__cui_ec!")), "{boot}");
-        assert!(boot.starts_with("set \"__cui=call set __cui_ec=%^ERRORLEVEL% & "), "{boot}");
-        // ...and so is the ERRORLEVEL reset (`(call )` sets it to 0).
-        assert!(boot.contains("\rset \"__cuz=(call )\"\r"), "{boot}");
-        assert_eq!(command_line_for_shell("bash", NONCE, "ls"), "\x1dls\r");
-        assert_eq!(resync_input("bash", NONCE), "\r");
-        assert_eq!(resync_input("cmd.exe", NONCE), "\r");
-    }
-
-    #[test]
-    fn cmd_commands_that_could_swallow_the_chained_marker_use_a_line_of_their_own() {
-        for command in [
-            "echo hi & rem",
-            "echo hi :: comment",
-            "echo \"unbalanced",
-            "echo hi ^",
-            "if exist x echo y",
-            "for /l %i in (1,1,3) do @echo %i",
-            "(echo a",
-            "echo a)",
-        ] {
-            let line = command_line_for_shell("cmd.exe", NONCE, command);
-            assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H%__cuz% & {command}\r%__cui%\r"), "{command}");
-        }
-        for command in ["echo hi", "dir /b", "cd /d \"C:\\a b\"", "echo (a) & echo b", "git status"] {
-            let line = command_line_for_shell("cmd.exe", NONCE, command);
-            assert!(line.ends_with(" & %__cui%\r"), "{command}: {line:?}");
-        }
-    }
-
-    #[test]
-    fn command_line_clears_pending_input_per_shell_family() {
-        assert_eq!(command_line_for_shell("zsh", NONCE, "ls"), "\x05\x15ls\r");
-        assert_eq!(command_line_for_shell("pwsh.exe", NONCE, "ls"), "\x1d\x1b[1;5F\x1b[1;5Hls\r");
-        assert_eq!(command_line_for_shell("powershell.exe", NONCE, "ls"), "\x1d\x1b[1;5F\x1b[1;5Hls\r");
-        assert_eq!(command_line_for_shell("/bin/bash", NONCE, "ls"), "\x1dls\r");
-        assert_eq!(command_line_for_shell("cmd.exe", NONCE, "dir"), "\x1b[1;5F\x1b[1;5H%__cuz% & dir & %__cui%\r");
-    }
-
-    #[test]
-    fn cmd_commands_with_bangs_are_written_through_unchanged() {
-        for command in ["echo hello!", "git commit -m \"done!\"", "cd hello!world"] {
-            let line = command_line_for_shell("cmd.exe", NONCE, command);
-            assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H%__cuz% & {command} & %__cui%\r"), "{line}");
-            // Only the marker child expands `!`; the session itself never does.
-            assert!(
-                bootstrap_prompt("cmd.exe", NONCE).unwrap().contains("\"%ComSpec%\" /v:on /c"),
-                "{line}"
-            );
-        }
-        let cmd = prepare_shell_command("cmd.exe", None);
-        assert!(!cmd.get_argv().iter().any(|arg| arg == "/v:on"));
-    }
-
-    #[test]
-    fn markers_start_their_own_line() {
-        let bash = bootstrap_prompt("/bin/bash", NONCE).unwrap();
-        assert!(bash.contains(&format!("\\n{PROMPT_MARKER}")), "{bash}");
-        let pwsh = bootstrap_prompt("pwsh", NONCE).unwrap();
-        assert!(pwsh.contains("[char]10) + '"), "{pwsh}");
-        let zsh = bootstrap_prompt("/bin/zsh", NONCE).unwrap();
-        assert!(zsh.contains("print -r -- \"\";"), "{zsh}");
-        assert!(bootstrap_prompt("cmd.exe", NONCE).unwrap().contains("echo. ^& echo"));
-        assert!(bootstrap_prompt("cmd.exe", NONCE).unwrap().contains("$_$P$G"));
-    }
-
-    #[test]
     fn utf8_split_across_reads_is_reassembled() {
         let text = "caf\u{e9} \u{2603} /h\u{f6}me/\u{1F600}x";
         let bytes = text.as_bytes();
@@ -990,35 +1390,6 @@ mod tests {
         let mut pending = Vec::new();
         let out = decode_utf8_stream(&mut pending, b"a\xffb");
         assert_eq!(out, "a\u{FFFD}b");
-    }
-
-    #[test]
-    fn spawn_reader_keeps_a_split_character_inside_a_marker_cwd() {
-        struct Chunks(Vec<Vec<u8>>);
-        impl Read for Chunks {
-            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-                if self.0.is_empty() {
-                    return Ok(0);
-                }
-                let next = self.0.remove(0);
-                buf[..next.len()].copy_from_slice(&next);
-                Ok(next.len())
-            }
-        }
-        let line = format!("{PROMPT_MARKER}|{NONCE}|/h\u{f6}me/\u{e9}|0\n").into_bytes();
-        let cut = line.iter().position(|b| *b == 0xc3).unwrap() + 1;
-        let chunks = vec![line[..cut].to_vec(), line[cut..].to_vec()];
-        let (tx, rx) = std::sync::mpsc::channel::<String>();
-        let tx = Mutex::new(tx);
-        spawn_reader(Chunks(chunks), move |text| {
-            tx.lock().unwrap().send(text).unwrap();
-        });
-        let mut all = String::new();
-        while let Ok(part) = rx.recv_timeout(std::time::Duration::from_secs(5)) {
-            all.push_str(&part);
-        }
-        assert!(!all.contains('\u{FFFD}'), "{all}");
-        assert!(all.contains("/h\u{f6}me/\u{e9}|0"), "{all}");
     }
 
     #[test]
@@ -1201,23 +1572,6 @@ mod tests {
     }
 
     #[test]
-    fn every_line_runtime_core_builds_is_submitted_with_cr_not_lf() {
-        // A Windows ConPTY runs a line on CR (Enter); LF is Ctrl+J there and
-        // the bootstrap was typed and never run.
-        for shell in ["powershell.exe", "pwsh", "cmd.exe", "/bin/bash", "/bin/zsh"] {
-            let boot = bootstrap_prompt(shell, NONCE).unwrap();
-            assert!(boot.ends_with('\r'), "{shell}: {boot:?}");
-            assert!(!boot.contains('\n'), "{shell}: {boot:?}");
-            let line = command_line_for_shell(shell, NONCE, "ls");
-            assert!(line.ends_with('\r'), "{shell}: {line:?}");
-            assert!(!line.contains('\n'), "{shell}: {line:?}");
-            let resync = resync_input(shell, NONCE);
-            assert!(resync.ends_with('\r'), "{shell}: {resync:?}");
-            assert!(!resync.contains('\n'), "{shell}: {resync:?}");
-        }
-    }
-
-    #[test]
     fn write_raw_adds_nothing_to_the_users_keystrokes() {
         #[derive(Clone)]
         struct Capture(Arc<Mutex<Vec<u8>>>);
@@ -1243,28 +1597,12 @@ mod tests {
     }
 
     #[test]
-    fn clear_line_is_a_csi_pair_never_a_lone_escape_on_windows_shells() {
-        // ESC followed by more bytes in one write is Alt+<key> to a ConPTY:
-        // `xyz` + ESC + `echo ok` ran `xyzecho ok`. Ctrl+End / Ctrl+Home as
-        // CSI sequences are unambiguous.
-        assert_eq!(clear_input_line("cmd.exe"), "\x1b[1;5F\x1b[1;5H");
-        // PowerShell and bash clear with a chord bound at bootstrap in every
-        // editing mode (a vi command mode has no ordinary key that clears).
-        for shell in ["powershell.exe", "pwsh.exe"] {
-            assert_eq!(clear_input_line(shell), "\x1d\x1b[1;5F\x1b[1;5H", "{shell}");
-        }
-        assert_eq!(clear_input_line("/bin/bash"), "\x1d");
-        assert_eq!(clear_input_line("zsh"), "\x05\x15");
-        assert_eq!(clear_input_line("fish"), "");
-    }
-
-    #[test]
     fn row_normalizer_turns_cursor_positioning_into_line_breaks() {
         let mut rows = RowNormalizer::default();
         // ConPTY: output, then the marker on the next row with no CR LF.
         assert_eq!(
-            rows.push("probe-ok\x1b[?25l\x1b[15;1H__COMMANDUI_PROMPT__|n|C:\\w|0\x1b[16;1HC:\\w>"),
-            "probe-ok\x1b[?25l\n__COMMANDUI_PROMPT__|n|C:\\w|0\nC:\\w>"
+            rows.push("probe-ok\x1b[?25l\x1b[15;1Hrow-with-text|n|C:\\w|0\x1b[16;1HC:\\w>"),
+            "probe-ok\x1b[?25l\nrow-with-text|n|C:\\w|0\nC:\\w>"
         );
         // A move on an empty row, or the screen clear at start-up, is not a break.
         let mut rows = RowNormalizer::default();
@@ -1433,62 +1771,6 @@ mod tests {
     }
 
     #[test]
-    fn a_marker_ends_the_alternate_screen_and_always_starts_its_own_row() {
-        // The program was killed: it never sent ?1049l. Its screen text is
-        // followed, with no row change, by the next prompt marker.
-        let mut rows = RowNormalizer::default();
-        let out = rows.push("\x1b[?1049hscreen text__COMMANDUI_PROMPT__|n|C:\\w|0\r\nnext\x1b[9;1Hmore");
-        assert_eq!(
-            out,
-            "\x1b[?1049hscreen text\n__COMMANDUI_PROMPT__|n|C:\\w|0\r\nnext\nmore"
-        );
-        // And the normalizer is back to rewriting cursor jumps.
-        assert!(!rows.alt_screen);
-        // A marker split by a read inside the alternate screen is held, not
-        // glued to the screen text.
-        let mut rows = RowNormalizer::default();
-        let mut out = rows.push("\x1b[?1049hdraw__COMMANDUI_PRO");
-        out.push_str(&rows.push("MPT__|n|C:\\w|0\r\n"));
-        // The row is wide enough to be a soft wrap, so its line break waits for
-        // the next read (or the flush) to say which it is.
-        out.push_str(&rows.flush_held());
-        assert_eq!(out,"\x1b[?1049hdraw\n__COMMANDUI_PROMPT__|n|C:\\w|0\r\n");
-        // RIS and DECSTR also leave it.
-        let mut rows = RowNormalizer::default();
-        rows.push("\x1b[?1049h");
-        assert!(rows.alt_screen);
-        rows.push("\x1bc");
-        assert!(!rows.alt_screen);
-        rows.push("\x1b[?47h");
-        assert!(rows.alt_screen);
-        rows.push("\x1b[!p");
-        assert!(!rows.alt_screen);
-    }
-
-    #[test]
-    fn a_panic_in_the_reader_still_reports_the_exit() {
-        let (done_tx, done_rx) = std::sync::mpsc::channel();
-        let (tx, rx) = std::sync::mpsc::channel();
-        let tx = Mutex::new(tx);
-        spawn_reader_with_exit(
-            ScriptedRead { steps: vec![Ok(b"boom".to_vec()), Ok(b"after".to_vec())], at: 0, done: None },
-            move |chunk: String| {
-                if chunk == "boom" {
-                    panic!("consumer bug");
-                }
-                tx.lock().unwrap().send(chunk).unwrap();
-            },
-            move || {
-                let _ = done_tx.send(());
-            },
-        );
-        done_rx
-            .recv_timeout(std::time::Duration::from_secs(5))
-            .expect("on_exit was not called after a panic");
-        drop(rx);
-    }
-
-    #[test]
     fn find_on_path_returns_the_first_existing_file() {
         let root = std::env::temp_dir().join(format!("commandui-findpath-{}", std::process::id()));
         let (a, b) = (root.join("a"), root.join("b"));
@@ -1539,5 +1821,719 @@ mod tests {
         let mut rows = RowNormalizer::default();
         let text = "a\x1b[?1049;1006h\x1b[2;1Hb\x1b[3;1Hc\x1b[?1006;1049l";
         assert_eq!(rows.push(text), text);
+    }
+
+    // ---- Markers: the wire format ----
+
+    #[test]
+    fn markers_round_trip_through_the_scanner() {
+        let osc = marker_osc('P', NONCE, Some(7), Some(true), "/work/a b");
+        let mut scanner = MarkerScanner::default();
+        let events = scanner.push(&format!("before{osc}after"));
+        assert_eq!(
+            events,
+            vec![
+                ReaderEvent::Text("before".into()),
+                ReaderEvent::Marker(Marker {
+                    kind: MarkerKind::Prompt,
+                    nonce: NONCE.into(),
+                    exit: Some(7),
+                    chord: Some(true),
+                    cwd: "/work/a b".into(),
+                }),
+                ReaderEvent::Text("after".into()),
+            ]
+        );
+        // ST terminates a marker as BEL does (cmd's PROMPT can only write ST).
+        let st = format!("{}{}", "\x1b]7733;P;abc;;;C:\\w", "\x1b\\");
+        let mut scanner = MarkerScanner::default();
+        let events = scanner.push(&st);
+        assert!(matches!(&events[..], [ReaderEvent::Marker(m)] if m.cwd == "C:\\w" && m.exit.is_none() && m.chord.is_none()), "{events:?}");
+        // The exit marker cmd's tail writes.
+        let mut scanner = MarkerScanner::default();
+        let events = scanner.push("\x1b]7733;X;abc;7;;\x1b\\");
+        assert!(matches!(&events[..], [ReaderEvent::Marker(m)] if m.kind == MarkerKind::Exit && m.exit == Some(7)), "{events:?}");
+    }
+
+    #[test]
+    fn a_marker_cut_at_any_byte_is_still_one_marker_and_never_text() {
+        let osc = marker_osc('P', NONCE, Some(0), None, "/h\u{f6}me/\u{65e5}\u{672c} dir");
+        let stream = format!("out1\r\n{osc}out2{osc}");
+        let bytes = stream.as_bytes();
+        for cut in 1..bytes.len() {
+            let mut pending = Vec::new();
+            let mut scanner = MarkerScanner::default();
+            let mut events = Vec::new();
+            for part in [&bytes[..cut], &bytes[cut..]] {
+                let text = decode_utf8_stream(&mut pending, part);
+                events.extend(scanner.push(&text));
+            }
+            let text: String = events
+                .iter()
+                .filter_map(|e| match e {
+                    ReaderEvent::Text(t) => Some(t.as_str()),
+                    _ => None,
+                })
+                .collect();
+            let markers = events.iter().filter(|e| matches!(e, ReaderEvent::Marker(_))).count();
+            assert_eq!(text, "out1\r\nout2", "cut at {cut}");
+            assert_eq!(markers, 2, "cut at {cut}");
+            assert_eq!(scanner.finish(), "");
+        }
+        // Byte by byte.
+        let mut pending = Vec::new();
+        let mut scanner = MarkerScanner::default();
+        let mut markers = 0;
+        for b in bytes {
+            let text = decode_utf8_stream(&mut pending, &[*b]);
+            for event in scanner.push(&text) {
+                if let ReaderEvent::Marker(m) = event {
+                    assert_eq!(m.cwd, "/h\u{f6}me/\u{65e5}\u{672c} dir");
+                    markers += 1;
+                }
+            }
+        }
+        assert_eq!(markers, 2);
+    }
+
+    #[test]
+    fn a_300_character_cwd_is_one_marker_whatever_the_console_width() {
+        // The marker is not text on a row: nothing about the width matters.
+        let cwd = format!("C:\\{}", "deep\\".repeat(60));
+        assert!(cwd.len() > 300);
+        let osc = marker_osc('P', NONCE, Some(0), Some(true), &cwd);
+        let mut scanner = MarkerScanner::default();
+        let events = scanner.push(&osc);
+        assert!(matches!(&events[..], [ReaderEvent::Marker(m)] if m.cwd == cwd), "{events:?}");
+    }
+
+    #[test]
+    fn the_cwd_field_cannot_carry_a_terminator_a_separator_or_a_line_break() {
+        let nasty = "/a;b%c\x07d\x1be\rf\ng";
+        let encoded = encode_cwd(nasty);
+        for forbidden in [';', '\x07', '\x1b', '\r', '\n'] {
+            assert!(!encoded.contains(forbidden), "{encoded:?} has {forbidden:?}");
+        }
+        assert_eq!(decode_cwd(&encoded), nasty);
+        // A `%` that is not an escape is kept; a lone `%` at the end too.
+        assert_eq!(decode_cwd("50%"), "50%");
+        assert_eq!(decode_cwd("50%2"), "50%2");
+        assert_eq!(decode_cwd("a%zzb"), "a%zzb");
+        assert_eq!(decode_cwd("%E6%97%A5"), "\u{65e5}");
+        let osc = marker_osc('P', NONCE, Some(0), None, nasty);
+        let mut scanner = MarkerScanner::default();
+        let events = scanner.push(&osc);
+        assert!(matches!(&events[..], [ReaderEvent::Marker(m)] if m.cwd == nasty), "{events:?}");
+    }
+
+    #[test]
+    fn malformed_markers_are_dropped_and_never_shown() {
+        for body in [
+            "P;;;;/w",             // no nonce
+            "Q;n;0;;/w",           // unknown kind
+            "P;n;nope;;/w",        // exit is not an integer
+            "P;n;0;;",             // fine: empty cwd is parsed (the service refuses it)
+            "P;n",                 // too few fields
+        ] {
+            let mut scanner = MarkerScanner::default();
+            let events = scanner.push(&format!("a\x1b]7733;{body}\x07b"));
+            let text: String = events
+                .iter()
+                .filter_map(|e| match e {
+                    ReaderEvent::Text(t) => Some(t.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(text, "ab", "{body}: {events:?}");
+        }
+        assert!(parse_marker("P;n;nope;;/w").is_none());
+        assert!(parse_marker("P;n;0;;").is_some());
+    }
+
+    #[test]
+    fn other_escapes_pass_through_and_titles_are_dropped() {
+        let mut scanner = MarkerScanner::default();
+        let text = "\x1b[93mred\x1b[0m \x1b]8;;http://x\x07link\x1b]8;;\x07 \x1b[?25h\x1bc";
+        assert_eq!(scanner.push(text), vec![ReaderEvent::Text(text.to_string())]);
+        assert_eq!(scanner.push("a\x1b]0;C:\\windows\\cmd.exe\x07b"), vec![ReaderEvent::Text("ab".into())]);
+        assert_eq!(scanner.push("a\x1b]2;t\x1b\\b\x1b]0;x\x07c"), vec![ReaderEvent::Text("abc".into())]);
+        // A title with plumbing in it, cut anywhere, is still dropped whole.
+        let title = "x\x1b]0;C:\\Windows\\cmd.exe - call set /p=]7733;X;abc;%ERRORLEVEL%\x07y";
+        for cut in 1..title.len() {
+            if !title.is_char_boundary(cut) {
+                continue;
+            }
+            let mut scanner = MarkerScanner::default();
+            let mut all = String::new();
+            for part in [&title[..cut], &title[cut..]] {
+                for event in scanner.push(part) {
+                    if let ReaderEvent::Text(t) = event {
+                        all.push_str(&t);
+                    }
+                }
+            }
+            assert_eq!(all, "xy", "cut at {cut}");
+        }
+    }
+
+    #[test]
+    fn an_unfinished_osc_is_bounded_and_a_half_marker_at_the_end_is_dropped() {
+        // No terminator ever: after MAX_OSC_LEN it is text, scanning goes on,
+        // and a marker after it still counts.
+        let mut scanner = MarkerScanner::default();
+        let junk = format!("\x1b]52;{}", "j".repeat(MAX_OSC_LEN + 10));
+        let osc = marker_osc('P', NONCE, Some(0), None, "/w");
+        let mut markers = 0;
+        for event in scanner.push(&format!("{junk}{osc}")) {
+            if matches!(event, ReaderEvent::Marker(_)) {
+                markers += 1;
+            }
+        }
+        assert_eq!(markers, 1);
+        // The stream ends in the middle of a marker: it is dropped, not shown.
+        let mut scanner = MarkerScanner::default();
+        assert!(scanner.push("x\x1b]7733;P;abc;0").iter().all(|e| matches!(e, ReaderEvent::Text(t) if t == "x")));
+        assert_eq!(scanner.finish(), "");
+        let mut scanner = MarkerScanner::default();
+        assert_eq!(scanner.push("x\x1b"), vec![ReaderEvent::Text("x".into())]);
+        assert_eq!(scanner.finish(), "\x1b");
+    }
+
+    #[test]
+    fn a_reader_hands_on_markers_in_order_and_shows_no_marker_text() {
+        struct Chunks(Vec<Vec<u8>>);
+        impl Read for Chunks {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                if self.0.is_empty() {
+                    return Ok(0);
+                }
+                let next = self.0.remove(0);
+                buf[..next.len()].copy_from_slice(&next);
+                Ok(next.len())
+            }
+        }
+        let line = format!("out\r\n{}tail", marker_osc('P', NONCE, Some(3), None, "/h\u{f6}me/\u{e9}")).into_bytes();
+        let cut = line.iter().position(|b| *b == 0xc3).unwrap() + 1;
+        let chunks = vec![line[..cut].to_vec(), line[cut..].to_vec()];
+        let (tx, rx) = std::sync::mpsc::channel::<ReaderEvent>();
+        let tx = Mutex::new(tx);
+        spawn_reader_with_exit(
+            Chunks(chunks),
+            Arc::new(AtomicU16::new(PTY_COLS)),
+            move |event| {
+                tx.lock().unwrap().send(event).unwrap();
+            },
+            || {},
+        );
+        let mut events = Vec::new();
+        while let Ok(e) = rx.recv_timeout(std::time::Duration::from_secs(5)) {
+            events.push(e);
+        }
+        let text: String = events
+            .iter()
+            .filter_map(|e| match e {
+                ReaderEvent::Text(t) => Some(t.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(!text.contains('\u{FFFD}') && !text.contains("7733") && !text.contains('\x1b'), "{text:?}");
+        let at_marker = events.iter().position(|e| matches!(e, ReaderEvent::Marker(_))).expect("a marker");
+        let before: String = events[..at_marker]
+            .iter()
+            .filter_map(|e| match e {
+                ReaderEvent::Text(t) => Some(t.as_str()),
+                _ => None,
+            })
+            .collect();
+        // The marker is delivered after the text that followed it in the same
+        // read (the reader waits for the stream to settle, so output ConPTY
+        // paints late is not overtaken by the marker).
+        assert!(before.starts_with("out") && before.ends_with("tail"), "{before:?}");
+        assert!(matches!(&events[at_marker], ReaderEvent::Marker(m) if m.cwd == "/h\u{f6}me/\u{e9}" && m.exit == Some(3)));
+        assert_eq!(at_marker, events.len() - 1, "{events:?}");
+    }
+
+    #[test]
+    fn a_marker_waits_for_text_that_arrives_within_the_settle_time() {
+        struct Timed(Vec<(u64, Vec<u8>)>);
+        impl Read for Timed {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                if self.0.is_empty() {
+                    return Ok(0);
+                }
+                let (delay, next) = self.0.remove(0);
+                std::thread::sleep(std::time::Duration::from_millis(delay));
+                buf[..next.len()].copy_from_slice(&next);
+                Ok(next.len())
+            }
+        }
+        let marker = marker_osc('P', NONCE, Some(0), None, "/w");
+        // The marker first, the output it follows 10 ms later (what ConPTY did
+        // at boot), then a second marker long after.
+        let chunks = vec![(0, marker.clone().into_bytes()), (10, b"late-output\r\n".to_vec())];
+        let (tx, rx) = std::sync::mpsc::channel::<ReaderEvent>();
+        let tx = Mutex::new(tx);
+        spawn_reader_with_exit(
+            Timed(chunks),
+            Arc::new(AtomicU16::new(PTY_COLS)),
+            move |event| {
+                tx.lock().unwrap().send(event).unwrap();
+            },
+            || {},
+        );
+        let mut events = Vec::new();
+        while let Ok(e) = rx.recv_timeout(std::time::Duration::from_secs(5)) {
+            events.push(e);
+        }
+        let text: String = events
+            .iter()
+            .filter_map(|e| match e {
+                ReaderEvent::Text(t) => Some(t.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(text, "late-output\r\n", "{events:?}");
+        assert!(matches!(events.last(), Some(ReaderEvent::Marker(_))), "the marker came before the late output: {events:?}");
+        assert_eq!(events.iter().filter(|e| matches!(e, ReaderEvent::Marker(_))).count(), 1);
+    }
+
+    // ---- Shell hooks ----
+
+    #[test]
+    fn every_hook_writes_the_osc_marker_with_nonce_exit_and_cwd() {
+        let pwsh = bootstrap_prompt("powershell.exe", NONCE).unwrap();
+        assert!(pwsh.contains("]7733;P;"), "{pwsh}");
+        assert!(pwsh.contains(NONCE));
+        assert!(pwsh.contains("$?"));
+        assert!(pwsh.contains("LASTEXITCODE"));
+        assert!(pwsh.contains("Get-Location"));
+        assert!(pwsh.contains("$__cui_code = 1"));
+        assert!(pwsh.contains("if ($__cui_ok) { $__cui_code = 0 }"));
+        assert!(pwsh.contains("[Console]::Write("), "the marker is one console write: {pwsh}");
+        assert!(!pwsh.contains('~'));
+
+        let cmd = bootstrap_prompt("cmd.exe", NONCE).unwrap();
+        assert!(cmd.contains("%^ERRORLEVEL%"));
+        assert!(cmd.contains(&format!("prompt $e]7733;P;{NONCE};;;$P$e\\$P$G")), "{cmd}");
+        assert!(cmd.contains(&format!("]7733;X;{NONCE};%^ERRORLEVEL%;;")), "{cmd}");
+
+        let bash = bootstrap_prompt("/bin/bash", NONCE).unwrap();
+        assert!(bash.contains("$PWD"));
+        assert!(bash.contains("ec=$?"));
+        assert!(bash.contains(NONCE));
+        assert!(bash.contains("]7733;P;%s;%s;%s;%s"), "{bash}");
+        assert!(bash.contains("PROMPT_COMMAND=__cui_prompt"));
+        assert!(!bash.contains("\\w"));
+
+        let zsh = bootstrap_prompt("/bin/zsh", NONCE).unwrap();
+        assert!(zsh.contains("${PWD}"));
+        assert!(zsh.contains("$?"));
+        assert!(zsh.contains(NONCE));
+        assert!(zsh.contains("]7733;P;"), "{zsh}");
+        assert!(!zsh.contains("%~"));
+    }
+
+    #[test]
+    fn no_hook_prints_marker_text_or_a_line_break() {
+        // The old marker was a visible `__COMMANDUI_PROMPT__|...` row preceded
+        // by a newline. The hooks write only the OSC.
+        for shell in ["powershell.exe", "pwsh", "cmd.exe", "/bin/bash", "/bin/zsh"] {
+            let boot = bootstrap_prompt(shell, NONCE).unwrap();
+            assert!(!boot.contains("COMMANDUI"), "{shell}: {boot}");
+            assert!(!boot.contains("print -r -- \"\""), "{shell}");
+        }
+        assert!(!bootstrap_prompt("/bin/bash", NONCE).unwrap().contains("printf \"\\n"));
+    }
+
+    #[test]
+    fn hooks_encode_the_cwd_so_it_cannot_end_the_sequence() {
+        for (shell, parts) in [
+            ("/bin/bash", vec!["\\%/%25", ";/%3B", "$'\\e'/%1B", "$'\\a'/%07", "$'\\n'/%0A", "$'\\r'/%0D"]),
+            ("/bin/zsh", vec!["\\%/%25", ";/%3B", "$'\\e'/%1B", "$'\\a'/%07", "$'\\n'/%0A", "$'\\r'/%0D"]),
+            // Bytes, not characters: [Console]::Write would turn a non-ASCII
+            // character into `?` in the console's code page.
+            ("pwsh", vec!["UTF8.GetBytes((Get-Location).Path)", "$_ -lt 32 -or $_ -gt 126 -or $_ -eq 37 -or $_ -eq 59", "'%{0:X2}' -f $_"]),
+        ] {
+            let boot = bootstrap_prompt(shell, NONCE).unwrap();
+            for part in parts {
+                assert!(boot.contains(part), "{shell} lacks {part}: {boot}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_clear_chord_is_bound_only_when_free_and_read_back() {
+        let ps = bootstrap_prompt("pwsh", NONCE).unwrap();
+        // Vi insert, vi command and the other modes each get a handler.
+        assert!(ps.contains("-ViMode Insert -Chord 'Ctrl+]' -Function RevertLine"), "{ps}");
+        assert!(ps.contains("-ViMode Command -Chord 'Ctrl+]' -ScriptBlock"), "{ps}");
+        assert!(ps.contains("ViInsertMode()"), "{ps}");
+        // The non-Vi branch, with its own `else`, is not a substring of the
+        // Vi insert binding above.
+        assert!(ps.contains("} else { Set-PSReadLineKeyHandler -Chord 'Ctrl+]' -Function RevertLine }"), "{ps}");
+        assert_eq!(ps.matches("Set-PSReadLineKeyHandler").count(), 3, "{ps}");
+        // Only when unbound or still a default, and only when the edit mode
+        // changed since the last binding (not at every prompt).
+        assert!(ps.contains("-notin 'GotoBrace','CharacterSearch','RevertLine'"), "{ps}");
+        assert!(ps.contains("if ($__cui_m -ne $global:__cui_mode)"), "{ps}");
+        // Read back, and the marker reports it.
+        assert!(ps.contains("[string]$_.Function -eq 'RevertLine'"), "{ps}");
+        assert!(ps.find("Set-PSReadLineKeyHandler").unwrap() < ps.find("]7733;P;").unwrap());
+
+        let bash = bootstrap_prompt("/bin/bash", NONCE).unwrap();
+        for map in ["emacs", "vi-insert", "vi-command"] {
+            assert!(bash.contains(&format!("bind -m {map} ")), "{map}: {bash}");
+            assert!(bash.contains(&format!("__cui_free {map}")), "{map}: {bash}");
+        }
+        assert!(bash.contains("kill-whole-line"));
+        // Unbound or readline's own default only (character-search in emacs,
+        // self-insert in vi insert); verified before it is relied on.
+        assert!(bash.contains("[ \"$l\" = '\"\\C-]\": character-search' ]"), "{bash}");
+        assert!(bash.contains("[ \"$l\" = '\"\\C-]\": self-insert' ]"), "{bash}");
+        assert!(bash.contains("then __cui_chord=1; fi"), "{bash}");
+        assert_eq!(CLEAR_CHORD, "\x1d");
+    }
+
+    #[test]
+    fn a_shell_that_says_the_chord_is_unbound_gets_the_fallback_clear() {
+        assert_eq!(clear_input_line("/bin/bash", true), "\x1d");
+        assert_eq!(clear_input_line("/bin/bash", false), "\x05\x15");
+        assert_eq!(clear_input_line("pwsh.exe", true), "\x1d\x1b[1;5F\x1b[1;5H");
+        assert_eq!(clear_input_line("pwsh.exe", false), "\x1b[1;5F\x1b[1;5H");
+        assert_eq!(clear_input_line("zsh", true), "\x05\x15");
+        assert_eq!(clear_input_line("cmd.exe", true), "\x1b[1;5F\x1b[1;5H");
+        assert_eq!(clear_input_line("fish", true), "");
+    }
+
+    #[test]
+    fn resync_clears_the_line_before_its_enter() {
+        // A half-typed line must not be submitted by the resync's Enter.
+        assert_eq!(resync_input("bash", true), "\x1d\r");
+        assert_eq!(resync_input("bash", false), "\x05\x15\r");
+        assert_eq!(resync_input("pwsh", true), "\x1d\x1b[1;5F\x1b[1;5H\r");
+        assert_eq!(resync_input("zsh", true), "\x05\x15\r");
+        assert_eq!(resync_input("cmd.exe", true), "\x1b[1;5F\x1b[1;5H\r");
+    }
+
+    // ---- cmd command lines ----
+
+    #[test]
+    fn cmd_command_line_chains_the_exit_tail_on_the_same_line() {
+        let nasty = "echo %CD% & del /q *";
+        let (line, tail) = command_line_for_shell("cmd.exe", nasty, true);
+        assert_eq!(tail, CmdTail::Chained);
+        // One line, one Enter: a program that flushes the console input
+        // buffer (pause, choice, set /p) has no typed-ahead tail to eat.
+        assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H%__cuz% & {nasty} & %__cui%\r"));
+        assert_eq!(line.matches('\r').count(), 1);
+        assert!(!line.contains('\n'), "a Windows ConPTY submits on CR; LF is Ctrl+J");
+        // The tail is in the bootstrap's variable, with the nonce, and the
+        // ERRORLEVEL reset is the other one (`(call )` sets it to 0).
+        let boot = bootstrap_prompt("cmd.exe", NONCE).unwrap();
+        assert!(boot.contains(&format!("\"__cui=call <nul set /p=%__cue%]7733;X;{NONCE};%^ERRORLEVEL%;;%__cue%\\\"\r")), "{boot}");
+        assert!(boot.contains("\r@set \"__cuz=(call )\"\r"), "{boot}");
+        assert_eq!(command_line_for_shell("bash", "ls", true).0, "\x1dls\r");
+        assert_eq!(cmd_probe_line(true), "\x1b[1;5F\x1b[1;5H%__cui%\r");
+    }
+
+    #[test]
+    fn cmd_commands_that_could_swallow_or_break_the_tail_are_written_alone() {
+        for command in [
+            "echo hi & rem",
+            "echo hi & :: comment",
+            ":: comment",
+            "echo \"unbalanced",
+            "echo hi ^",
+            "(echo a",
+            "echo a)",
+            // Trailing operators: `echo a & & tail` does not parse.
+            "echo a &",
+            "echo a |",
+            "echo a >",
+            "echo a <",
+            "echo a &&",
+            "echo a ||",
+            // if / for / rem as the first word of a segment.
+            "if exist x echo y",
+            "for /l %i in (1,1,3) do @echo %i",
+            "rem hello",
+            "@rem hello",
+            "echo a & if x==x echo b",
+            "echo a | for %i in (1) do echo %i",
+            "(if 1==1 echo y)",
+            "IF EXIST x echo y",
+        ] {
+            let (line, tail) = command_line_for_shell("cmd.exe", command, true);
+            assert_eq!(tail, CmdTail::None, "{command}");
+            assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H%__cuz% & {command}\r"), "{command}");
+        }
+        // The same words as arguments, in quotes, or inside another word chain.
+        for command in [
+            "echo for you",
+            "echo if only",
+            "git commit -m \"fix for bug\"",
+            "findstr if x",
+            "echo rem",
+            "dir /b",
+            "cd /d \"C:\\a b\"",
+            "echo (a) & echo b",
+            "git status",
+            "echo format & echo information",
+            // `::` is a comment only at the start of a command.
+            "echo hi :: not a comment",
+        ] {
+            let (line, tail) = command_line_for_shell("cmd.exe", command, true);
+            assert_eq!(tail, CmdTail::Chained, "{command}");
+            assert!(line.ends_with(" & %__cui%\r"), "{command}: {line:?}");
+        }
+    }
+
+    #[test]
+    fn command_line_clears_pending_input_per_shell_family() {
+        assert_eq!(command_line_for_shell("zsh", "ls", true).0, "\x05\x15ls\r");
+        assert_eq!(command_line_for_shell("pwsh.exe", "ls", true).0, "\x1d\x1b[1;5F\x1b[1;5Hls\r");
+        assert_eq!(command_line_for_shell("powershell.exe", "ls", false).0, "\x1b[1;5F\x1b[1;5Hls\r");
+        assert_eq!(command_line_for_shell("/bin/bash", "ls", true).0, "\x1dls\r");
+        assert_eq!(command_line_for_shell("/bin/bash", "ls", false).0, "\x05\x15ls\r");
+        assert_eq!(
+            command_line_for_shell("cmd.exe", "dir", true).0,
+            "\x1b[1;5F\x1b[1;5H%__cuz% & dir & %__cui%\r"
+        );
+    }
+
+    #[test]
+    fn cmd_commands_with_bangs_are_written_through_unchanged() {
+        for command in ["echo hello!", "git commit -m \"done!\"", "cd hello!world"] {
+            let (line, _) = command_line_for_shell("cmd.exe", command, true);
+            assert_eq!(line, format!("\x1b[1;5F\x1b[1;5H%__cuz% & {command} & %__cui%\r"), "{line}");
+        }
+        // The session itself never enables delayed expansion.
+        let cmd = prepare_shell_command("cmd.exe", None);
+        assert!(!cmd.get_argv().iter().any(|arg| arg == "/v:on"));
+        assert!(!bootstrap_prompt("cmd.exe", NONCE).unwrap().contains("/v:on"));
+    }
+
+    #[test]
+    fn every_line_runtime_core_builds_is_submitted_with_cr_not_lf() {
+        // A Windows ConPTY runs a line on CR (Enter); LF is Ctrl+J there and
+        // the bootstrap was typed and never run.
+        for shell in ["powershell.exe", "pwsh", "cmd.exe", "/bin/bash", "/bin/zsh"] {
+            let boot = bootstrap_prompt(shell, NONCE).unwrap();
+            assert!(boot.ends_with('\r'), "{shell}: {boot:?}");
+            assert!(!boot.contains('\n'), "{shell}: {boot:?}");
+            let (line, _) = command_line_for_shell(shell, "ls", true);
+            assert!(line.ends_with('\r'), "{shell}: {line:?}");
+            assert!(!line.contains('\n'), "{shell}: {line:?}");
+            let resync = resync_input(shell, true);
+            assert!(resync.ends_with('\r'), "{shell}: {resync:?}");
+            assert!(!resync.contains('\n'), "{shell}: {resync:?}");
+        }
+        let probe = cmd_probe_line(true);
+        assert!(probe.ends_with('\r') && !probe.contains('\n'));
+    }
+
+    #[test]
+    fn clear_line_is_a_csi_pair_never_a_lone_escape_on_windows_shells() {
+        // ESC followed by more bytes in one write is Alt+<key> to a ConPTY:
+        // `xyz` + ESC + `echo ok` ran `xyzecho ok`. Ctrl+End / Ctrl+Home as
+        // CSI sequences are unambiguous.
+        assert_eq!(clear_input_line("cmd.exe", true), "\x1b[1;5F\x1b[1;5H");
+        for shell in ["powershell.exe", "pwsh.exe"] {
+            assert_eq!(clear_input_line(shell, true), "\x1d\x1b[1;5F\x1b[1;5H", "{shell}");
+        }
+    }
+
+    // ---- cmd plumbing in the display ----
+
+    #[test]
+    fn cmd_plumbing_is_stripped_whatever_the_read_boundaries() {
+        let echo = "C:\\w>%__cuz% & dir /b & %__cui%\r\nfile.txt\r\nC:\\w>%__cui%\r\n";
+        let clean = "C:\\w>dir /b\r\nfile.txt\r\nC:\\w>\r\n";
+        // Cut into two reads at every offset, and into one-byte reads.
+        for cut in 0..=echo.len() {
+            let mut hold = String::new();
+            let mut shown = strip_cmd_plumbing(&mut hold, &echo[..cut], false);
+            shown.push_str(&strip_cmd_plumbing(&mut hold, &echo[cut..], false));
+            shown.push_str(&strip_cmd_plumbing(&mut hold, "", true));
+            assert_eq!(shown, clean, "cut at {cut}");
+        }
+        let mut hold = String::new();
+        let mut shown = String::new();
+        for ch in echo.chars() {
+            shown.push_str(&strip_cmd_plumbing(&mut hold, &ch.to_string(), false));
+        }
+        shown.push_str(&strip_cmd_plumbing(&mut hold, "", true));
+        assert_eq!(shown, clean);
+        // The observed live split: `%__` then `cuz% & dir /b`.
+        let mut hold = String::new();
+        assert_eq!(strip_cmd_plumbing(&mut hold, "C:\\w>%__", false), "C:\\w>");
+        assert_eq!(strip_cmd_plumbing(&mut hold, "cuz% & dir /b", false), "dir /b");
+        // Text that merely starts like plumbing is released when it turns out not to be.
+        let mut hold = String::new();
+        assert_eq!(strip_cmd_plumbing(&mut hold, "50%", false), "50");
+        assert_eq!(strip_cmd_plumbing(&mut hold, " done", false), "% done");
+        // And at the prompt (flush) nothing is kept back.
+        let mut hold = String::new();
+        assert_eq!(strip_cmd_plumbing(&mut hold, "a &", true), "a &");
+        assert!(hold.is_empty());
+    }
+
+    #[test]
+    fn segment_first_words_are_found_outside_quotes_only() {
+        assert!(cmd_segment_swallows_tail("if a==a echo y"));
+        assert!(cmd_segment_swallows_tail("  FOR %i in (1) do echo %i"));
+        assert!(cmd_segment_swallows_tail("echo a&rem x"));
+        assert!(cmd_segment_swallows_tail("echo a | if x==x echo"));
+        assert!(!cmd_segment_swallows_tail("echo \"a & if b\""));
+        assert!(!cmd_segment_swallows_tail("echo if"));
+        assert!(!cmd_segment_swallows_tail("iffy"));
+        assert!(!cmd_segment_swallows_tail("format c:"));
+        assert!(!cmd_segment_swallows_tail("forfiles /p ."));
+        assert!(!cmd_segment_swallows_tail("remote x"));
+    }
+
+    // ---- Paste accounting ----
+
+    #[test]
+    fn submitted_lines_counts_terminators_outside_a_bracketed_paste() {
+        assert_eq!(submitted_lines(""), 0);
+        assert_eq!(submitted_lines("abc"), 0);
+        assert_eq!(submitted_lines("abc\r"), 1);
+        assert_eq!(submitted_lines("a\r\nb\r\n"), 2);
+        assert_eq!(submitted_lines("a\nb\n"), 2);
+        assert_eq!(submitted_lines("sleep 1; echo A\rsleep 6; echo B\r"), 2);
+        assert_eq!(submitted_lines("\r\r"), 2);
+        // A bracketed paste inserts its line breaks; only the Enter after it runs.
+        assert_eq!(submitted_lines("\x1b[200~a\rb\r\x1b[201~"), 0);
+        assert_eq!(submitted_lines("\x1b[200~a\rb\x1b[201~\r"), 1);
+        assert_eq!(submitted_lines("x\r\x1b[200~a\rb\x1b[201~\r"), 2);
+        assert_eq!(submitted_lines("\x1b[200~a\rb"), 0);
+        assert_eq!(submitted_lines("\x1b[A\x1b[B"), 0);
+    }
+
+    // ---- Display rewrite ----
+
+    #[test]
+    fn a_marker_less_prompt_ends_the_alternate_screen_and_starts_its_own_row() {
+        // The program was killed: it never sent ?1049l. Its screen text is
+        // still on the row when the prompt (and so its marker) arrives.
+        let mut rows = RowNormalizer::default();
+        let out = rows.push("\x1b[?1049hscreen text");
+        assert_eq!(out, "\x1b[?1049hscreen text");
+        assert!(rows.alt_screen);
+        assert_eq!(rows.end_alt_screen(), "\n");
+        assert!(!rows.alt_screen);
+        // Back to rewriting cursor jumps.
+        assert_eq!(rows.push("next\x1b[9;1Hmore"), "next\nmore");
+        // Not in the alternate screen: nothing is added.
+        assert_eq!(rows.end_alt_screen(), "");
+        // Text that happens to look like the old marker never ends it.
+        let mut rows = RowNormalizer::default();
+        rows.push("\x1b[?1049h");
+        let shown = rows.push("__COMMANDUI_PROMPT__|x|y|0\x1b[5;1Hmore");
+        assert!(rows.alt_screen, "{shown:?}");
+        assert_eq!(shown, "__COMMANDUI_PROMPT__|x|y|0\x1b[5;1Hmore");
+        // RIS and DECSTR also leave it.
+        let mut rows = RowNormalizer::default();
+        rows.push("\x1b[?1049h");
+        assert!(rows.alt_screen);
+        rows.push("\x1bc");
+        assert!(!rows.alt_screen);
+        rows.push("\x1b[?47h");
+        assert!(rows.alt_screen);
+        rows.push("\x1b[!p");
+        assert!(!rows.alt_screen);
+    }
+
+    #[test]
+    fn a_line_of_several_console_rows_is_one_line_whether_or_not_the_width_is_known() {
+        // Two soft wraps in a row, the first with the first row not at the
+        // bottom of the screen (so no repaint on the first wrap): 240 cells.
+        let row1 = "r".repeat(120);
+        let row2 = "s".repeat(120);
+        let stream = format!("\n{row1}{row2}\r\n\x1b[29;120Hs-and-more|0\r\n");
+        let expect = format!("\n{row1}{row2}-and-more|0\r\n");
+        // Width seeded from the pty size.
+        let mut rows = RowNormalizer::with_width(120);
+        let mut out = rows.push(&stream);
+        out.push_str(&rows.finish());
+        assert_eq!(out, expect);
+        // Width unknown: the cumulative column is a multiple of the CUP column.
+        let mut rows = RowNormalizer::default();
+        let mut out = rows.push(&stream);
+        out.push_str(&rows.finish());
+        assert_eq!(out, expect);
+        // A resize to another width is followed.
+        let mut rows = RowNormalizer::with_width(120);
+        rows.set_width(40);
+        let line = "x".repeat(39) + "y";
+        let mut out = rows.push(&format!("{line}\r\n\x1b[9;40Hyzzz\r\nnext"));
+        out.push_str(&rows.finish());
+        assert_eq!(out, format!("{line}zzz\r\nnext"));
+    }
+
+    #[test]
+    fn wide_characters_take_two_cells_when_the_column_is_followed() {
+        assert_eq!(char_cells('a'), 1);
+        assert_eq!(char_cells('\u{e9}'), 1);
+        assert_eq!(char_cells('\u{65e5}'), 2);
+        assert_eq!(char_cells('\u{ff21}'), 2);
+        assert_eq!(char_cells('\u{1F600}'), 2);
+        assert_eq!(char_cells('\u{301}'), 0);
+        assert_eq!(char_cells('\u{200d}'), 0);
+        // 48 CJK characters (96 cells) and 24 ASCII fill a 120-cell row; ConPTY
+        // then repaints at column 120. A one-cell-per-character count (72) never
+        // reaches it and splits the row.
+        let row = "\u{65e5}".repeat(48) + &"a".repeat(23) + "b";
+        let mut rows = RowNormalizer::with_width(120);
+        let mut out = rows.push(&format!("{row}\r\n\x1b[29;120Hb-more\r\n"));
+        out.push_str(&rows.finish());
+        assert_eq!(out, format!("{}-more\r\n", row));
+        // The repainted last character may be non-ASCII too.
+        let row = "a".repeat(118) + "\u{65e5}";
+        let mut rows = RowNormalizer::with_width(120);
+        let mut out = rows.push(&format!("{row}\r\n\x1b[29;120H\u{65e5}-more\r\n"));
+        out.push_str(&rows.finish());
+        assert_eq!(out, format!("{row}-more\r\n"));
+    }
+
+    #[test]
+    fn a_held_break_is_released_by_a_flush_and_waits_longer_than_a_slow_write() {
+        // The break is held until the next read says what it is; the reader
+        // releases it after HELD_BREAK_FLUSH, which is well above a loaded
+        // machine's gap between ConPTY's CR LF and the repaint that follows.
+        assert!(HELD_BREAK_FLUSH >= std::time::Duration::from_millis(200));
+        let line = "w".repeat(30);
+        let mut rows = RowNormalizer::default();
+        assert_eq!(rows.push(&format!("{line}\r\n")), line);
+        // The repaint arrives in the next read, later than 40 ms would have waited.
+        assert_eq!(rows.push("\x1b[9;30Hwmore"), "more");
+        let mut rows = RowNormalizer::default();
+        assert_eq!(rows.push(&format!("{line}\r\n")), line);
+        assert_eq!(rows.flush_held(), "\r\n");
+    }
+
+    #[test]
+    fn a_panic_in_the_reader_still_reports_the_exit() {
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let tx = Mutex::new(tx);
+        spawn_reader_with_exit(
+            ScriptedRead { steps: vec![Ok(b"boom".to_vec()), Ok(b"after".to_vec())], at: 0, done: None },
+            Arc::new(AtomicU16::new(PTY_COLS)),
+            move |event: ReaderEvent| {
+                if event == ReaderEvent::Text("boom".into()) {
+                    panic!("consumer bug");
+                }
+                tx.lock().unwrap().send(event).unwrap();
+            },
+            move || {
+                let _ = done_tx.send(());
+            },
+        );
+        done_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("on_exit was not called after a panic");
+        drop(rx);
     }
 }
