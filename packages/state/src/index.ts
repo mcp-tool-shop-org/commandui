@@ -183,12 +183,14 @@ type SettingsState = {
   productMode: "classic" | "guided";
   reducedClutter: boolean;
   simplifiedSummaries: boolean;
-  confirmMediumRisk: boolean;
+  plannerModel: string;
+  plannerEndpoint: string;
   defaultInputMode: "command" | "ask";
   setProductMode: (mode: "classic" | "guided") => void;
   setReducedClutter: (value: boolean) => void;
   setSimplifiedSummaries: (value: boolean) => void;
-  setConfirmMediumRisk: (value: boolean) => void;
+  setPlannerModel: (value: string) => void;
+  setPlannerEndpoint: (value: string) => void;
   setDefaultInputMode: (mode: "command" | "ask") => void;
 };
 
@@ -196,13 +198,15 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   productMode: "classic",
   reducedClutter: false,
   simplifiedSummaries: false,
-  confirmMediumRisk: true,
+  plannerModel: "qwen2.5:14b",
+  plannerEndpoint: "http://localhost:11434",
   defaultInputMode: "command",
   setProductMode: (productMode) => set({ productMode }),
   setReducedClutter: (reducedClutter) => set({ reducedClutter }),
   setSimplifiedSummaries: (simplifiedSummaries) =>
     set({ simplifiedSummaries }),
-  setConfirmMediumRisk: (confirmMediumRisk) => set({ confirmMediumRisk }),
+  setPlannerModel: (plannerModel) => set({ plannerModel }),
+  setPlannerEndpoint: (plannerEndpoint) => set({ plannerEndpoint }),
   setDefaultInputMode: (defaultInputMode) => set({ defaultInputMode }),
 }));
 

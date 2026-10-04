@@ -5,7 +5,8 @@ export type SettingsSnapshot = {
   density: "compact" | "comfortable";
   defaultInputMode: "command" | "ask";
   autoOpenPlanPanel: boolean;
-  confirmMediumRisk: boolean;
+  plannerModel: string;
+  plannerEndpoint: string;
   explanationVerbosity: "brief" | "normal";
   reducedClutter: boolean;
   simplifiedSummaries: boolean;

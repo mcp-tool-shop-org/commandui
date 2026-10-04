@@ -11,6 +11,12 @@ pub struct PlannerGeneratePlanRequest {
     pub session_id: String,
     pub user_intent: String,
     pub context: PlannerContextPayload,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    #[serde(default)]
+    pub probe_only: bool,
 }
 
 /// Desktop-specific context payload from the frontend.
@@ -48,8 +54,11 @@ pub struct ProjectFactPayload {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlannerGeneratePlanResponse {
-    pub plan: CommandProposal,
-    pub review: planner::PlanReview,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan: Option<CommandProposal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review: Option<planner::PlanReview>,
+    pub status: planner::PlannerStatus,
 }
 
 // --- Tauri command: thin adapter ---
@@ -59,26 +68,59 @@ pub async fn planner_generate_plan(
     request: PlannerGeneratePlanRequest,
     state: tauri::State<'_, AppState>,
 ) -> Result<PlannerGeneratePlanResponse, ApiError> {
-    if request.user_intent.is_empty() {
+    if request.user_intent.is_empty() && !request.probe_only {
         return Err(ApiError::validation("user_intent cannot be empty"));
     }
 
-    // Convert desktop payload to shared PlanContext
-    let context = to_plan_context(&request.context);
+    let mut config = state.ollama.clone();
+    if let Some(model) = request.model.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        config.model = model.to_string();
+    }
+    if let Some(endpoint) = request
+        .endpoint
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        config.endpoint = endpoint.trim_end_matches('/').to_string();
+    }
 
-    // Use shared planner — same one Console uses
-    let proposal = planner::generate_proposal(
-        &state.ollama,
+    if request.probe_only {
+        let status = planner::probe_status(&config).await;
+        return Ok(PlannerGeneratePlanResponse {
+            plan: None,
+            review: None,
+            status,
+        });
+    }
+
+    let context = to_plan_context(&request.context);
+    // Debug builds and `cargo test` may return a labeled stand-in. A release
+    // build passes false inside answer_for via generate_proposal's cfg, but
+    // this call states it: tests stay on the debug path, release does not.
+    let answer = planner::answer_for(
+        &config,
         &context,
         &request.user_intent,
+        cfg!(debug_assertions),
     )
     .await;
 
-    let review = planner::client::build_review(&proposal, &context);
-
-    Ok(PlannerGeneratePlanResponse {
-        plan: proposal,
-        review,
+    Ok(match answer {
+        planner::PlannerAnswer::Proposal {
+            proposal,
+            review,
+            status,
+        } => PlannerGeneratePlanResponse {
+            plan: Some(proposal),
+            review: Some(review),
+            status,
+        },
+        planner::PlannerAnswer::Unavailable { status } => PlannerGeneratePlanResponse {
+            plan: None,
+            review: None,
+            status,
+        },
     })
 }
 
@@ -132,6 +174,9 @@ mod tests {
                 memory_items: vec![],
                 project_facts: vec![],
             },
+            model: None,
+            endpoint: None,
+            probe_only: false,
         }
     }
 

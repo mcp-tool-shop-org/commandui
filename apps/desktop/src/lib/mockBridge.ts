@@ -219,6 +219,23 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   planner_generate_plan(args) {
     const req = (args.request ?? {}) as Record<string, unknown>;
     const context = (req.context ?? {}) as Record<string, unknown>;
+    const model = (req.model as string) || "qwen2.5:14b";
+    const endpoint = (req.endpoint as string) || "http://localhost:11434";
+    if (req.probeOnly) {
+      return {
+        plan: null,
+        review: null,
+        status: {
+          state: "notRunning",
+          model,
+          endpoint,
+          headline: "Ollama is not running.",
+          fix: "Start Ollama, then choose Check again.",
+          link: "https://ollama.com/download",
+          linkLabel: "Download Ollama",
+        },
+      };
+    }
     const intent = (req.userIntent as string) || "do something";
     const planId = uuid();
     const projectFacts = (context.projectFacts ?? []) as Array<Record<string, string>>;
@@ -267,6 +284,15 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
         safetyFlags: [],
         memoryUsed: memoryItems.map((m) => `${m.kind}:${m.key}`),
         retrievedContext,
+      },
+      status: {
+        state: "ready",
+        model,
+        endpoint,
+        headline: "Ready.",
+        fix: `Ask can draft a command with ${model}.`,
+        link: "https://ollama.com/library",
+        linkLabel: "Model library",
       },
     };
   },
@@ -342,7 +368,8 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
         defaultInputMode: "ask",
         reducedClutter: false,
         simplifiedSummaries: false,
-        confirmMediumRisk: true,
+        plannerModel: "qwen2.5:14b",
+        plannerEndpoint: "http://localhost:11434",
       },
     };
   },

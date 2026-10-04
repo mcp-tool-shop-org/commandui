@@ -92,6 +92,55 @@ pub(crate) async fn try_ollama(
     Ok(llm_to_proposal(&llm, context, user_intent, "ollama"))
 }
 
+#[derive(Deserialize)]
+struct TagsResponse {
+    #[serde(default)]
+    models: Vec<TagModel>,
+}
+
+#[derive(Deserialize)]
+struct TagModel {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    model: String,
+}
+
+/// Local model list. An error means the endpoint could not be asked.
+/// This only calls the configured endpoint. It never calls a cloud host of its own.
+pub(crate) async fn list_models(config: &OllamaConfig) -> Result<Vec<String>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(config.timeout_secs.max(1)))
+        .build()
+        .map_err(|e| format!("HTTP client: {e}"))?;
+    let endpoint = config.endpoint.trim().trim_end_matches('/');
+    let url = format!("{endpoint}/api/tags");
+    let response = client.get(&url).send().await.map_err(|e| {
+        if e.is_timeout() {
+            "timeout".to_string()
+        } else {
+            format!("connection: {e}")
+        }
+    })?;
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status()));
+    }
+    let tags: TagsResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("tags parse: {e}"))?;
+    let mut names = Vec::new();
+    for model in tags.models {
+        if !model.name.is_empty() {
+            names.push(model.name);
+        }
+        if !model.model.is_empty() {
+            names.push(model.model);
+        }
+    }
+    Ok(names)
+}
+
 /// Truncate to at most 200 bytes on a char boundary (multibyte-safe).
 pub(crate) fn preview_response(response: &str) -> String {
     if response.len() <= 200 {
@@ -546,6 +595,34 @@ pub(crate) mod test_support {
             if let Ok((stream, _)) = listener.accept() {
                 thread::sleep(Duration::from_secs(4));
                 drop(stream);
+            }
+        });
+        format!("http://127.0.0.1:{port}")
+    }
+
+    /// Serves each response to the next connection, in order.
+    pub(crate) fn spawn_sequence(responses: Vec<(&str, String)>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let responses: Vec<(String, String)> = responses
+            .into_iter()
+            .map(|(status, body)| (status.to_string(), body))
+            .collect();
+        thread::spawn(move || {
+            for (status, body) in responses {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    break;
+                };
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+                drain_request(&mut stream);
+                let header = format!(
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(body.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(Shutdown::Write);
             }
         });
         format!("http://127.0.0.1:{port}")

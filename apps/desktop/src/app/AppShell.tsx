@@ -11,6 +11,7 @@ import type {
 import { runDetectors } from "@commandui/domain";
 import type {
   PlannerGeneratePlanResponse,
+  PlannerStatus,
   SessionExecState,
   TerminalExecutionFinishedEvent,
   TerminalExecutionStartedEvent,
@@ -72,6 +73,7 @@ import {
 import { InputComposer } from "../components/InputComposer";
 import type { InputComposerHandle } from "../components/InputComposer";
 import { PlanPanel, planCanRun } from "../components/PlanPanel";
+import { PlannerStatusCard } from "../components/PlannerStatusCard";
 import { commandProblem, escapeForTerminal } from "../lib/displaySafe";
 import {
   askFixPrompt,
@@ -142,8 +144,6 @@ type UndoRequest = {
   restore: () => void;
   commit: () => void;
 };
-// The model Ask calls; the default of OllamaConfig in crates/runtime-planner/src/types.rs.
-const PLANNER_MODEL = "qwen2.5:14b";
 /** How long a session may stay in "booting" before the UI offers Resync and Close. */
 const BOOT_STALL_MS = 20_000;
 /** How long a typed command (or an interrupt) may hold a session before the UI explains the way out. */
@@ -282,12 +282,14 @@ export function AppShell() {
     productMode,
     reducedClutter,
     simplifiedSummaries,
-    confirmMediumRisk,
+    plannerModel,
+    plannerEndpoint,
     defaultInputMode,
     setProductMode,
     setReducedClutter,
     setSimplifiedSummaries,
-    setConfirmMediumRisk,
+    setPlannerModel,
+    setPlannerEndpoint,
     setDefaultInputMode,
   } = useSettingsStore();
   const { items: workflows, setWorkflows, addWorkflow, removeWorkflow } = useWorkflowStore();
@@ -296,7 +298,12 @@ export function AppShell() {
   const { restorePreviousZone } = useFocusStore();
 
   // --- Local state ---
-  const [plan, setPlan] = useState<PlannerGeneratePlanResponse | null>(null);
+  const [plan, setPlan] = useState<{
+    plan: CommandPlan;
+    review: NonNullable<PlannerGeneratePlanResponse["review"]>;
+    status: PlannerStatus;
+  } | null>(null);
+  const [plannerStatus, setPlannerStatus] = useState<PlannerStatus | null>(null);
   const [planNonce, setPlanNonce] = useState(0);
   const [currentPlanHistoryId, setCurrentPlanHistoryId] = useState<
     string | null
@@ -715,7 +722,8 @@ export function AppShell() {
             if (typeof s.defaultInputMode === "string") setDefaultInputMode(s.defaultInputMode as "command" | "ask");
             if (typeof s.reducedClutter === "boolean") setReducedClutter(s.reducedClutter);
             if (typeof s.simplifiedSummaries === "boolean") setSimplifiedSummaries(s.simplifiedSummaries);
-            if (typeof s.confirmMediumRisk === "boolean") setConfirmMediumRisk(s.confirmMediumRisk);
+            if (typeof s.plannerModel === "string" && s.plannerModel.trim()) setPlannerModel(s.plannerModel);
+            if (typeof s.plannerEndpoint === "string" && s.plannerEndpoint.trim()) setPlannerEndpoint(s.plannerEndpoint);
           }
         } catch {
           // settings not critical — do not hydrate, or a later write would replace saved preferences
@@ -1124,11 +1132,12 @@ export function AppShell() {
         productMode,
         reducedClutter,
         simplifiedSummaries,
-        confirmMediumRisk,
+        plannerModel,
+        plannerEndpoint,
         defaultInputMode,
       },
     }));
-  }, [browserPreview, productMode, reducedClutter, simplifiedSummaries, confirmMediumRisk, defaultInputMode]);
+  }, [browserPreview, productMode, reducedClutter, simplifiedSummaries, plannerModel, plannerEndpoint, defaultInputMode]);
 
   // --- Background persistence failure banner ---
   useEffect(() => {
@@ -1503,15 +1512,24 @@ export function AppShell() {
           sessionId: session.id,
           userIntent: value,
           context,
+          model: plannerModel,
+          endpoint: plannerEndpoint,
         });
 
         // The user switched tabs while the plan was generating: drop it rather than show
         // a plan for another session that Approve could run in the wrong place.
         if (activeSessionIdRef.current !== sessionId) return true;
 
+        setPlannerStatus(res.status);
+        if (!res.plan || !res.review) {
+          setPlan(null);
+          setPlanNotice(null);
+          return true;
+        }
+
         planGateRef.current = { command: "", confirmed: false };
         setPlanNotice(null);
-        setPlan(res);
+        setPlan({ plan: res.plan, review: res.review, status: res.status });
         setPlanNonce((n) => n + 1);
         setCurrentPlanHistoryId(historyId);
 
@@ -1579,7 +1597,6 @@ export function AppShell() {
       !planCanRun({
         command: trimmed,
         risk: plan.plan.risk,
-        requireMediumRiskConfirmation: confirmMediumRisk,
         confirmed: gate.confirmed,
         flags: plan.plan,
       })
@@ -2073,6 +2090,15 @@ export function AppShell() {
         safetyFlags: [],
         memoryUsed: [],
         retrievedContext: [],
+      },
+      status: {
+        state: "ready",
+        model: plannerModel,
+        endpoint: plannerEndpoint,
+        headline: "Ready.",
+        fix: `Ask can draft a command with ${plannerModel}.`,
+        link: "https://ollama.com/library",
+        linkLabel: "Model library",
       },
     });
     setPlanNonce((n) => n + 1);
@@ -2673,8 +2699,42 @@ export function AppShell() {
     }
   }
 
+  async function refreshPlannerStatus() {
+    const session = sessions.find((item) => item.id === activeSessionId) ?? sessions[0];
+    try {
+      const res = await generatePlan({
+        sessionId: session?.id ?? "none",
+        userIntent: "",
+        probeOnly: true,
+        model: plannerModel,
+        endpoint: plannerEndpoint,
+        context: buildPlannerContext({
+          sessionId: session?.id ?? "none",
+          cwd: session?.cwd ?? ".",
+          shell: session?.shell ?? "unknown",
+          os: detectOS(),
+          memoryItems,
+          workflows,
+          lastRunByWorkflowId,
+          recentHistory: historyItems,
+        }),
+      });
+      setPlannerStatus(res.status);
+    } catch {
+      setPlannerStatus({
+        state: "unavailable",
+        model: plannerModel,
+        endpoint: plannerEndpoint,
+        headline: "CommandUI could not check the model.",
+        fix: "Choose Check again in a moment.",
+        link: "https://ollama.com/download",
+        linkLabel: "Download Ollama",
+      });
+    }
+  }
+
   const showPlanColumn =
-    productMode === "guided" || plan !== null;
+    productMode === "guided" || plan !== null || (plannerStatus !== null && plannerStatus.state !== "ready");
 
   const displayExplanation =
     plan && simplifiedSummaries
@@ -2706,6 +2766,13 @@ export function AppShell() {
     }, 150);
     return () => window.clearTimeout(timer);
   }, [resultToken, finishedText]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    void refreshPlannerStatus();
+    // Opening Settings is the check. Editing the model uses Check again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsOpen]);
 
   // --- Boot failure screen ---
   if (bootPhase === "failed") {
@@ -2952,7 +3019,6 @@ export function AppShell() {
                 explanation={displayExplanation}
                 contextSources={plan.review.retrievedContext}
                 plannerSource={plan.plan.source}
-                requireMediumRiskConfirmation={confirmMediumRisk}
                 flags={plan.plan}
                 safetyFlags={plan.review.safetyFlags}
                 ambiguityFlags={plan.review.ambiguityFlags}
@@ -2976,6 +3042,13 @@ export function AppShell() {
                 onReject={handleRejectPlan}
                 onSaveWorkflow={handleSaveWorkflow}
               />
+            ) : plannerStatus && plannerStatus.state !== "ready" ? (
+              <div className="plan-panel" tabIndex={0} aria-label="Model status">
+                <PlannerStatusCard
+                  status={plannerStatus}
+                  onCheckAgain={() => void refreshPlannerStatus()}
+                />
+              </div>
             ) : (
               <div className="plan-panel">
                 <p className="muted">
@@ -2993,7 +3066,7 @@ export function AppShell() {
           onStart={closeWelcome}
           showAtStartup={showWelcomeAtStartup}
           onShowAtStartupChange={changeShowWelcome}
-          plannerModel={PLANNER_MODEL}
+          plannerModel={plannerModel}
         />
       )}
 
@@ -3065,8 +3138,12 @@ export function AppShell() {
         onReducedClutterChange={setReducedClutter}
         simplifiedSummaries={simplifiedSummaries}
         onSimplifiedSummariesChange={setSimplifiedSummaries}
-        confirmMediumRisk={confirmMediumRisk}
-        onConfirmMediumRiskChange={setConfirmMediumRisk}
+        plannerModel={plannerModel}
+        onPlannerModelChange={setPlannerModel}
+        plannerEndpoint={plannerEndpoint}
+        onPlannerEndpointChange={setPlannerEndpoint}
+        plannerStatus={plannerStatus}
+        onCheckPlanner={() => void refreshPlannerStatus()}
       />
 
       {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}

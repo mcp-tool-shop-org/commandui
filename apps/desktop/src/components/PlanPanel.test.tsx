@@ -27,24 +27,28 @@ describe("PlanPanel", () => {
     expect(onApprove).toHaveBeenCalledWith("git diff --stat");
   });
 
-  it("requires confirmation for high risk", async () => {
+  it("requires the folder name before a high-risk plan can run", async () => {
     const onApprove = vi.fn();
     render(
-      <PlanPanel {...defaultProps} risk="high" onApprove={onApprove} />,
+      <PlanPanel
+        {...defaultProps}
+        risk="high"
+        target={{ label: "Session 1", cwd: "C:\\Work\\notes" }}
+        onApprove={onApprove}
+      />,
     );
 
-    // Run Plan should be disabled without checkbox
     const runButton = screen.getByText("Run Plan");
     expect(runButton).toBeDisabled();
-
-    // Check the confirmation checkbox
-    const checkbox = screen.getByRole("checkbox");
-    await userEvent.click(checkbox);
-
-    // Now Run Plan should be enabled
+    const confirm = screen.getByLabelText("Type notes to run this");
+    await userEvent.type(confirm, "nope");
+    expect(runButton).toBeDisabled();
+    await userEvent.clear(confirm);
+    await userEvent.type(confirm, "notes");
     expect(runButton).not.toBeDisabled();
     await userEvent.click(runButton);
     expect(onApprove).toHaveBeenCalledWith("git status --short");
+    expect(screen.getByText("Shows a short list of what changed in this folder.")).toBeInTheDocument();
   });
 
   it("approves the trimmed command for high risk", async () => {
@@ -57,37 +61,37 @@ describe("PlanPanel", () => {
         onApprove={onApprove}
       />,
     );
-    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.type(screen.getByLabelText("Type confirm to run this"), "confirm");
     await userEvent.click(screen.getByText("Run Plan"));
     expect(onApprove).toHaveBeenCalledWith("git push");
   });
 
-  it("requires confirmation for medium risk by default", async () => {
+  it("approves a medium-risk plan in one step", async () => {
     const onApprove = vi.fn();
     render(<PlanPanel {...defaultProps} risk="medium" onApprove={onApprove} />);
+    expect(screen.queryByLabelText(/to run this/)).toBeNull();
     const runButton = screen.getByText("Run Plan");
-    expect(runButton).toBeDisabled();
-    await userEvent.click(screen.getByRole("checkbox"));
     expect(runButton).not.toBeDisabled();
     await userEvent.click(runButton);
     expect(onApprove).toHaveBeenCalledWith("git status --short");
   });
 
-  it("runs medium risk without confirmation when not required", async () => {
-    const onApprove = vi.fn();
+  it("writes safety flags in plain words and lists a delete", () => {
     render(
       <PlanPanel
         {...defaultProps}
-        risk="medium"
-        requireMediumRiskConfirmation={false}
-        onApprove={onApprove}
+        command="rm notes.txt old.log"
+        risk="high"
+        flags={{ destructive: true }}
+        safetyFlags={["DESTRUCTIVE_OPERATION", "NETWORK_ACCESS"]}
       />,
     );
-    expect(screen.queryByRole("checkbox")).toBeNull();
-    const runButton = screen.getByText("Run Plan");
-    expect(runButton).not.toBeDisabled();
-    await userEvent.click(runButton);
-    expect(onApprove).toHaveBeenCalledWith("git status --short");
+    expect(screen.getByText("Deletes files: cannot be undone")).toBeInTheDocument();
+    expect(screen.getByText("Uses the network")).toBeInTheDocument();
+    expect(screen.getByText("This will delete: notes.txt, old.log")).toBeInTheDocument();
+    expect(screen.queryByText("DESTRUCTIVE_OPERATION")).toBeNull();
+    expect(screen.queryByText("NETWORK_ACCESS")).toBeNull();
+    expect(screen.getByText("Run Plan")).toBeDisabled();
   });
 
   it("reports the run gate with the trimmed edited command and confirmation", async () => {
@@ -105,13 +109,13 @@ describe("PlanPanel", () => {
       confirmed: false,
     });
 
-    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.type(screen.getByLabelText("Type confirm to run this"), "confirm");
     expect(onRunGate).toHaveBeenLastCalledWith({
       command: "git push",
       confirmed: true,
     });
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = screen.getByLabelText("Command");
     await userEvent.clear(textarea);
     await userEvent.type(textarea, "  git fetch ");
     expect(onRunGate).toHaveBeenLastCalledWith({
@@ -128,6 +132,6 @@ describe("PlanPanel", () => {
 
   it("shows empty state when no command", () => {
     render(<PlanPanel {...defaultProps} command="" />);
-    expect(screen.getByText(/no semantic plan yet/i)).toBeDefined();
+    expect(screen.getByText(/no plan yet/i)).toBeDefined();
   });
 });

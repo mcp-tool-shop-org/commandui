@@ -460,18 +460,20 @@ fn database_commands_round_trip() {
 
     let settings = ipc(&webview, "settings_get", json!({})).unwrap();
     assert_eq!(settings["settings"]["theme"], "dark");
-    assert_eq!(settings["settings"]["confirmMediumRisk"], true);
+    assert_eq!(settings["settings"]["plannerModel"], "qwen2.5:14b");
+    assert_eq!(settings["settings"]["plannerEndpoint"], "http://localhost:11434");
     assert_ok(
         &ipc(
             &webview,
             "settings_update",
-            json!({ "request": { "settings": { "theme": "light", "confirmMediumRisk": false } } }),
+            json!({ "request": { "settings": { "theme": "light", "plannerModel": "qwen2.5:7b" } } }),
         )
         .unwrap(),
     );
     let settings = ipc(&webview, "settings_get", json!({})).unwrap();
     assert_eq!(settings["settings"]["theme"], "light");
-    assert_eq!(settings["settings"]["confirmMediumRisk"], false);
+    assert_eq!(settings["settings"]["plannerModel"], "qwen2.5:7b");
+    assert_eq!(settings["settings"]["plannerEndpoint"], "http://localhost:11434");
     assert_eq!(settings["settings"]["fontSize"], "md");
 
     drop(app);

@@ -24,13 +24,34 @@ export type PlannerContext = {
   projectFacts: ProjectFact[];
 };
 
+export type PlannerStatusState =
+  | "ready"
+  | "notInstalled"
+  | "notRunning"
+  | "modelMissing"
+  | "unavailable";
+
+export type PlannerStatus = {
+  state: PlannerStatusState;
+  model: string;
+  endpoint: string;
+  headline: string;
+  fix: string;
+  link: string;
+  linkLabel: string;
+};
+
 export type PlannerGeneratePlanRequest = {
   sessionId: string;
   userIntent: string;
   context: PlannerContext;
+  model?: string;
+  endpoint?: string;
+  probeOnly?: boolean;
 };
 
 export type PlannerGeneratePlanResponse = {
-  plan: CommandPlan;
-  review: PlanReview;
+  plan: CommandPlan | null;
+  review: PlanReview | null;
+  status: PlannerStatus;
 };

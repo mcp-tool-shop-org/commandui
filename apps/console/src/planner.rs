@@ -4,7 +4,7 @@
 //! All plan generation, validation, and mock fallback are in the shared crate.
 
 pub use commandui_runtime_planner::OllamaConfig;
-use commandui_runtime_planner::{self as planner, CommandProposal, PlanContext};
+use commandui_runtime_planner::{self as planner, PlanContext, PlannerAnswer};
 
 /// Build a PlanContext from Console's current state, with the default shell.
 #[allow(dead_code)]
@@ -32,11 +32,12 @@ pub fn build_context_for_shell(
 }
 
 /// Generate a proposal using the shared planner.
+/// A debug build may return a labeled stand-in. A release build returns no command.
 pub async fn generate_proposal(
     config: &OllamaConfig,
     context: &PlanContext,
     user_intent: &str,
-) -> CommandProposal {
+) -> PlannerAnswer {
     planner::generate_proposal(config, context, user_intent).await
 }
 
@@ -97,10 +98,16 @@ mod tests {
             timeout_secs: 1,
         };
         let ctx = build_context("s1", "/work");
-        let proposal = generate_proposal(&config, &ctx, "show changed files").await;
-        assert_eq!(proposal.source, "mock");
-        assert_eq!(proposal.command, "git status --short");
-        assert_eq!(proposal.session_id, "s1");
-        assert_eq!(proposal.cwd.as_deref(), Some("/work"));
+        let answer = planner::answer_for(&config, &ctx, "show changed files", false).await;
+        let dumped = serde_json::to_string(&answer).unwrap();
+        match answer {
+            PlannerAnswer::Unavailable { status } => {
+                assert!(status.state == "notInstalled" || status.state == "notRunning");
+                assert!(!dumped.contains("\"command\""), "{dumped}");
+            }
+            PlannerAnswer::Proposal { proposal, .. } => {
+                panic!("release returned {}", proposal.command)
+            }
+        }
     }
 }

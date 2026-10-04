@@ -438,8 +438,34 @@ select {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-primary);
   cursor: pointer;
+}
+
+.plan-confirm {
+  min-height: 24px;
+  min-width: 8em;
+}
+
+.plan-parts {
+  margin: 8px 0 0;
+  padding-left: 1.2em;
+}
+
+.planner-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.planner-status-headline {
+  font-weight: 650;
+}
+
+.planner-status a,
+.planner-status button {
+  min-height: 24px;
+  min-width: 24px;
 }
 
 .risk-badge {

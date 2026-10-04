@@ -596,8 +596,17 @@ impl App {
         );
 
         tokio::spawn(async move {
-            let proposal = planner::generate_proposal(&config, &context, &intent).await;
-            let _ = tx.send(PlannerResult::Success((proposal, session_id), epoch));
+            match planner::generate_proposal(&config, &context, &intent).await {
+                commandui_runtime_planner::PlannerAnswer::Proposal { proposal, .. } => {
+                    let _ = tx.send(PlannerResult::Success((proposal, session_id), epoch));
+                }
+                commandui_runtime_planner::PlannerAnswer::Unavailable { status } => {
+                    let _ = tx.send(PlannerResult::Error(
+                        format!("{} {}", status.headline, status.fix),
+                        epoch,
+                    ));
+                }
+            }
         });
     }
 

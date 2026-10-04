@@ -68,7 +68,8 @@ function resetStores() {
     productMode: "classic",
     reducedClutter: false,
     simplifiedSummaries: false,
-    confirmMediumRisk: true,
+    plannerModel: "qwen2.5:14b",
+    plannerEndpoint: "http://localhost:11434",
     defaultInputMode: "command",
   });
   useComposerStore.setState({ inputValue: "", inputMode: "command" });

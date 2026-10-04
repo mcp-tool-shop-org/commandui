@@ -30,7 +30,8 @@ describe("WelcomeScreen", () => {
   it("names the local model Ask needs and what happens without it", () => {
     setup();
     expect(screen.getByText("qwen2.5:14b")).toBeInTheDocument();
-    expect(screen.getByText(/falls back to a basic built-in planner/)).toBeInTheDocument();
+    expect(screen.getByText(/does not invent a command/)).toBeInTheDocument();
+    expect(screen.queryByText(/built-in planner/)).not.toBeInTheDocument();
   });
 
   it("lists the shortcuts the app really binds", () => {

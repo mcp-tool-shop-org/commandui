@@ -112,9 +112,9 @@ export function WelcomeScreen({ onStart, showAtStartup, onShowAtStartupChange, p
         </ol>
 
         <p className="welcome-note muted">
-          Ask uses a local Ollama model (<code>{plannerModel}</code>) on this PC, so your requests
-          stay on your machine. Without it, Ask falls back to a basic built-in planner, marked{" "}
-          <em>mock</em>.
+          Ask uses a local model (<code>{plannerModel}</code>) on this computer, so your request
+          stays here. If that model is not ready, Ask says what is missing and how to fix it.
+          It does not invent a command.
         </p>
 
         <ul className="welcome-keys" aria-label="Keyboard shortcuts">

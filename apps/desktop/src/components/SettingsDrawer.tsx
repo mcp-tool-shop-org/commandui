@@ -1,4 +1,6 @@
+import type { PlannerStatus } from "@commandui/api-contract";
 import { useModalDialog } from "../lib/useModalDialog";
+import { PlannerStatusCard } from "./PlannerStatusCard";
 
 type Props = {
   isOpen: boolean;
@@ -11,8 +13,12 @@ type Props = {
   onReducedClutterChange: (value: boolean) => void;
   simplifiedSummaries: boolean;
   onSimplifiedSummariesChange: (value: boolean) => void;
-  confirmMediumRisk: boolean;
-  onConfirmMediumRiskChange: (value: boolean) => void;
+  plannerModel: string;
+  onPlannerModelChange: (value: string) => void;
+  plannerEndpoint: string;
+  onPlannerEndpointChange: (value: string) => void;
+  plannerStatus: PlannerStatus | null;
+  onCheckPlanner: () => void;
 };
 
 export function SettingsDrawer({
@@ -26,8 +32,12 @@ export function SettingsDrawer({
   onReducedClutterChange,
   simplifiedSummaries,
   onSimplifiedSummariesChange,
-  confirmMediumRisk,
-  onConfirmMediumRiskChange,
+  plannerModel,
+  onPlannerModelChange,
+  plannerEndpoint,
+  onPlannerEndpointChange,
+  plannerStatus,
+  onCheckPlanner,
 }: Props) {
   const dialogRef = useModalDialog(isOpen, onClose);
   if (!isOpen) return null;
@@ -96,14 +106,30 @@ export function SettingsDrawer({
             Simplified summaries
           </label>
 
-          <label className="settings-check">
+          <div className="settings-row">
+            <label htmlFor="settings-planner-model">Model</label>
             <input
-              type="checkbox"
-              checked={confirmMediumRisk}
-              onChange={(e) => onConfirmMediumRiskChange(e.target.checked)}
+              id="settings-planner-model"
+              value={plannerModel}
+              onChange={(e) => onPlannerModelChange(e.target.value)}
             />
-            Confirm medium-risk commands
-          </label>
+          </div>
+
+          <div className="settings-row">
+            <label htmlFor="settings-planner-endpoint">Where the model runs</label>
+            <input
+              id="settings-planner-endpoint"
+              value={plannerEndpoint}
+              onChange={(e) => onPlannerEndpointChange(e.target.value)}
+            />
+          </div>
+
+          {plannerStatus && <PlannerStatusCard status={plannerStatus} onCheckAgain={onCheckPlanner} />}
+          {!plannerStatus && (
+            <button type="button" onClick={onCheckPlanner}>
+              Check again
+            </button>
+          )}
         </div>
       </div>
     </div>

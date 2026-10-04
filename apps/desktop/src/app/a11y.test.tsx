@@ -95,7 +95,8 @@ function resetStores() {
     productMode: "classic",
     reducedClutter: false,
     simplifiedSummaries: false,
-    confirmMediumRisk: true,
+    plannerModel: "qwen2.5:14b",
+    plannerEndpoint: "http://localhost:11434",
     defaultInputMode: "ask",
   });
   useComposerStore.setState({ inputValue: "", inputMode: "ask" });
@@ -200,8 +201,12 @@ describe("Workstream 2 accessibility", () => {
         onReducedClutterChange={() => {}}
         simplifiedSummaries={false}
         onSimplifiedSummariesChange={() => {}}
-        confirmMediumRisk={false}
-        onConfirmMediumRiskChange={() => {}}
+        plannerModel="qwen2.5:14b"
+        onPlannerModelChange={() => {}}
+        plannerEndpoint="http://localhost:11434"
+        onPlannerEndpointChange={() => {}}
+        plannerStatus={null}
+        onCheckPlanner={() => {}}
       />,
     );
     await expectClean(settings.container);
