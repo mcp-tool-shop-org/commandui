@@ -52,6 +52,10 @@ pub struct SessionTracking {
     /// A tail of display text held back because it could be the start of cmd
     /// plumbing the console echoes (see `crate::pty::strip_cmd_plumbing`).
     pub display_hold: String,
+    /// cmd: the bootstrap lines whose console echo is still to be taken out of
+    /// the display, and until when to look for it.
+    pub boot_echo: Vec<String>,
+    pub boot_echo_until: Option<std::time::Instant>,
     /// The console width the reader sizes its display rewrite for. The resize
     /// path updates it.
     pub width: std::sync::Arc<std::sync::atomic::AtomicU16>,
@@ -66,6 +70,8 @@ impl Default for SessionTracking {
             user_prompts_owed: 0,
             clear_chord: true,
             display_hold: String::new(),
+            boot_echo: Vec::new(),
+            boot_echo_until: None,
             width: std::sync::Arc::new(std::sync::atomic::AtomicU16::new(crate::pty::PTY_COLS)),
         }
     }

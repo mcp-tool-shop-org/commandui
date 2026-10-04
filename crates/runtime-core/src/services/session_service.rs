@@ -12,7 +12,7 @@ use crate::events::{
 };
 use crate::pty::{
     bootstrap_prompt, clone_reader, cmd_probe_line, default_shell, new_marker_nonce, shell_family,
-    spawn_reader_with_exit, spawn_shell, strip_cmd_plumbing, write_raw, CmdTail, Marker, MarkerKind,
+    spawn_reader_with_exit, spawn_shell, strip_cmd_echo, write_raw, CmdTail, Marker, MarkerKind,
     PtyHandle, ReaderEvent, ShellFamily,
 };
 use crate::session::{SessionExecState, SessionRecord, SessionRegistry, SessionTracking};
@@ -86,7 +86,11 @@ impl SessionService {
         let reader = clone_reader(&pair)?;
         let bootstrap_writer = writer.clone();
 
-        let track = SessionTracking::default();
+        let mut track = SessionTracking::default();
+        if shell_family(&shell) == ShellFamily::Cmd {
+            track.boot_echo = crate::pty::cmd_bootstrap_echo(&prompt_cmd);
+            track.boot_echo_until = Some(std::time::Instant::now() + BOOT_ECHO_WINDOW);
+        }
         let reader_width = track.width.clone();
         let record = SessionRecord {
             id: id.clone(),
@@ -352,7 +356,12 @@ impl SessionService {
                         // echo late and in pieces, and a redraw can repeat
                         // one after the prompt. The hold is released by the
                         // next text or by `process_idle`.
-                        strip_cmd_plumbing(&mut record.track.display_hold, text, false)
+                        let t = &mut record.track;
+                        if t.boot_echo_until.is_some_and(|until| std::time::Instant::now() > until) {
+                            t.boot_echo.clear();
+                            t.boot_echo_until = None;
+                        }
+                        strip_cmd_echo(&mut t.boot_echo, &mut t.display_hold, text, false)
                     } else {
                         text.to_string()
                     };
@@ -376,7 +385,19 @@ impl SessionService {
             Ok(mut reg) => match reg.get_mut(session_id) {
                 Some(record) if !record.track.display_hold.is_empty() => (
                     record.pending_execution_id.clone(),
-                    strip_cmd_plumbing(&mut record.track.display_hold, "", true),
+                    {
+                        let t = &mut record.track;
+                        if t.boot_echo_until.is_some_and(|until| std::time::Instant::now() > until) {
+                            t.boot_echo.clear();
+                            t.boot_echo_until = None;
+                        }
+                        // A long partial line of the bootstrap echo is the start
+                        // of that echo, not text: wait for the rest of it.
+                        if !t.boot_echo.is_empty() && t.display_hold.len() >= 4 {
+                            return;
+                        }
+                        strip_cmd_echo(&mut t.boot_echo, &mut t.display_hold, "", true)
+                    },
                 ),
                 _ => return,
             },
@@ -550,6 +571,10 @@ impl SessionService {
         }
     }
 }
+
+/// How long after a cmd session starts the console may still be painting the
+/// echo of the bootstrap lines that were typed into it.
+const BOOT_ECHO_WINDOW: std::time::Duration = std::time::Duration::from_secs(5);
 
 fn persist_bootstrap(
     sessions: &Arc<Mutex<SessionRegistry>>,

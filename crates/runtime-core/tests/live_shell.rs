@@ -602,6 +602,14 @@ fn paste_then_approved(live: &mut Live) {
     let _ = before;
 }
 
+/// Up to 200 characters either side of the first `needle` in `text`.
+fn around(text: &str, needle: &str) -> String {
+    let Some(at) = text.find(needle) else { return String::new() };
+    let start = text[..at].char_indices().rev().nth(199).map(|(i, _)| i).unwrap_or(0);
+    let end = text[at..].char_indices().nth(200 + needle.len()).map(|(i, _)| at + i).unwrap_or(text.len());
+    text[start..end].to_string()
+}
+
 /// A long working directory, the console at 80 and then 120 columns, and more
 /// commands than a screen holds: the marker is not a row of text, so the width
 /// of the console, wraps, and the first screen fill have no bearing on whether
@@ -659,8 +667,8 @@ fn exercise_long_cwd(shell: &str, kind: Kind, tag: &str) {
     assert_eq!(finishes, 2 * 39 + 1, "{shell}: every command finished exactly once");
     let shown = live.shown_since_ready();
     for needle in ["7733", "COMMANDUI", "__cu"] {
-        assert!(!shown.contains(needle), "{shell}: `{needle}` was displayed; ready_at {}; events:
-{}", live.ready_at, live.debug_events(live.ready_at + 6));
+        assert!(!shown.contains(needle), "{shell}: `{needle}` was displayed; ready_at {}; around it: {:?}; events:
+{}", live.ready_at, around(&shown, needle), live.debug_events(live.ready_at + 6));
     }
     drop(live);
     let _ = std::fs::remove_dir_all(std::env::temp_dir().join(format!("commandui-long-{}-{tag}", std::process::id())));
@@ -928,8 +936,8 @@ fn exercise(shell: &str, kind: Kind, tag: &str) {
     // ready: no sequence, no plumbing, in any display line.
     let shown = live.shown_since_ready();
     for needle in ["7733", "COMMANDUI", "__cu", "ERRORLEVEL"] {
-        assert!(!shown.contains(needle), "{shell}: `{needle}` was displayed; ready_at {}; events:
-{}", live.ready_at, live.debug_events(live.ready_at + 6));
+        assert!(!shown.contains(needle), "{shell}: `{needle}` was displayed; ready_at {}; around it: {:?}; events:
+{}", live.ready_at, around(&shown, needle), live.debug_events(live.ready_at + 6));
     }
     assert!(!shown.contains("\x1b]7733"), "{shell}: a marker sequence reached the display");
     for line in output_lines(&live.sink).iter().skip(1) {

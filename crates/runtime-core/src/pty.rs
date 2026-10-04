@@ -216,7 +216,9 @@ pub(crate) fn default_term(inherited: Option<&std::ffi::OsStr>) -> Option<(&'sta
 /// startup files and sets no ZDOTDIR the shell is started with a private one
 /// holding a `.zshenv` that unsets ZDOTDIR again (so `$ZDOTDIR` is unset in the
 /// session, as it would be, and any file the user adds is read as usual) and
-/// removes the directory. The user's own files are never touched or created.
+/// sets `skip_global_compinit` (Debian and Ubuntu's global zshrc then does not
+/// run compinit, which asks a question when a directory on fpath is
+/// group-writable, as on CI runners) and removes the directory. The user's own files are never touched or created.
 ///
 /// None when the wizard would not run (a startup file exists, or ZDOTDIR is
 /// set), or the directory cannot be made.
@@ -243,9 +245,7 @@ pub(crate) fn zsh_newuser_guard_dir(
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).ok()?;
     }
     let dir_text = dir.to_string_lossy().replace('\'', "'\\''");
-    let script = format!("unset ZDOTDIR
-command rm -rf -- '{dir_text}'
-");
+    let script = format!("unset ZDOTDIR\nskip_global_compinit=1\ncommand rm -rf -- '{dir_text}'\n");
     std::fs::write(dir.join(".zshenv"), script).ok()?;
     Some(dir)
 }
@@ -500,22 +500,43 @@ const CMD_PLUMBING: [&str; 3] = [CMD_RESET_ECHO, CMD_TAIL_ECHO, CMD_PROBE_ECHO];
 /// Take the cmd plumbing the console echoes out of display text. `hold` keeps
 /// the tail of the text that could still turn into plumbing once more arrives
 /// (the console echoes a line in pieces: `%__` then `cuz% & dir`). With
-/// `flush` nothing is held. Only used for cmd, and only while a command it ran
-/// is pending.
+/// `flush` nothing is held. Only used for cmd.
+#[cfg(test)]
 pub(crate) fn strip_cmd_plumbing(hold: &mut String, text: &str, flush: bool) -> String {
+    strip_cmd_echo(&mut Vec::new(), hold, text, flush)
+}
+
+/// The lines the runtime types into cmd to set it up, as the console echoes
+/// them (without the line ending).
+pub(crate) fn cmd_bootstrap_echo(bootstrap: &str) -> Vec<String> {
+    bootstrap.split(ENTER).filter(|l| !l.is_empty()).map(str::to_string).collect()
+}
+
+/// `strip_cmd_plumbing`, and also the echo of each of `boot_lines` (the
+/// bootstrap the runtime typed), each taken out once. The console can paint
+/// that echo after the session is ready, in pieces.
+pub(crate) fn strip_cmd_echo(boot_lines: &mut Vec<String>, hold: &mut String, text: &str, flush: bool) -> String {
     let mut s = std::mem::take(hold);
     s.push_str(text);
+    boot_lines.retain(|line| {
+        if let Some(at) = s.find(line.as_str()) {
+            s.replace_range(at..at + line.len(), "");
+            false
+        } else {
+            true
+        }
+    });
     for plumbing in CMD_PLUMBING {
         if s.contains(plumbing) {
             s = s.replace(plumbing, "");
         }
     }
     if !flush {
-        // The longest suffix that is a proper prefix of some plumbing string.
+        // The longest suffix that is a proper prefix of some string to remove.
         let mut keep = 0;
-        for plumbing in CMD_PLUMBING {
+        for plumbing in CMD_PLUMBING.iter().copied().chain(boot_lines.iter().map(String::as_str)) {
             for len in (1..plumbing.len()).rev() {
-                if len > keep && len <= s.len() && s.is_char_boundary(s.len() - len) && s.ends_with(&plumbing[..len]) {
+                if len > keep && len <= s.len() && s.is_char_boundary(s.len() - len) && plumbing.is_char_boundary(len) && s.ends_with(&plumbing[..len]) {
                     keep = len;
                     break;
                 }
@@ -1540,8 +1561,8 @@ mod tests {
         // No startup files, no ZDOTDIR: guarded, with a .zshenv that unsets ZDOTDIR.
         let dir = zsh_newuser_guard_dir(Some(&home), None).expect("a guard directory");
         let zshenv = std::fs::read_to_string(dir.join(".zshenv")).unwrap();
-        assert!(zshenv.starts_with("unset ZDOTDIR
-"), "{zshenv}");
+        assert!(zshenv.starts_with("unset ZDOTDIR\n"), "{zshenv}");
+        assert!(zshenv.contains("skip_global_compinit=1\n"), "{zshenv}");
         assert!(zshenv.contains("rm -rf"), "{zshenv}");
         let _ = std::fs::remove_dir_all(&dir);
         // The user set ZDOTDIR: left alone.
@@ -2496,6 +2517,34 @@ mod tests {
         let mut hold = String::new();
         assert_eq!(strip_cmd_plumbing(&mut hold, "a &", true), "a &");
         assert!(hold.is_empty());
+    }
+
+    #[test]
+    fn the_echo_of_the_cmd_bootstrap_is_stripped_whatever_the_read_boundaries() {
+        let boot = bootstrap_cmd("n0nce");
+        let lines = cmd_bootstrap_echo(&boot);
+        assert_eq!(lines.len(), 4, "{lines:?}");
+        let prompt = r"C:\long\cwd>";
+        let mut echo = String::new();
+        for line in &lines {
+            echo.push_str(&format!("{prompt}{line}\r\n"));
+        }
+        let clean = format!("{prompt}\r\n").repeat(4);
+        for cut in 0..=echo.len() {
+            let (mut todo, mut hold) = (lines.clone(), String::new());
+            let mut shown = strip_cmd_echo(&mut todo, &mut hold, &echo[..cut], false);
+            shown.push_str(&strip_cmd_echo(&mut todo, &mut hold, &echo[cut..], false));
+            shown.push_str(&strip_cmd_echo(&mut todo, &mut hold, "", true));
+            assert_eq!(shown, clean, "cut at {cut}");
+        }
+        let (mut todo, mut hold) = (lines.clone(), String::new());
+        let mut shown = String::new();
+        for ch in echo.chars() {
+            shown.push_str(&strip_cmd_echo(&mut todo, &mut hold, &ch.to_string(), false));
+        }
+        shown.push_str(&strip_cmd_echo(&mut todo, &mut hold, "", true));
+        assert_eq!(shown, clean);
+        assert!(todo.is_empty());
     }
 
     #[test]
