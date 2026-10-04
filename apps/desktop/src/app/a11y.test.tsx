@@ -17,13 +17,16 @@ import {
 import { resetMockBridge } from "../lib/mockBridge";
 import { CommandPalette } from "../components/CommandPalette";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { HelpDialog } from "../components/HelpDialog";
 import { HistoryDrawer } from "../components/HistoryDrawer";
 import { MemoryDrawer } from "../components/MemoryDrawer";
 import { OutputView } from "../components/OutputView";
+import { PlanPanel } from "../components/PlanPanel";
 import { SettingsDrawer } from "../components/SettingsDrawer";
 import { WelcomeScreen } from "../components/WelcomeScreen";
 import { WorkflowDrawer } from "../components/WorkflowDrawer";
 import { WorkflowEditor } from "../components/WorkflowEditor";
+import { WorkflowRunBanner } from "../components/WorkflowRunBanner";
 import { AppShell } from "./AppShell";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -133,7 +136,7 @@ describe("Workstream 2 accessibility", () => {
     localStorage.clear();
   });
 
-  it("has no axe violations on the shell, the welcome screen, or a dialog", async () => {
+  it("has no axe violations on the shell and the open screens", async () => {
     const shell = await renderReadyShell();
     await expectClean(shell.container);
     shell.unmount();
@@ -244,6 +247,89 @@ describe("Workstream 2 accessibility", () => {
       <ConfirmDialog title="Delete this workflow?" message="You can bring it back." confirmLabel="Delete workflow" onConfirm={() => {}} onCancel={() => {}} />,
     );
     await expectClean(confirm.container);
+    confirm.unmount();
+
+    const emptyHistory = render(
+      <HistoryDrawer
+        isOpen
+        items={[]}
+        allItems={[]}
+        sessions={[session]}
+        activeSessionId="s1"
+        onClose={() => {}}
+        onRerun={() => {}}
+        onReopenPlan={() => {}}
+        onSaveWorkflow={() => {}}
+        onSaveSelected={() => {}}
+        onCopyCommand={() => {}}
+      />,
+    );
+    await expectClean(emptyHistory.container);
+    emptyHistory.unmount();
+
+    const emptyWorkflows = render(
+      <WorkflowDrawer
+        isOpen
+        workflows={[]}
+        lastRunByWorkflowId={{}}
+        expandedRunWorkflowId={null}
+        onClose={() => {}}
+        onRun={() => {}}
+        onNew={() => {}}
+        onEdit={() => {}}
+        onExpandRun={() => {}}
+        onRetryStep={() => {}}
+        onCopyCommand={() => {}}
+        onViewHistoryItem={() => {}}
+      />,
+    );
+    await expectClean(emptyWorkflows.container);
+    emptyWorkflows.unmount();
+
+    const emptyOutput = render(<OutputView blocks={[]} onClose={() => {}} />);
+    await expectClean(emptyOutput.container);
+    emptyOutput.unmount();
+
+    const help = render(<HelpDialog onClose={() => {}} />);
+    await expectClean(help.container);
+    help.unmount();
+
+    const plan = render(
+      <PlanPanel
+        sessionId="s1"
+        intent="remove the notes folder"
+        command="rm -rf notes"
+        risk="high"
+        explanation="Deletes the notes folder."
+        flags={{ destructive: true }}
+        safetyFlags={["DESTRUCTIVE_OPERATION"]}
+        target={{ label: "Notes", cwd: "notes" }}
+        onApprove={() => {}}
+        onReject={() => {}}
+        onSaveWorkflow={() => {}}
+      />,
+    );
+    await expectClean(plan.container);
+    plan.unmount();
+
+    useWorkflowRunStore.setState({
+      activeRun: {
+        id: "run1",
+        workflowId: "wf1",
+        workflowName: "Ship the notes",
+        startedAt: 0,
+        status: "running",
+        currentStepIndex: 0,
+        steps: [
+          { index: 0, command: "echo hi", status: "running" },
+          { index: 1, command: "echo there", status: "pending" },
+        ],
+      },
+      lastRunByWorkflowId: {},
+    });
+    const banner = render(<WorkflowRunBanner />);
+    await expectClean(banner.container);
+    banner.unmount();
   });
 
   it("names session tabs and keeps only one dialog open", async () => {
