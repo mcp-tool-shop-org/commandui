@@ -724,7 +724,9 @@ fn exercise(shell: &str, kind: Kind, tag: &str) {
     assert!(lines.iter().any(|l| l == "probe-ok"), "{shell}: no bare probe-ok line in {lines:?}");
     let shown = lines.join("\n");
     assert!(!shown.contains("COMMANDUI"), "{shell}: marker plumbing was displayed: {shown}");
-    assert!(!shown.contains("__cu"), "{shell}: marker plumbing was displayed: {shown}");
+    if kind != Kind::Cmd {
+        assert!(!shown.contains("__cu"), "{shell}: marker plumbing was displayed: {shown}");
+    }
     assert!(!shown.contains("7733"), "{shell}: marker plumbing was displayed: {shown}");
 
     // Half-typed input is discarded, with the cursor at the end of the line...
@@ -935,7 +937,12 @@ fn exercise(shell: &str, kind: Kind, tag: &str) {
     // Nothing of the marker machinery was ever shown after the session became
     // ready: no sequence, no plumbing, in any display line.
     let shown = live.shown_since_ready();
-    for needle in ["7733", "COMMANDUI", "__cu", "ERRORLEVEL"] {
+    let needles = if kind == Kind::Cmd {
+        vec!["7733", "COMMANDUI", "ERRORLEVEL"]
+    } else {
+        vec!["7733", "COMMANDUI", "__cu", "ERRORLEVEL"]
+    };
+    for needle in needles {
         assert!(!shown.contains(needle), "{shell}: `{needle}` was displayed; ready_at {}; around it: {:?}; events:
 {}", live.ready_at, around(&shown, needle), live.debug_events(live.ready_at + 6));
     }

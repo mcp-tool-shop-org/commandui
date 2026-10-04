@@ -63,4 +63,4 @@ boundaries:
   - name: winget
     globs:
       - winget/**
-    role: data
+    role: config
