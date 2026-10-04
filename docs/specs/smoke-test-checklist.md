@@ -35,13 +35,12 @@
 - [ ] Delete memory item works
 
 ## Accessibility + UX
-- [ ] Ctrl+H opens history drawer
-- [ ] Ctrl+W opens workflow drawer
-- [ ] Ctrl+M opens memory drawer
-- [ ] Ctrl+, opens settings drawer
-- [ ] Esc closes all drawers
-- [ ] Ctrl+1 switches to Command mode
-- [ ] Ctrl+2 switches to Ask mode
-- [ ] Classic mode hides plan panel when empty
-- [ ] Guided mode always shows plan panel
-- [ ] Reduced clutter hides suggestion panel + markers
+- [ ] Ctrl+H opens history outside the terminal. Ctrl+Shift+H opens it from the terminal
+- [ ] Ctrl+Shift+W opens workflows. Ctrl+W closes the session in the desktop app
+- [ ] Ctrl+M opens memory outside the terminal
+- [ ] Ctrl+, opens settings outside the terminal
+- [ ] Escape closes the top dialog and does not reject a plan
+- [ ] Ctrl+Shift+A switches Command and Ask. Ctrl+1 switches sessions
+- [ ] Classic hides the plan until there is one
+- [ ] Guided keeps the plan column open
+- [ ] Text size 200% sets the window scale to 2. There is no Reduced clutter setting

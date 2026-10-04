@@ -2,7 +2,7 @@ import type { SiteConfig } from '@mcptoolshop/site-theme';
 
 export const config: SiteConfig = {
   title: 'CommandUI',
-  description: 'AI-native shell environment with semantic command review.',
+  description: 'A shell that explains every result, and waits for you to approve a drafted command.',
   logoBadge: 'C',
   brandName: 'CommandUI',
   repoUrl: 'https://github.com/mcp-tool-shop-org/commandui',
@@ -11,8 +11,8 @@ export const config: SiteConfig = {
   hero: {
     badge: 'Desktop app',
     headline: 'CommandUI',
-    headlineAccent: 'AI-native shell.',
-    description: 'Real terminal. Semantic input. You review every command before it runs.',
+    headlineAccent: 'A shell you can follow.',
+    description: 'Ask in plain words. Read the command. Nothing runs until you approve it.',
     primaryCta: { href: '#install', label: 'Download' },
     secondaryCta: { href: 'handbook/', label: 'Read the Handbook' },
     previews: [
@@ -49,35 +49,35 @@ export const config: SiteConfig = {
       subtitle: 'Terminal power without terminal hostility.',
       features: [
         {
-          title: 'Real Shell',
-          desc: 'Full PTY sessions with stdout/stderr streaming, exit codes, cwd tracking, and multi-session tabs. Not a wrapper — a real terminal.',
+          title: 'Real shell',
+          desc: 'Your own shell, more than one session, and a result sentence for every command you run from the command box.',
         },
         {
-          title: 'Semantic Input',
-          desc: 'Describe intent in natural language. The AI planner generates a shell command with explanation, risk assessment, and assumptions. You review before anything runs.',
+          title: 'Ask',
+          desc: 'Describe what you want. CommandUI drafts a command, explains it in plain words, and waits. Run Plan is the approval.',
         },
         {
-          title: 'Risk-Tiered Safety',
-          desc: 'Low-risk commands flow. Medium-risk commands ask. High-risk commands require explicit confirmation. Nothing destructive executes without your approval.',
+          title: 'A careful yes',
+          desc: 'Low and medium risk need Run Plan. A command that deletes files, or that needs higher permissions, also waits until you type the folder name.',
         },
         {
           title: 'Edit Before Run',
           desc: 'Every generated command is editable. Modify it, add flags, change paths — then approve. History records both the original and your edit.',
         },
         {
-          title: 'Workflow Promotion',
-          desc: 'Repeat a command sequence three times and the system suggests saving it as a workflow. Promoted workflows feed back into the planner for better future suggestions.',
+          title: 'Workflows',
+          desc: 'Make a list of commands, edit it, and run it again. History can save the commands you pick. A repeated sequence can be offered as a suggestion.',
         },
         {
-          title: 'Project Memory',
-          desc: 'Learns your preferred tools, directories, and command patterns. Confidence-scored, visible, editable, deletable. Feeds the planner so it stops acting like a stranger.',
+          title: 'Memory',
+          desc: 'Preferences CommandUI has noticed. You can read them and delete them.',
         },
       ],
     },
     {
       kind: 'code-cards',
       id: 'usage',
-      title: 'Quick Start',
+      title: 'Build it',
       cards: [
         {
           title: 'Clone & install',
@@ -85,11 +85,11 @@ export const config: SiteConfig = {
         },
         {
           title: 'Browser preview',
-          code: 'pnpm dev\n# Opens at http://localhost:5176\n# Mock bridge simulates all backend ops',
+          code: 'pnpm dev\n# Opens at http://localhost:5176\n# Does not run your shell. A practice plan is labeled as practice.',
         },
         {
-          title: 'Full desktop app',
-          code: 'cd apps/desktop\npnpm tauri:dev\n# Rust backend + real PTY shell',
+          title: 'Desktop app, while developing',
+          code: 'cd apps/desktop\npnpm tauri:dev\n# Builds the desktop app and opens your shell.',
         },
         {
           title: 'Run tests',
@@ -104,16 +104,16 @@ export const config: SiteConfig = {
       subtitle: 'Six layers, clear boundaries, local-first.',
       features: [
         {
-          title: 'Tauri v2 + React 19',
-          desc: 'The Store executable is a Rust process. PTY, SQLite, and the planner live in shared crates. The React window is the desktop front end. A Rust console in this repo uses the same crates and is not in the Store package.',
+          title: 'Desktop app',
+          desc: 'The window is React. The shell, the saved history, and Ask live in Rust. A second front end in this repo is not in the Store package.',
         },
         {
-          title: 'Monorepo Packages',
-          desc: 'Domain types, API contracts, and state stores as separate packages. Dependencies flow downward. Frontend never touches Rust directly.',
+          title: 'Separate packages',
+          desc: 'Types, contracts, and saved state are separate packages. The window does not reach into the shell code.',
         },
         {
-          title: 'Ollama-First Planning',
-          desc: 'Local LLM generates command plans with context-aware prompts. Falls back to mock planner when Ollama is unavailable. Zero cloud dependency.',
+          title: 'A model on this computer',
+          desc: 'Ask uses a local model. If it is not installed, not running, or not downloaded, Ask says so and does not draft a command.',
         },
       ],
     },

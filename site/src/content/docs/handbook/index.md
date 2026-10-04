@@ -1,6 +1,6 @@
 ---
 title: CommandUI Handbook
-description: Comprehensive guide to CommandUI — the AI-native shell environment.
+description: Guide to CommandUI — a shell that explains every result and waits for approval.
 sidebar:
   order: 0
 ---

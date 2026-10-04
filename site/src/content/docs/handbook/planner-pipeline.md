@@ -52,14 +52,10 @@ The `build_planner_prompt()` function constructs an LLM prompt with:
 
 Ollama returns a `LlmPlanResponse` with: command, risk, explanation, assumptions, safety flags, confidence, expected output.
 
-### Mock fallback
-If Ollama is unavailable, the backend falls back to `mock_plan()`:
+### When the model is not ready
+A release call returns no command. It returns the status: not installed, not running, or not downloaded.
 
-- "show me changed files" / "git status" → `git status --short`
-- "delete" / "remove" intents → high-risk stub
-- Everything else → echo stub with the intent text
-
-The response includes `source: "mock"` so the frontend can display the mock planner notice.
+A debug build, tests, and the browser preview may still build a practice plan. The screen says "Practice plan — Ollama is not connected. This is not a real plan." The stored source can be `mock`. The screen does not say "Mock planner".
 
 ### Mock bridge (browser preview)
 In browser preview mode, the frontend's mock bridge handles the request directly. It also checks if the intent matches a known workflow by fuzzy-matching labels against project facts.
@@ -77,14 +73,13 @@ The backend generates a `PlanReview` alongside the plan:
 
 The `PlanPanel` component renders the full plan:
 
-1. Mock planner notice (if `source === "mock"`)
-2. Intent (user's original words)
-3. Editable command textarea
-4. Risk badge
-5. Explanation text
-6. Confirmation checkbox (medium/high risk)
-7. Action buttons: Run Plan, Reject, Save Workflow
-8. Context sources footer
+1. Practice-plan notice, only when the plan is a practice plan
+2. Intent (the words the user typed)
+3. Editable command
+4. What this does, in a sentence
+5. Risk, in a sentence
+6. A folder-name field, for a high-risk plan only
+7. Run Plan, Reject, Save Workflow
 
 ## Stage 5: User decision
 

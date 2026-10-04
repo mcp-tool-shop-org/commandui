@@ -16,7 +16,9 @@
 
 # CommandUI
 
-AI-native shell environment with semantic command review.
+A shell that explains every result in plain words, lets you ask for a command in plain words, and never runs a drafted command until you have seen it and approved it.
+
+The English page is the current description. The other languages are from the previous text and will be updated before the next release tag.
 
 ## Install
 
@@ -44,26 +46,24 @@ Pack the Store upload from a release build of the desktop app:
 
 ## What it does
 
-- Real PTY shell sessions (not a wrapper, not a chatbot)
-- Two input paths: direct terminal typing (freeform) + composer (structured/tracked)
-- Semantic mode: describe intent → AI generates command → you review/edit/approve
-- Risk-tiered confirmation: low (auto), medium (configurable), high (required)
-- History with rerun, reopen-plan, and save-to-workflow actions
-- Saved workflows: the plan panel and history save the one command you reviewed. A repeated sequence opens an editor, and those steps are stored and restored
-- Project-scoped memory: learns preferences from repeated edits
-- Multi-session tabs with per-session terminal streams
-- Local-first SQLite persistence (history, plans, workflows, memory, settings)
-- Classic vs Guided modes with real behavioral differences
+- A real shell, with your own profile, and more than one session
+- Command runs what you type. If the line looks like a request, CommandUI offers to Ask instead of running the sentence
+- Ask drafts a command, explains it, and waits. Run Plan is the approval. Reject runs nothing
+- A result sentence says whether the command worked. A failure offers Ask how to fix it
+- Text from 100% to 200%, in Settings
+- Workflows you can make, edit, run, and delete. A delete can be undone
+- History you can search, and memory you can delete
+- Classic hides the plan until there is one. Guided keeps the plan column open
 
 ## What it is NOT
 
-- Not a chatbot or autonomous agent
-- Not a terminal emulator replacement
+- Not a chatbot, and not something that runs a drafted command on its own
+- Not a claim that a screen reader, Narrator, or a high-contrast theme has already been tested on this build. Those checks are still open
 - Not the console. `apps/console` is a second front end in this repo. The Store package is the desktop executable only.
 
 ## Security
 
-CommandUI runs on your machine. It keeps history, plans, workflows, memory, and settings in a local SQLite database, and it runs the shell commands you approve. It does not send telemetry. Planning talks to a local Ollama process when one is running, and otherwise uses the built-in mock. Medium and high risk commands wait for you.
+CommandUI runs on your machine. It keeps history, plans, workflows, memory, and settings locally, and it runs the shell commands you approve. It does not send telemetry. Ask talks to a model on this computer. If that model is not installed, not running, or not downloaded, Ask says so and does not draft a command. A command that deletes files, or that needs higher permissions, waits until you type the folder name.
 
 See [SECURITY.md](SECURITY.md) for the threat model and how to report a vulnerability.
 
@@ -71,11 +71,11 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report a vulnerab
 
 ```
 commandui/
-  apps/desktop/                 — Tauri v2 + React 19. This is the Store executable.
+  apps/desktop/                 — the desktop app. This is the Store executable.
   apps/console/                 — Rust terminal front end on the same runtime. Not in the Store package.
-  crates/runtime-core/          — PTY, sessions, events
-  crates/runtime-persistence/   — SQLite
-  crates/runtime-planner/       — Local Ollama planner, mock fallback
+  crates/runtime-core/          — shell sessions and events
+  crates/runtime-persistence/   — local storage
+  crates/runtime-planner/       — the local model Ask uses
   packages/domain/              — Domain types
   packages/api-contract/        — Request and response contracts
   packages/state/               — Zustand stores
@@ -105,6 +105,6 @@ cargo test
 
 ## Current status
 
-v1.0.2 — desktop app on the shared Rust runtime. The planner calls a local Ollama model and falls back to a mock when Ollama is not running. The Store upload is the unsigned x64 MSIX of `commandui-desktop.exe`. The public GitHub release is still the v1.0.0 MSI.
+v1.0.2 — the desktop app. Ask uses a model on this computer and says when that model is not ready. The Store upload is the unsigned x64 MSIX of `commandui-desktop.exe`, and the Store submission is still a draft. The public GitHub release is still the v1.0.0 MSI.
 
 Built by [MCP Tool Shop](https://mcp-tool-shop.github.io/).

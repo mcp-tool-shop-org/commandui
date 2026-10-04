@@ -1,70 +1,54 @@
 ---
 title: Keyboard Shortcuts
-description: Complete reference for all keyboard shortcuts including global, plan panel, composer, and command palette bindings.
+description: The shortcuts CommandUI uses, including the Ctrl+Shift forms that work from the terminal.
 sidebar:
   order: 10
 ---
 
-CommandUI is designed for keyboard-first operation. All major actions are reachable without a pointer.
+Plain Ctrl plus a letter goes to the shell while the terminal has focus. The Ctrl+Shift form works from the terminal.
 
-## Global shortcuts
+There is no Ctrl+2. Ctrl+1 switches to the first session. It does not select Command.
 
-These work from anywhere in the app:
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+K` | Open command palette |
-| `Ctrl+J` | Focus composer |
-| `Ctrl+L` | Clear terminal |
-| `Ctrl+T` | New session |
-| `Ctrl+H` | Toggle history drawer |
-| `Ctrl+Shift+W` | Toggle workflow drawer |
-| `Ctrl+M` | Toggle memory drawer |
-| `Ctrl+,` | Toggle settings drawer |
-| `Ctrl+1` – `Ctrl+9` | Switch to session 1–9 |
-| `Ctrl+W` | Close current session (Tauri only) |
-| `Escape` | Close all open drawers/overlays |
-| `Ctrl+Enter` | Approve and execute the current plan |
-
-## Plan panel shortcuts
-
-These work when the plan panel has focus:
+## From anywhere
 
 | Shortcut | Action |
 |----------|--------|
-| `A` | Approve plan (same as Run Plan button) |
-| `R` | Reject plan |
-| `E` | Focus the command edit textarea |
+| F1 | Keyboard help |
+| Ctrl+Shift+A | Switch between Command and Ask |
+| Ctrl+Shift+O | Output |
+| Ctrl+Shift+W | Workflows |
+| Ctrl+Shift+J | Command box |
+| Ctrl+Shift+K | Command palette |
+| Ctrl+Shift+H | History |
+| Ctrl+Shift+M | Memory |
+| Ctrl+Shift+L | Clear the terminal view |
+| Ctrl+Shift+T | New session |
+| Ctrl+Shift+X | Close the session, in the desktop app. Asks first if a command is running. |
+| Escape | Close the top dialog. This does not reject a plan. |
 
-## Composer shortcuts
+## Outside the terminal
 
 | Shortcut | Action |
 |----------|--------|
-| `Enter` | Submit |
-| `Ctrl+1` | Switch to Command mode |
-| `Ctrl+2` | Switch to Ask mode |
+| Ctrl+J | Command box |
+| Ctrl+K | Command palette |
+| Ctrl+H | History |
+| Ctrl+M | Memory |
+| Ctrl+L | Clear the terminal view |
+| Ctrl+T | New session |
+| Ctrl+, | Settings |
+| Ctrl+1 to Ctrl+9 | Switch to that session |
+| Ctrl+W | Close the session, in the desktop app. Asks first if a command is running. |
+| Ctrl+Enter | Run the plan. Does not fire while the terminal has focus. |
 
-## How shortcuts work
+## When the plan has focus
 
-The shortcut system is zone-aware. The app tracks which zone has focus:
+| Key | Action |
+|-----|--------|
+| A | Run Plan |
+| R | Reject |
+| E | Edit the command |
 
-- **composer** — the input textarea
-- **terminal** — the xterm.js terminal
-- **plan** — the plan panel
-- **drawer** — any open drawer
-- **palette** — the command palette
+The welcome screen lists Ctrl+K, Ctrl+J, Ctrl+T, and Ctrl+Enter. F1 lists the rest.
 
-### Resolution rules
-
-1. Zone-specific matches take priority over global matches
-2. Bare-key shortcuts (single letter, no modifier) are suppressed in text-input zones (terminal, composer) to avoid interfering with typing
-3. Special keys (`Escape`, `Enter`, `Tab`) work in text-input zones
-4. Modifier combos (`Ctrl+...`, `Shift+...`) work everywhere
-
-### Conditional shortcuts
-
-Some shortcuts have `when` guards — they only activate when specific conditions are true. For example, the plan approval shortcut only works when a plan is present.
-
-## Command palette
-
-`Ctrl+K` opens the command palette — a searchable list of all available actions. Type to filter, use arrow keys to navigate, Enter to execute. This provides discoverability for actions you might not know the shortcut for.
+The command palette opens with Ctrl+K, or Ctrl+Shift+K from the terminal. Type to filter. Enter runs the action.
