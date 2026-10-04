@@ -1,15 +1,14 @@
 # Known Limitations
 
 ## Shell Completion Detection
-- Based on prompt-marker injection (`__COMMANDUI_PROMPT__`)
-- Supports: PowerShell, pwsh, bash, zsh, cmd
-- If user overrides their shell prompt, markers break
+- A prompt hook reports each prompt with an invisible OSC 7733 sequence (nonce, exit code, cwd)
+- Supports: PowerShell, pwsh, bash (Git Bash on Windows too), zsh, cmd
+- A prompt framework that replaces the hook after startup stops detection
 - Interactive commands (vim, htop) show as "running" until exit
 
 ## Exit Code Fidelity
-- Relies on shell prompt marker including exit code
-- PowerShell uses `$LASTEXITCODE`, bash/zsh use `$?`
-- Some shells may not report exit codes accurately
+- PowerShell uses `$?` and `$LASTEXITCODE`, bash/zsh use `$?`
+- cmd: an approved command captures `%ERRORLEVEL%` in a hidden tail; a hand-typed cmd command reports completion but no exit code
 
 ## PTY Session Restore
 - Sessions are ephemeral per app launch

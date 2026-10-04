@@ -94,7 +94,14 @@ jobs:
       - name: Release version sources agree
         run: node packaging/check-release-version.mjs --self
 
+      # zsh is not on ubuntu-latest by default; the live shell tests require
+      # bash and zsh here so a missing shell fails instead of skipping.
+      - name: Install zsh for the live shell tests
+        run: sudo apt-get install -y zsh
+
       - name: Cargo test (crates)
+        env:
+          COMMANDUI_REQUIRE_SHELLS: bash,zsh
         run: cargo test -p commandui-runtime-core -p commandui-runtime-persistence -p commandui-runtime-planner -p commandui-console -p commandui-desktop
 
       - name: Install workspace dependencies

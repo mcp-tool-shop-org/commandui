@@ -3,10 +3,10 @@
 ## Shell and Terminal
 
 ### Completion detection
-Command completion relies on prompt-marker injection. If your shell prompt is heavily customized or strips injected markers, completion detection may fail. The terminal may enter a `desynced` state — use the Resync button to recover.
+Command completion relies on a prompt hook CommandUI installs in the shell, which reports each prompt with an invisible escape sequence. A prompt framework that replaces that hook after startup stops completion detection; the session stays `running` until you interrupt or resync it.
 
 ### Exit code fidelity
-Exit codes are extracted from shell markers. Some shells or commands may not report exit codes accurately through this mechanism.
+Exit codes come from the shell itself: `$?` in bash and zsh, `$?` and `$LASTEXITCODE` in PowerShell, and `%ERRORLEVEL%` captured after each approved command in cmd. A command you type yourself in cmd reports no exit code, only that it finished.
 
 ### PTY session restore
 Sessions are ephemeral. The PTY process is respawned on app restart. Terminal output and shell state (environment variables, aliases) do not persist across restarts. History, workflows, and memory do persist.

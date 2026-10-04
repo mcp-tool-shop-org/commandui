@@ -4,23 +4,22 @@ CommandUI wraps a real pseudo-terminal (PTY). This is not a simulated shell — 
 
 ## PTY lifecycle
 
-1. **Session creation:** `session_create` spawns a new PTY process with the detected shell (PowerShell on Windows, `$SHELL` on Unix)
-2. **Ready signal:** the backend detects the shell prompt and emits `session:ready` with the initial cwd
-3. **Command execution:** `terminal_execute` writes the command to the PTY and tracks it with an execution ID
-4. **Output streaming:** PTY output is emitted line-by-line as `terminal:line` events
-5. **Completion detection:** prompt-marker injection detects when the command finishes, extracting exit code
+1. **Session creation:** `session_create` spawns a new PTY process with the detected shell (on Windows, PowerShell 7 if it is installed or on PATH, otherwise Windows PowerShell; on Unix, `$SHELL`). cmd, bash (including Git Bash on Windows) and zsh are also supported
+2. **Ready signal:** the backend installs a prompt hook in the shell and emits `session:ready` with the initial cwd when the first prompt reports in
+3. **Command execution:** `terminal_execute` clears anything half-typed at the prompt, writes the command to the PTY, and tracks it with an execution ID
+4. **Output streaming:** PTY output is emitted as `terminal:line` events, including partial lines (a prompt waiting for input appears at once)
+5. **Completion detection:** the shell's prompt hook reports the exit code and cwd in an invisible escape sequence
 6. **Session close:** `session_close` terminates the PTY process
 
 ## Completion detection
 
-CommandUI injects invisible prompt markers around commands to detect completion:
+At startup CommandUI installs a prompt hook in the shell: the `prompt` function in PowerShell, `PROMPT_COMMAND` in bash, `precmd` in zsh, and the `PROMPT` setting in cmd. Every time the shell shows its prompt, the hook writes an OSC escape sequence (`ESC ] 7733 ; … BEL`) carrying a per-session nonce, the last exit code and the percent-encoded cwd. An OSC sequence takes no columns, so the terminal never wraps or repaints it; the backend reads it from the raw output stream, never displays it, checks the nonce, and emits `terminal:execution_finished` and `session:cwd_changed`.
 
-1. Before executing, a unique marker is written to the PTY
-2. The command runs
-3. After execution, the shell prompt reappears with the marker
-4. The backend matches the marker, extracts the exit code, and emits `terminal:execution_finished`
+cmd cannot expand `%ERRORLEVEL%` inside its prompt, so for cmd an approved command line also carries a short hidden tail that records the exit code, and starts with `(call )` so a built-in like `echo` does not report the previous command's code.
 
-**Limitation:** this breaks if the user has a custom shell prompt that strips or modifies the injected markers.
+Because the prompt hook reports after every command, commands you type yourself are tracked too: pressing Enter at a ready prompt puts the session in `userRunning` until the next prompt.
+
+**Limitation:** a prompt framework that replaces the `prompt` function, `PROMPT_COMMAND` or `precmd` after CommandUI installs its hook stops completion detection. The session then stays `running`; Interrupt or Resync recovers it.
 
 ## Terminal events
 
@@ -54,7 +53,7 @@ booting → ready ⇄ running
 
 A session that stays in `booting` for 20 seconds shows a banner with **Resync** and **Close Session**, so a shell that never starts is not a dead pane.
 
-Before an approved command, the runtime clears anything half-typed at the prompt so it cannot be joined to the command. In bash and PowerShell sessions it binds `Ctrl+]` to "discard the current line" (in every editing mode, vi included) and sends that chord; zsh gets `Ctrl+E Ctrl+U`, cmd gets `Ctrl+End Ctrl+Home`. Inside CommandUI sessions, `Ctrl+]` therefore no longer does the shell's usual character search.
+Before an approved command, the runtime clears anything half-typed at the prompt so it cannot be joined to the command. In bash and PowerShell sessions it binds `Ctrl+]` to "discard the current line" (in every editing mode, vi included) and sends that chord, but only when `Ctrl+]` is unbound or still has the shell's default (character search): a binding of your own is left alone, and the runtime then falls back to `Ctrl+End Ctrl+Home` (PowerShell) or `Ctrl+E Ctrl+U` (bash), which does not clear a vi normal-mode line. zsh gets `Ctrl+E Ctrl+U`, cmd gets `Ctrl+End Ctrl+Home`.
 
 When the shell process itself exits (`exit`, a crash, a killed process), the session's status becomes `exited` and its execution state `desynced`, but this is not recoverable: `execute` and `resync` refuse the session. The desktop shows a banner with a **New Session** button in place of Resync. Exit is detected both from the end of the PTY output and by polling the child process, since a Windows ConPTY may not end the output stream.
 

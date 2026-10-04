@@ -28,7 +28,7 @@ A terminal shell with sidecar AI assistance. You play freely in a real PTY shell
 | `^T` | Ask the AI (enter Ask mode) |
 | `^G` | Enter Raw Play (fullscreen passthrough) |
 | `^S` | Open run selector |
-| `^H` | Help overlay |
+| `F1` / `^/` | Help overlay (`^H` is Backspace to a shell, so it goes to the shell) |
 | `^N` | New session |
 | `^W` | Close session (asks `y/n` if a command is running, approved or typed by you) |
 | `^]` / `^[` | Next / previous session (on Unix, a bare `Esc` is `^[` when more than one session is open) |
@@ -38,6 +38,8 @@ A terminal shell with sidecar AI assistance. You play freely in a real PTY shell
 | `Shift+PgUp/PgDn` | Scroll terminal |
 
 At a `y/n` prompt only a plain `y` goes ahead; any other key cancels and is not sent to the shell.
+
+While a session is still starting (BOOT), keystrokes are not sent to it; `^R` resends Enter to a shell that is slow to show its first prompt, and `^W` / `^N` still close or create sessions.
 
 ### Ask mode
 
@@ -87,7 +89,7 @@ Approval is refused while the command is clipped, while confirmation is pending,
 
 **Runs** — Run selector overlay. See all sessions with state badges (IDLE, RUN, FOREGROUND, BOOT, STOP, DONE, ERR!), unread markers, and CWD. Switch, create, or close sessions.
 
-**Raw Play** — Fullscreen mode. Console leaves its alternate screen and the app draws to the host terminal directly. Keys, resizes, bracketed paste and focus events are forwarded in the encodings the app enabled. Mouse events reach apps that enable SGR mouse reporting (`?1006`), with drag and motion only when the app asks for them (`?1002` / `?1003`). Replies the host terminal sends to the app's own queries (cursor position, device attributes) are not forwarded yet. `^\` returns to Console; `^Q` returns and asks before quitting. If writing to the app fails, the session is marked as an error and Console comes back. The transcript keeps the text with control sequences stripped; cursor movement is not replayed, so full-screen output reads out of order.
+**Raw Play** — Fullscreen mode. Console leaves its alternate screen and the app draws to the host terminal directly. Keys, resizes, bracketed paste and focus events are forwarded in the encodings the app enabled. Mouse events reach apps that enable SGR mouse reporting (`?1006`), with drag and motion only when the app asks for them (`?1002` / `?1003`). Replies the host terminal sends to the app's own queries (cursor position, device attributes) are not forwarded yet. `^\` returns to Console; `^Q` returns and asks before quitting. If writing to the app fails, the session is marked as an error and Console comes back. The transcript keeps the text with control sequences stripped. Movement within a line is followed, but movement between lines is not, so full-screen output reads out of order.
 
 ## Architecture
 
@@ -115,13 +117,15 @@ The integration seam is `RuntimeEventSink` — Console implements it via a tokio
 ## Limitations
 
 - **Shell mode is a line view, not a terminal** — it follows line edits on the current line, but not cursor addressing across lines or full-screen redraws. Use Raw Play for anything that draws the whole screen
-- **Transcript degraded in Raw Play** — control sequences are stripped and cursor movement is not replayed, so full-screen app output is kept as text, not as the screen you saw
+- **Transcript degraded in Raw Play** — control sequences are stripped and movement between lines is not followed, so full-screen app output is kept as text, not as the screen you saw
 - **No UI during Raw Play** — no split-screen, no real-time AI overlay. Exit Raw Play first to use Console features
 - **Session switching blocked during Raw Play** — exit with `^\` first
 - **Mouse in Raw Play needs SGR reporting** — apps that only use the older X10 or UTF-8 mouse encodings get no mouse events
 - **No persistence, workflow UI, memory UI, or history reopen yet** — these exist in the Desktop shell but are deferred for Console
 - **Console cannot detect a full-screen app quitting** — when the app exits but the shell lives on, you may need to press `^\` manually. A shell that exits is detected and shown
-- **`Ctrl+]` is rebound inside sessions** — to clear a half-typed line before an approved command in every editing mode (including vi), CommandUI binds `Ctrl+]` in PowerShell and bash sessions to "discard the current line". Console itself uses `^]` for next session in Shell mode, so you only meet the shell binding in Raw Play
+- **`Ctrl+]` may be rebound inside sessions** — to clear a half-typed line before an approved command in every editing mode (including vi), CommandUI binds `Ctrl+]` in PowerShell and bash sessions to "discard the current line", unless you have bound it to something yourself. Console itself uses `^]` for next session in Shell mode, so you only meet the shell binding in Raw Play
+- **Your shell prompt may be replaced** — CommandUI installs its own prompt hook to detect when commands finish. In PowerShell the prompt becomes `> ` and in cmd `$P$G`, so a custom prompt theme is not shown; in bash your `PS1` stays, but a prompt tool that runs from `PROMPT_COMMAND` (starship, for example) is replaced
+- **Runtime messages go to a log** — while Console owns the terminal, diagnostic output from the runtime is written to `commandui-console-stderr.log` in the system temp directory instead of over the screen
 
 ## Build and test
 
