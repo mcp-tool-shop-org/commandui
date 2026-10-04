@@ -231,7 +231,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "site",
-      "qualifyingSourceCommits": 0,
+      "qualifyingSourceCommits": 1,
       "rebaseline": null
     },
     {
@@ -664,8 +664,8 @@
         "path": "README.ja.md"
       },
       {
-        "commits": 3,
-        "lines": 134,
+        "commits": 4,
+        "lines": 172,
         "path": "README.md"
       },
       {
@@ -699,8 +699,8 @@
         "path": "apps/console/Cargo.toml"
       },
       {
-        "commits": 6,
-        "lines": 223,
+        "commits": 7,
+        "lines": 225,
         "path": "apps/console/README.md"
       },
       {
@@ -1484,8 +1484,8 @@
         "path": "apps/desktop/vite.config.ts"
       },
       {
-        "commits": 11,
-        "lines": 349,
+        "commits": 12,
+        "lines": 357,
         "path": "atlas/README.md"
       },
       {
@@ -1494,18 +1494,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 11,
-        "lines": 1690,
+        "commits": 12,
+        "lines": 1726,
         "path": "atlas/page.json"
       },
       {
-        "commits": 11,
-        "lines": 4403,
+        "commits": 12,
+        "lines": 4459,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 11,
-        "lines": 8115,
+        "commits": 12,
+        "lines": 8125,
         "path": "atlas/structure.json"
       },
       {
@@ -1669,8 +1669,8 @@
         "path": "docs/handbook/src/architecture/persistence.md"
       },
       {
-        "commits": 1,
-        "lines": 108,
+        "commits": 2,
+        "lines": 133,
         "path": "docs/handbook/src/architecture/planner-pipeline.md"
       },
       {
@@ -1704,8 +1704,8 @@
         "path": "docs/handbook/src/developer-guide/testing.md"
       },
       {
-        "commits": 1,
-        "lines": 93,
+        "commits": 2,
+        "lines": 100,
         "path": "docs/handbook/src/intelligence/context-enrichment.md"
       },
       {
@@ -1714,13 +1714,13 @@
         "path": "docs/handbook/src/intelligence/memory-detectors.md"
       },
       {
-        "commits": 1,
-        "lines": 62,
+        "commits": 2,
+        "lines": 72,
         "path": "docs/handbook/src/intelligence/workflow-promotion.md"
       },
       {
-        "commits": 3,
-        "lines": 74,
+        "commits": 4,
+        "lines": 88,
         "path": "docs/handbook/src/operations/known-limitations.md"
       },
       {
@@ -1734,43 +1734,43 @@
         "path": "docs/handbook/src/orientation/core-concepts.md"
       },
       {
-        "commits": 1,
-        "lines": 69,
+        "commits": 2,
+        "lines": 138,
         "path": "docs/handbook/src/orientation/first-ten-minutes.md"
       },
       {
-        "commits": 1,
-        "lines": 40,
+        "commits": 2,
+        "lines": 89,
         "path": "docs/handbook/src/orientation/what-is-commandui.md"
       },
       {
-        "commits": 3,
-        "lines": 101,
+        "commits": 4,
+        "lines": 205,
         "path": "docs/handbook/src/product-behavior/keyboard-shortcuts.md"
       },
       {
-        "commits": 1,
-        "lines": 44,
+        "commits": 2,
+        "lines": 87,
         "path": "docs/handbook/src/product-behavior/modes.md"
       },
       {
-        "commits": 1,
-        "lines": 59,
+        "commits": 2,
+        "lines": 120,
         "path": "docs/handbook/src/product-behavior/risk-tiers.md"
       },
       {
-        "commits": 1,
-        "lines": 52,
+        "commits": 2,
+        "lines": 103,
         "path": "docs/handbook/src/product-behavior/settings.md"
       },
       {
-        "commits": 1,
-        "lines": 56,
+        "commits": 2,
+        "lines": 62,
         "path": "docs/handbook/src/user-guide/history.md"
       },
       {
-        "commits": 1,
-        "lines": 54,
+        "commits": 2,
+        "lines": 107,
         "path": "docs/handbook/src/user-guide/input-modes.md"
       },
       {
@@ -1779,13 +1779,13 @@
         "path": "docs/handbook/src/user-guide/memory.md"
       },
       {
-        "commits": 2,
-        "lines": 75,
+        "commits": 3,
+        "lines": 92,
         "path": "docs/handbook/src/user-guide/plan-review.md"
       },
       {
-        "commits": 2,
-        "lines": 83,
+        "commits": 3,
+        "lines": 160,
         "path": "docs/handbook/src/user-guide/workflows.md"
       },
       {
@@ -1809,8 +1809,8 @@
         "path": "docs/product/icon-spec.md"
       },
       {
-        "commits": 3,
-        "lines": 58,
+        "commits": 4,
+        "lines": 66,
         "path": "docs/product/known-limitations.md"
       },
       {
@@ -1839,8 +1839,8 @@
         "path": "docs/specs/raw-play-mode.md"
       },
       {
-        "commits": 1,
-        "lines": 47,
+        "commits": 2,
+        "lines": 66,
         "path": "docs/specs/smoke-test-checklist.md"
       },
       {
@@ -1852,6 +1852,11 @@
         "commits": 1,
         "lines": 230,
         "path": "docs/specs/tui-spine.md"
+      },
+      {
+        "commits": 1,
+        "lines": 29,
+        "path": "docs/store-listing.md"
       },
       {
         "commits": 3,
@@ -2299,8 +2304,8 @@
         "path": "site/src/content.config.ts"
       },
       {
-        "commits": 2,
-        "lines": 113,
+        "commits": 3,
+        "lines": 215,
         "path": "site/src/content/docs/handbook/beginners.md"
       },
       {
@@ -2329,28 +2334,28 @@
         "path": "site/src/content/docs/handbook/developer-guide/testing.md"
       },
       {
-        "commits": 1,
-        "lines": 74,
+        "commits": 2,
+        "lines": 145,
         "path": "site/src/content/docs/handbook/first-ten-minutes.md"
       },
       {
-        "commits": 1,
-        "lines": 61,
+        "commits": 2,
+        "lines": 67,
         "path": "site/src/content/docs/handbook/history.md"
       },
       {
-        "commits": 1,
-        "lines": 18,
+        "commits": 2,
+        "lines": 20,
         "path": "site/src/content/docs/handbook/index.md"
       },
       {
-        "commits": 1,
-        "lines": 59,
+        "commits": 2,
+        "lines": 114,
         "path": "site/src/content/docs/handbook/input-modes.md"
       },
       {
-        "commits": 1,
-        "lines": 98,
+        "commits": 2,
+        "lines": 105,
         "path": "site/src/content/docs/handbook/intelligence/context-enrichment.md"
       },
       {
@@ -2359,13 +2364,13 @@
         "path": "site/src/content/docs/handbook/intelligence/memory-detectors.md"
       },
       {
-        "commits": 1,
-        "lines": 67,
+        "commits": 2,
+        "lines": 77,
         "path": "site/src/content/docs/handbook/intelligence/workflow-promotion.md"
       },
       {
-        "commits": 1,
-        "lines": 70,
+        "commits": 2,
+        "lines": 166,
         "path": "site/src/content/docs/handbook/keyboard-shortcuts.md"
       },
       {
@@ -2379,13 +2384,13 @@
         "path": "site/src/content/docs/handbook/memory.md"
       },
       {
-        "commits": 1,
-        "lines": 49,
+        "commits": 2,
+        "lines": 94,
         "path": "site/src/content/docs/handbook/modes.md"
       },
       {
-        "commits": 2,
-        "lines": 75,
+        "commits": 3,
+        "lines": 89,
         "path": "site/src/content/docs/handbook/operations/known-limitations.md"
       },
       {
@@ -2399,23 +2404,23 @@
         "path": "site/src/content/docs/handbook/persistence.md"
       },
       {
-        "commits": 1,
-        "lines": 59,
+        "commits": 2,
+        "lines": 78,
         "path": "site/src/content/docs/handbook/plan-review.md"
       },
       {
-        "commits": 1,
-        "lines": 113,
+        "commits": 2,
+        "lines": 138,
         "path": "site/src/content/docs/handbook/planner-pipeline.md"
       },
       {
-        "commits": 1,
-        "lines": 64,
+        "commits": 2,
+        "lines": 127,
         "path": "site/src/content/docs/handbook/risk-tiers.md"
       },
       {
-        "commits": 1,
-        "lines": 57,
+        "commits": 2,
+        "lines": 110,
         "path": "site/src/content/docs/handbook/settings.md"
       },
       {
@@ -2429,13 +2434,13 @@
         "path": "site/src/content/docs/handbook/terminal.md"
       },
       {
-        "commits": 1,
-        "lines": 45,
+        "commits": 2,
+        "lines": 96,
         "path": "site/src/content/docs/handbook/what-is-commandui.md"
       },
       {
-        "commits": 2,
-        "lines": 88,
+        "commits": 3,
+        "lines": 167,
         "path": "site/src/content/docs/handbook/workflows.md"
       },
       {
@@ -2449,8 +2454,8 @@
         "path": "site/src/pages/privacy.astro"
       },
       {
-        "commits": 2,
-        "lines": 137,
+        "commits": 3,
+        "lines": 183,
         "path": "site/src/site-config.ts"
       },
       {
@@ -2494,9 +2499,9 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-10-04T22:06:33.820Z",
+  "generatedAt": "2026-10-04T22:13:27.898Z",
   "generatedFrom": {
-    "commit": "8ff616fec9b5d6ce3ab955f983e5d2b3925a460d"
+    "commit": "d5391dcff59e069ac3ca64f5f4c5e5e13d329209"
   },
   "pairs": [
     {
@@ -2572,43 +2577,43 @@
     {
       "a": "atlas/README.md",
       "b": "atlas/page.json",
-      "either": 10,
-      "shared": 10,
+      "either": 11,
+      "shared": 11,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/statistics.json",
-      "either": 10,
-      "shared": 10,
+      "either": 11,
+      "shared": 11,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/structure.json",
-      "either": 10,
-      "shared": 10,
+      "either": 11,
+      "shared": 11,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/statistics.json",
-      "either": 10,
-      "shared": 10,
+      "either": 11,
+      "shared": 11,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/structure.json",
-      "either": 10,
-      "shared": 10,
+      "either": 11,
+      "shared": 11,
       "strength": 1
     },
     {
       "a": "atlas/statistics.json",
       "b": "atlas/structure.json",
-      "either": 10,
-      "shared": 10,
+      "either": 11,
+      "shared": 11,
       "strength": 1
     },
     {
@@ -2692,16 +2697,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-10-04T18:06:27-04:00",
-    "inScopeFiles": 432,
+    "headDate": "2026-10-04T18:13:21-04:00",
+    "inScopeFiles": 433,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 75,
+    "qualifyingCommits": 77,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-07T22:06:27.000Z",
+    "since": "2026-04-07T22:13:21.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

@@ -446,7 +446,7 @@
           "path": "apps/console/Cargo.toml"
         },
         {
-          "hash": "ced3a755bc3790b2881572630dfa7faaf710c8f93ef012e80d6e0e1b168154b4",
+          "hash": "a805cd52dea37bd644711896df4313feedd2b4c3c2877f80866e63eb247dde2c",
           "path": "apps/console/README.md"
         },
         {
@@ -2520,7 +2520,7 @@
           "path": "docs/handbook/src/architecture/persistence.md"
         },
         {
-          "hash": "84f2f3fd921ff0ee377b854179128192a6adebecabdc5fd5929f560a4fee4fa7",
+          "hash": "e7ae634656ec8f129352c9028060e9dd1d0da8c135f9a53e40d4ebb52801709b",
           "path": "docs/handbook/src/architecture/planner-pipeline.md"
         },
         {
@@ -2548,7 +2548,7 @@
           "path": "docs/handbook/src/developer-guide/testing.md"
         },
         {
-          "hash": "d06e12bfae72a9ecd49d2f22de2b49fedd858e887cbf11f94837f54869db3780",
+          "hash": "59b35ee3e026aace51c56888f83f65d92c511ce0ec62363dbdeee8c17f0c992b",
           "path": "docs/handbook/src/intelligence/context-enrichment.md"
         },
         {
@@ -2556,11 +2556,11 @@
           "path": "docs/handbook/src/intelligence/memory-detectors.md"
         },
         {
-          "hash": "5821f408bade799313a9250ce1a6bdaa6e534b32bf9a3da250b0f681411e112c",
+          "hash": "c8a0a4f3ab18adfd907b9964e84931dc3bc2589c65a58b1a6b42eaf200f58256",
           "path": "docs/handbook/src/intelligence/workflow-promotion.md"
         },
         {
-          "hash": "5b7d48fd5d781cb7a256afcb64fc47fe81e75eaff400ea363951d162a88f6034",
+          "hash": "2f1f8ddba9cdda233c43ffd8daca9b7afbf19e0c3d38658981cdec9f26f5f95d",
           "path": "docs/handbook/src/operations/known-limitations.md"
         },
         {
@@ -2572,35 +2572,35 @@
           "path": "docs/handbook/src/orientation/core-concepts.md"
         },
         {
-          "hash": "24888f8ee8b35e8b7f5860e6cf9513363a78fafefc845adfa59cdd895c904ce9",
+          "hash": "2e26cf54affa78726e650666e70cdf5850c0d11ee7168256cbb382bb0206a850",
           "path": "docs/handbook/src/orientation/first-ten-minutes.md"
         },
         {
-          "hash": "b2bb371aa1bcfc3dae890bd6f871f8ccb915110dde92ebf5d9821f1c7f22f172",
+          "hash": "851be3a054c1b5f86efad95dcdcfde13e4aa704b5e6962e9acdcfff8d540feaf",
           "path": "docs/handbook/src/orientation/what-is-commandui.md"
         },
         {
-          "hash": "9ed8d7111f9615a904631a251d9e78eb05908606857b31ef2f2c4451485bb3a8",
+          "hash": "ab497e46c4de39f282be9cc0b1dad7a90f29e347d3c292f501b54ffc6451c068",
           "path": "docs/handbook/src/product-behavior/keyboard-shortcuts.md"
         },
         {
-          "hash": "e8a729dcd2612920ba62fcdb777321d6682273aeb1c09776cdaaa6f82c182fc7",
+          "hash": "59deba5020f4d00ef6d23417f732a380c8424330d4b2f68301834e76004f681a",
           "path": "docs/handbook/src/product-behavior/modes.md"
         },
         {
-          "hash": "84ac8639e4b73ed16d2332f8a7f1accdadf0f5ab978149b1ad5861e8a39bf890",
+          "hash": "c08ec4bd2800caa30b803fece20c33c658b81fa5fc6fc69575d12619d18b26e2",
           "path": "docs/handbook/src/product-behavior/risk-tiers.md"
         },
         {
-          "hash": "1e4bf6749146cd74cc74630407e2afb47a10ce700586f412bc14c79319c27f7b",
+          "hash": "6307ba18f64d705827b8abcee4af88a709d830e31ff45d35d447dc2c6e4625fd",
           "path": "docs/handbook/src/product-behavior/settings.md"
         },
         {
-          "hash": "8dcad9c961eacf3de5f4d03f5a85a145d922f49e089b2f857de4a7ce3c12153b",
+          "hash": "45a4bacae0113120418c6e54355beaf261ded0cf341bbea1c7258f62b7dc6bc6",
           "path": "docs/handbook/src/user-guide/history.md"
         },
         {
-          "hash": "dd1f986a95baae6437821dc2b824715b528cf4b17742dd246ba93ecc238673b6",
+          "hash": "cc0a681b7ef32ab32b96773c572464f1637f2a466220b64de15b4c96b04a2def",
           "path": "docs/handbook/src/user-guide/input-modes.md"
         },
         {
@@ -2608,11 +2608,11 @@
           "path": "docs/handbook/src/user-guide/memory.md"
         },
         {
-          "hash": "18e49d111580a39d0158a34b4e8732ff5b1d7e963501c5b3e3359c0d1676d499",
+          "hash": "f6c9b4465d27af1b08798763f7da6a83dbd6ebd498709aa49ad0ee275e88333b",
           "path": "docs/handbook/src/user-guide/plan-review.md"
         },
         {
-          "hash": "0f9cc989109cfaf76b1d0912b0026f560eff3a4f1f1c2b386ef948b88433e4db",
+          "hash": "6d3ff76cdcb1b3c57e387203633677544496d56f034bb0e7e7c92f909ec1043a",
           "path": "docs/handbook/src/user-guide/workflows.md"
         },
         {
@@ -2632,7 +2632,7 @@
           "path": "docs/product/icon-spec.md"
         },
         {
-          "hash": "f6d114c2ffa35de3d808be53fc1e14ee9b26c1f438b7210a5bc830f9da6c37fe",
+          "hash": "b3529bcc44ac3b1dddf4eca094e02a2e44db22ffb58ad7d5f081708657ed294c",
           "path": "docs/product/known-limitations.md"
         },
         {
@@ -2656,7 +2656,7 @@
           "path": "docs/specs/raw-play-mode.md"
         },
         {
-          "hash": "ede158da7f1b96aaed61ba4cfae9cec36c924c9befc1d4e7037922f7dfeef03d",
+          "hash": "d7c1f5eba4afd692322bb4c4341548641592ec80c78d1449e7215bc98f97ad73",
           "path": "docs/specs/smoke-test-checklist.md"
         },
         {
@@ -2666,6 +2666,10 @@
         {
           "hash": "de9a40b939f3dbad506234cf2cf79e968a2ee0908c72d6bc2488e8cd628291bf",
           "path": "docs/specs/tui-spine.md"
+        },
+        {
+          "hash": "e92e6ace69da27834a91455534ce0be8d8d57e29740688a82488901f50b5a3b5",
+          "path": "docs/store-listing.md"
         }
       ],
       "globs": [
@@ -3059,7 +3063,7 @@
           "path": "README.ja.md"
         },
         {
-          "hash": "004cd9a1ff214a777a7cd0669b641985bd1adf35cffca6fece905ad2c32b7f7d",
+          "hash": "3631933ee4ef9b5d73d92f019c3687e6b489c74e106df03aec721d255f788920",
           "path": "README.md"
         },
         {
@@ -3895,7 +3899,7 @@
           "path": "site/src/content.config.ts"
         },
         {
-          "hash": "e7765bae16b95f7a13b616a2ef0e1b7bbe69cce45400f2ff2718e3c6c232bcbc",
+          "hash": "2adfad327826cf65852c4c3d1625ccd521eb25331d92b9b1a3cb158b2d78217b",
           "path": "site/src/content/docs/handbook/beginners.md"
         },
         {
@@ -3919,23 +3923,23 @@
           "path": "site/src/content/docs/handbook/developer-guide/testing.md"
         },
         {
-          "hash": "7ce22bb16e0a34fcf8cb79c67a4307d490e407be1bf60bfbd10cf8e9a286495d",
+          "hash": "38106fab4afd800497c1df91409811eb14ca59c028c6321535c5ea90ed255679",
           "path": "site/src/content/docs/handbook/first-ten-minutes.md"
         },
         {
-          "hash": "97ecf7fa46a47e551a6e8a4da58b41b66efcda6d55707ffaa4951fdab821d2b2",
+          "hash": "21f1a339a42889ac0ebcb782e416118227781436042ebc560d6f408cfb8d6d3f",
           "path": "site/src/content/docs/handbook/history.md"
         },
         {
-          "hash": "bbd3b288fae20bb6ced72609c2fce1f8e7bfd33f7da74ac7ec2ec0412668644d",
+          "hash": "6701afee6a9eaea0778ec27e983df8dc338a8ad0fca4b0e6c2a5b2b3d91c1f13",
           "path": "site/src/content/docs/handbook/index.md"
         },
         {
-          "hash": "5e35ea460ece2a24239618ded401133d79b9841c0647f3e66c9409814ae0611a",
+          "hash": "75f8bde32f0a087c5a9d8aad1b79834d40bf6cdecac288a282d8e1b29e54d059",
           "path": "site/src/content/docs/handbook/input-modes.md"
         },
         {
-          "hash": "34c2c39caf110696b9492e72a2c85514a6209ac1918eac1979a3f2eab5375e4e",
+          "hash": "dff4a4bbbe5a9fbbf9b5cf55f5a7d8dde1161e1d3c7aa1c319ccdf7148ba8177",
           "path": "site/src/content/docs/handbook/intelligence/context-enrichment.md"
         },
         {
@@ -3943,11 +3947,11 @@
           "path": "site/src/content/docs/handbook/intelligence/memory-detectors.md"
         },
         {
-          "hash": "4846745c9e110581f41af4120d631057213ddf68a6dd8577827a66077b686716",
+          "hash": "5307cb39db456aa5b06efb132a40493d226e0a6489a223729d030f61e1d123f1",
           "path": "site/src/content/docs/handbook/intelligence/workflow-promotion.md"
         },
         {
-          "hash": "bf04165dfeea391184a3fa16d72670b4a47aec04d1eb03ce1ad64850ffb033dd",
+          "hash": "a5bb74936ce90a64d44082d451ca9ad63fbf17dbdf834b9099aeaceb2ad2e573",
           "path": "site/src/content/docs/handbook/keyboard-shortcuts.md"
         },
         {
@@ -3959,11 +3963,11 @@
           "path": "site/src/content/docs/handbook/memory.md"
         },
         {
-          "hash": "7cd66e6ca5a490eab4cc1d4f18c8d4ed791a84b6a6c9c01ce4c8bb4d45b8b1e3",
+          "hash": "d454964b3ddf92ff44f0bb20ffd6f3f179083eb599883035bd76559773d18bc8",
           "path": "site/src/content/docs/handbook/modes.md"
         },
         {
-          "hash": "66d8d26272ae6be3859e266b23e3eaee8e48e4aca71dead4da82b5e0497d016a",
+          "hash": "4c9a35ea6caa2d4350ba12f1c631eb96a758224d5f716e05dee32f450b3e38b1",
           "path": "site/src/content/docs/handbook/operations/known-limitations.md"
         },
         {
@@ -3975,19 +3979,19 @@
           "path": "site/src/content/docs/handbook/persistence.md"
         },
         {
-          "hash": "aac3f390367271612842914b4a197b7e4ca088152f6a7c780f1563a21dd3bd9e",
+          "hash": "e963b0c8ef1646e00dfa5acf44ea505a405a29f86af47e125c545c4f8608dc45",
           "path": "site/src/content/docs/handbook/plan-review.md"
         },
         {
-          "hash": "d8680fa67861f052b4835280f7794ca184a093c4d0aea523ae2c57a560f9850a",
+          "hash": "04c8251b5da573478475c9650385b0be17b8084e31ff1e3ac9565143d816a5b6",
           "path": "site/src/content/docs/handbook/planner-pipeline.md"
         },
         {
-          "hash": "bc1adc2f0a49440b38cf625737fe7d014f383555fe8154c10b92e301651d15a9",
+          "hash": "c3e0a549ca02d5d1b48ab41ebaeda39197d73cb639847c1479a1d1839c81d2a2",
           "path": "site/src/content/docs/handbook/risk-tiers.md"
         },
         {
-          "hash": "3b548bea0557fbf53c4d78e4767891bdad632cec7effb206952ef251efcf920a",
+          "hash": "f99c6129e52ad53a1e20b0ef39c668e4ec563b3e915d0eceae54a2e836037003",
           "path": "site/src/content/docs/handbook/settings.md"
         },
         {
@@ -3999,11 +4003,11 @@
           "path": "site/src/content/docs/handbook/terminal.md"
         },
         {
-          "hash": "4b85ec14a88994446324c7071da542dfee270c2addb58c2a8166495d86f3e620",
+          "hash": "26ec3f3fd91cfa38df80bffa11b1b01643b724447e3994f02a08f0abb02021f6",
           "path": "site/src/content/docs/handbook/what-is-commandui.md"
         },
         {
-          "hash": "7c9e2f276f5ea4174d26da104f696530ac9b52356dc4c9348ecb7a80b1063d09",
+          "hash": "ffb3656615d18f10f67e2ed66b1231c2180254ee39af4afc045a02068d252289",
           "path": "site/src/content/docs/handbook/workflows.md"
         },
         {
@@ -4032,7 +4036,7 @@
         },
         {
           "constantOnly": true,
-          "hash": "d4e5e3e1d37ecd4ddf5eb44c3a3e0c19950009f8e5406c7d0e782a67a54089a6",
+          "hash": "801fb83df3974660609d8cb2c9707696608cbcf2b3e55a320681ab191c6b3c3f",
           "path": "site/src/site-config.ts"
         },
         {
@@ -5731,8 +5735,8 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "8ff616fec9b5d6ce3ab955f983e5d2b3925a460d",
-    "tracked": 427
+    "commit": "d5391dcff59e069ac3ca64f5f4c5e5e13d329209",
+    "tracked": 428
   },
   "landings": [
     {
