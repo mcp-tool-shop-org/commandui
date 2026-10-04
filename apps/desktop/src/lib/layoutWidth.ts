@@ -2,10 +2,9 @@
 export const NARROW_LAYOUT_PX = 960;
 
 /**
- * The shell's layout width. Text zoom paints the shell larger than its layout
- * box, and the two measurements disagree across engines. The smaller one is
- * the space the columns actually share. Zero means the box has not been laid
- * out yet.
+ * The shell's layout width. Zoom can make clientWidth and the border box
+ * disagree. The smaller positive one is the space the columns share.
+ * Zero means the box has not been laid out yet.
  */
 export function layoutWidth(layoutPx: number, visualPx: number): number {
   const layout = Number.isFinite(layoutPx) && layoutPx > 0 ? layoutPx : 0;

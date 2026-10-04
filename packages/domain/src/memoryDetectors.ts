@@ -146,7 +146,7 @@ export function detectPreferredCwd(input: DetectorInput): MemorySuggestion[] {
       scope: input.projectRoot ? "project" : "global",
       projectRoot: input.projectRoot,
       kind: "preferred_cwd",
-      label: `You've worked in ${cwd} across ${data.count} executions in ${data.sessions.size} sessions`,
+      label: `You've worked in ${cwd} across ${data.count} commands in ${data.sessions.size} sessions`,
       proposedKey: "workspace",
       proposedValue: cwd,
       confidence: scaledConfidence(data.count, CWD_MIN_EXECUTIONS, 0.7, 0.95),

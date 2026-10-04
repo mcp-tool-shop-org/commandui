@@ -99,9 +99,12 @@ describe("contrast tokens", () => {
   });
 
   it("scales with zoom instead of clipping, and honours contrast themes and reduced motion", () => {
-    expect(css).toMatch(/zoom:\s*var\(--ui-scale,\s*1\)/);
-    expect(css).toMatch(/height:\s*calc\(100% \/ var\(--ui-scale,\s*1\)\)/);
-    expect(css).toMatch(/width:\s*calc\(100% \/ var\(--ui-scale,\s*1\)\)/);
+    const shell = css.slice(css.indexOf(".app-shell {"), css.indexOf(".topbar {"));
+    expect(shell).toMatch(/zoom:\s*var\(--ui-scale,\s*1\)/);
+    expect(shell).toMatch(/width:\s*100%/);
+    expect(shell).toMatch(/height:\s*100%/);
+    expect(shell).not.toContain("calc(100% / var(--ui-scale");
+    expect(css).not.toContain("calc(100% / var(--ui-scale");
     expect(css).toContain("@media (forced-colors: active)");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce\)[\s\S]*animation:\s*none/);

@@ -74,7 +74,7 @@ describe("normalizeCommand", () => {
 // --- detectPreferredCwd ---
 
 describe("detectPreferredCwd", () => {
-  it("suggests when threshold met (5 executions, 2 sessions)", () => {
+  it("suggests when threshold met (5 commands, 2 sessions)", () => {
     const history = [
       makeHistory({ id: "1", sessionId: "s1", cwd: "/proj", executedCommand: "ls" }),
       makeHistory({ id: "2", sessionId: "s1", cwd: "/proj", executedCommand: "ls" }),
@@ -87,6 +87,8 @@ describe("detectPreferredCwd", () => {
     expect(result[0]!.kind).toBe("preferred_cwd");
     expect(result[0]!.proposedValue).toBe("/proj");
     expect(result[0]!.derivedFromHistoryIds).toHaveLength(5);
+    expect(result[0]!.label).toBe("You've worked in /proj across 5 commands in 2 sessions");
+    expect(result[0]!.label).not.toMatch(/\bexecutions\b/);
   });
 
   it("skips when below execution threshold", () => {

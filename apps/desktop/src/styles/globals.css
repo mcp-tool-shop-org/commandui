@@ -132,13 +132,13 @@ select {
 .app-shell {
   display: flex;
   flex-direction: column;
-  /* zoom scales every fixed-px rule, including the terminal canvas.
-     The layout box is divided by the same factor so the zoomed shell
-     still fills the window and the panes scroll instead of clipping.
-     The container query below sees this layout width, not the window. */
+  /* zoom scales the text and the terminal. Current Chromium already
+     resolves this element's percentages against the window, so dividing
+     by the scale paints the app into the top-left quarter. The container
+     query below sees this box, not the monitor. */
   zoom: var(--ui-scale, 1);
-  width: calc(100% / var(--ui-scale, 1));
-  height: calc(100% / var(--ui-scale, 1));
+  width: 100%;
+  height: 100%;
   container-type: inline-size;
   container-name: commandui;
 }
@@ -1750,10 +1750,9 @@ button.primary {
 }
 
 /*
- * One column when the shell's layout box is under 960px. At 200% text size a
- * 1600px window is about 800px here, because zoom divides the layout box.
- * A viewport query still sees 1600px, so it would not reflow.
- * The layout-narrow class is the same rules, set from the measured width.
+ * One column when the shell is under 960px wide. The query sees the shell,
+ * not the monitor. The layout-narrow class is the same rules, set from the
+ * measured width.
  */
 @container commandui (max-width: 960px) {
   .main-layout {
