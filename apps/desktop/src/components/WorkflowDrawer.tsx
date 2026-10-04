@@ -1,4 +1,5 @@
 import type { Workflow, WorkflowRun, WorkflowStepRun } from "@commandui/domain";
+import { useModalDialog } from "../lib/useModalDialog";
 
 type Props = {
   isOpen: boolean;
@@ -79,14 +80,22 @@ export function WorkflowDrawer({
   onViewHistoryItem,
   loading = false,
 }: Props) {
+  const dialogRef = useModalDialog(isOpen, onClose);
   if (!isOpen) return null;
 
   return (
     <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-drawer" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="settings-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="workflow-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="drawer-header">
-          <strong>Workflows</strong>
-          <button type="button" onClick={onClose}>
+          <strong id="workflow-title">Workflows</strong>
+          <button type="button" data-autofocus onClick={onClose}>
             Close
           </button>
         </div>

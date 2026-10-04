@@ -250,6 +250,31 @@ select {
   min-width: 24px;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.output-blocks {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0 12px 12px;
+}
+
+.output-command {
+  font-family: ui-monospace, Consolas, monospace;
+}
+
 .result-output {
   margin: 0;
   max-height: 10rem;

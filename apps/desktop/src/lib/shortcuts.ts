@@ -97,7 +97,7 @@ export function isShellChord(event: KeyboardEvent): boolean {
 }
 
 /** Special keys that should work even in text input zones. */
-const SPECIAL_KEYS = new Set(["escape", "enter", "tab"]);
+const SPECIAL_KEYS = new Set(["escape", "enter", "tab", "f1"]);
 
 const NON_TEXT_INPUT_TYPES = new Set([
   "button",

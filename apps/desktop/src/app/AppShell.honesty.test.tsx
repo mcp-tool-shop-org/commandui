@@ -115,7 +115,7 @@ describe("Workstream 0 honesty", () => {
     const user = userEvent.setup();
     await renderReadyShell();
     await user.type(screen.getByPlaceholderText("Describe what you want to do…"), "list the files");
-    await user.click(screen.getByRole("button", { name: "Run" }));
+    await user.click(screen.getByRole("button", { name: "Draft plan" }));
 
     await waitFor(() => {
       const item = useHistoryStore.getState().items.find((entry) => entry.userInput === "list the files");
@@ -159,7 +159,7 @@ describe("Workstream 0 honesty", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete workflow" }));
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Delete this workflow?" })).not.toBeInTheDocument();
       expect(useWorkflowStore.getState().items.some((item) => item.id === "wf-undo")).toBe(false);
     });
     expect(screen.queryByText("Ship the notes")).not.toBeInTheDocument();
@@ -181,7 +181,7 @@ describe("Workstream 0 honesty", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Delete workflow" }));
     });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Delete this workflow?" })).not.toBeInTheDocument();
     expect(useWorkflowStore.getState().items.some((item) => item.id === "wf-undo")).toBe(false);
     expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
 
@@ -200,7 +200,7 @@ describe("Workstream 0 honesty", () => {
     expect(screen.getByRole("dialog", { name: "Delete this memory?" })).toBeInTheDocument();
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Delete this memory?" })).not.toBeInTheDocument();
     });
     expect(useMemoryStore.getState().items.some((item) => item.id === "mem-undo")).toBe(true);
     expect(screen.getByText(/editor/)).toBeInTheDocument();
@@ -208,7 +208,7 @@ describe("Workstream 0 honesty", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete memory" }));
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Delete this memory?" })).not.toBeInTheDocument();
       expect(useMemoryStore.getState().items.some((item) => item.id === "mem-undo")).toBe(false);
     });
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));

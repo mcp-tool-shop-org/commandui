@@ -18,8 +18,8 @@
     "@commandui/state": "workspace:*",
     "@commandui/ui": "workspace:*",
     "@tauri-apps/api": "^2.3.0",
-    "@xterm/xterm": "^5.5.0",
     "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zustand": "^5.0.3"
@@ -32,8 +32,10 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "axe-core": "^4.13.0",
     "jsdom": "^26.0.0",
     "vite": "^6.2.0",
-    "vitest": "^3.0.8"
+    "vitest": "^3.0.8",
+    "vitest-axe": "^0.1.0"
   }
 }

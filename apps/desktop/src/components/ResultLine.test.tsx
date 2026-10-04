@@ -49,6 +49,22 @@ describe("ResultLine", () => {
     expect(onAction.mock.calls.map((call) => call[0])).toEqual(["show-output", "ask-fix", "run-again"]);
   });
 
+  it("runs Ask how to fix it from the keyboard and does not announce the line itself", async () => {
+    const onAction = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ResultLine
+        result={describeResult({ phase: "failure", exitCode: 1, exitKnown: true })}
+        onAction={onAction}
+      />,
+    );
+    const ask = screen.getByRole("button", { name: "Ask how to fix it" });
+    expect(screen.getByTestId("result-line").querySelector("[role='status']")).toBeNull();
+    ask.focus();
+    await user.keyboard("{Enter}");
+    expect(onAction).toHaveBeenCalledWith("ask-fix");
+  });
+
   it("offers Ask for a sentence and Stop while a command runs", () => {
     const { rerender } = render(
       <ResultLine result={describeResult({ phase: "request" })} onAction={() => {}} />,

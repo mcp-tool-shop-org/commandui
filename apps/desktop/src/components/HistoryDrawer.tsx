@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { HistoryItem } from "@commandui/domain";
 import type { SessionSummary } from "@commandui/domain";
 import { historyStatusLabel } from "../lib/commandResult";
+import { useModalDialog } from "../lib/useModalDialog";
 
 type Props = {
   isOpen: boolean;
@@ -62,6 +63,8 @@ export function HistoryDrawer({
     }
   }, [initialExpandedId]);
 
+  const dialogRef = useModalDialog(isOpen, onClose);
+
   if (!isOpen) return null;
 
   // Determine which items to show based on session filter
@@ -86,9 +89,16 @@ export function HistoryDrawer({
 
   return (
     <div className="history-overlay" onClick={onClose}>
-      <div className="history-drawer" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="history-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="history-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="drawer-header">
-          <strong>History</strong>
+          <strong id="history-title">History</strong>
           <button type="button" onClick={onClose}>
             Close
           </button>
@@ -98,12 +108,15 @@ export function HistoryDrawer({
           <input
             className="history-search"
             type="text"
+            aria-label="Search history"
+            data-autofocus
             placeholder="Search history…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <select
             className="history-filter"
+            aria-label="Which session"
             value={sessionFilter}
             onChange={(e) => setSessionFilter(e.target.value)}
           >

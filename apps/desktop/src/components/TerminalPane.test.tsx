@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
 
 type KeyHandler = (event: KeyboardEvent) => boolean;
-const captured: { handler: KeyHandler | null } = { handler: null };
+const captured: { handler: KeyHandler | null; options: Record<string, unknown> | null } = {
+  handler: null,
+  options: null,
+};
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
@@ -10,6 +13,10 @@ vi.mock("@xterm/xterm", () => ({
     rows = 24;
     options: Record<string, unknown> = {};
     textarea = document.createElement("textarea");
+    constructor(options?: Record<string, unknown>) {
+      this.options = options ?? {};
+      captured.options = this.options;
+    }
     loadAddon() {}
     open() {}
     write() {}
@@ -45,6 +52,7 @@ function key(
 describe("TerminalPane custom key handler", () => {
   beforeEach(() => {
     captured.handler = null;
+    captured.options = null;
     globalThis.ResizeObserver ??= class {
       observe() {}
       unobserve() {}
@@ -55,6 +63,10 @@ describe("TerminalPane custom key handler", () => {
 
   it("registers a handler", () => {
     expect(captured.handler).toBeTypeOf("function");
+  });
+
+  it("turns on screen reader mode so typing, dictation, and paste stay in the terminal", () => {
+    expect(captured.options?.screenReaderMode).toBe(true);
   });
 
   it.each(["K", "X", "W", "k"])("returns the Ctrl+Shift+%s chord to the app", (letter) => {

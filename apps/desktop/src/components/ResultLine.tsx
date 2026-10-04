@@ -21,9 +21,7 @@ export function ResultLine({ result, outputOpen = false, outputText = "", onActi
   const text = resultText(result);
   return (
     <div className="result-line" data-cause={result.cause} data-testid="result-line">
-      <p className="result-line-text" role={result.announce ? "status" : undefined}>
-        {text}
-      </p>
+      <p className="result-line-text">{text}</p>
       {result.actions.length > 0 && (
         <div className="result-line-actions">
           {result.actions.map((action) => (

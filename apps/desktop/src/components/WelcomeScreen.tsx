@@ -30,7 +30,16 @@ export function WelcomeScreen({ onStart, showAtStartup, onShowAtStartupChange, p
   useEffect(() => {
     const inside = (node: EventTarget | null) =>
       node instanceof Node && dialogRef.current !== null && dialogRef.current.contains(node);
+    // A dialog rendered later (help, a confirm) is on top. This one yields so it
+    // does not close itself or pull focus out of that dialog.
+    const isTop = () => {
+      const root = dialogRef.current;
+      if (!root) return false;
+      const dialogs = document.querySelectorAll("[role='dialog'][aria-modal='true']");
+      return dialogs.length === 0 || dialogs[dialogs.length - 1] === root;
+    };
     const onKey = (e: KeyboardEvent) => {
+      if (!isTop()) return;
       const onCheckbox = e.target instanceof HTMLInputElement && e.target.type === "checkbox";
       if (e.key === "Escape" || (e.key === "Enter" && !onCheckbox)) {
         e.preventDefault();
@@ -45,6 +54,7 @@ export function WelcomeScreen({ onStart, showAtStartup, onShowAtStartupChange, p
       }
     };
     const onFocus = (e: FocusEvent) => {
+      if (!isTop()) return;
       if (!inside(e.target)) startRef.current?.focus();
     };
     startRef.current?.focus();

@@ -134,6 +134,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
 
       const term = new Terminal({
         cursorBlink: true,
+        screenReaderMode: true,
         fontSize: 14,
         fontFamily:
           "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",

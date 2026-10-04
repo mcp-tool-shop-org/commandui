@@ -75,9 +75,11 @@ import { PlanPanel, planCanRun } from "../components/PlanPanel";
 import { commandProblem, escapeForTerminal } from "../lib/displaySafe";
 import {
   askFixPrompt,
+  collapseRedraws,
   countOutputLines,
   describeResult,
   looksLikeRequest,
+  resultText,
 } from "../lib/commandResult";
 import type { CommandResult, ResultAction } from "../lib/commandResult";
 import type { PlanRunGate } from "../components/PlanPanel";
@@ -93,6 +95,9 @@ import { MemorySuggestions } from "../components/MemorySuggestions";
 import { MemoryDrawer } from "../components/MemoryDrawer";
 import { WorkflowDrawer } from "../components/WorkflowDrawer";
 import { WorkflowEditor } from "../components/WorkflowEditor";
+import { HelpDialog } from "../components/HelpDialog";
+import { OutputView } from "../components/OutputView";
+import type { OutputBlock } from "../components/OutputView";
 import { WorkflowRunBanner } from "../components/WorkflowRunBanner";
 import { isTauriRuntime } from "../lib/tauriInvoke";
 import { errorText, isNotFoundError, isSessionExitedError } from "../lib/commandError";
@@ -325,6 +330,10 @@ export function AppShell() {
   const undoTimerRef = useRef<number | null>(null);
   const [undoMessage, setUndoMessage] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [outputOpen, setOutputOpen] = useState(false);
+  const [outputBlocksBySession, setOutputBlocksBySession] = useState<Record<string, OutputBlock[]>>({});
+  const [liveMessage, setLiveMessage] = useState("");
   const [resultsBySession, setResultsBySession] = useState<Record<string, SessionResult>>({});
   const [requestOffers, setRequestOffers] = useState<Record<string, string>>({});
   const [workflowEditorData, setWorkflowEditorData] = useState<{
@@ -887,6 +896,17 @@ export function AppShell() {
           exitKnown,
         },
       }));
+      setOutputBlocksBySession((prev) => {
+        const list = prev[sessionId] ?? [];
+        const block: OutputBlock = {
+          id: event.executionId,
+          command,
+          headline: resultText(view),
+          output: collapseRedraws(output),
+        };
+        const without = list.filter((item) => item.id !== block.id);
+        return { ...prev, [sessionId]: [...without, block].slice(-40) };
+      });
     }
     setLastExecutionId(event.executionId);
 
@@ -1192,6 +1212,8 @@ export function AppShell() {
     memoryOpen: false,
     settingsOpen: false,
     paletteOpen: false,
+    helpOpen: false,
+    outputOpen: false,
     editorOpen: false,
     planOpen: false,
   });
@@ -1201,24 +1223,52 @@ export function AppShell() {
     memoryOpen,
     settingsOpen,
     paletteOpen,
+    helpOpen,
+    outputOpen,
     editorOpen: workflowEditorData !== null,
     planOpen: plan !== null,
   };
 
+  function setOverlay(name: "history" | "workflow" | "memory" | "settings" | "palette" | "help" | "output" | null) {
+    setHistoryOpen(name === "history");
+    setWorkflowOpen(name === "workflow");
+    setMemoryOpen(name === "memory");
+    setSettingsOpen(name === "settings");
+    setPaletteOpen(name === "palette");
+    setHelpOpen(name === "help");
+    setOutputOpen(name === "output");
+  }
+
+  function toggleOverlay(name: "history" | "workflow" | "memory" | "settings" | "palette" | "help" | "output") {
+    const overlay = overlayRef.current;
+    const open =
+      (name === "history" && overlay.historyOpen) ||
+      (name === "workflow" && overlay.workflowOpen) ||
+      (name === "memory" && overlay.memoryOpen) ||
+      (name === "settings" && overlay.settingsOpen) ||
+      (name === "palette" && overlay.paletteOpen) ||
+      (name === "help" && overlay.helpOpen) ||
+      (name === "output" && overlay.outputOpen);
+    setOverlay(open ? null : name);
+  }
+
   function closeAllOverlays() {
     const overlay = overlayRef.current;
     if (overlay.editorOpen) { setWorkflowEditorData(null); return; }
-    if (overlay.paletteOpen) { setPaletteOpen(false); return; }
-    if (overlay.historyOpen || overlay.workflowOpen || overlay.memoryOpen || overlay.settingsOpen) {
-      setHistoryOpen(false);
-      setWorkflowOpen(false);
-      setMemoryOpen(false);
-      setSettingsOpen(false);
+    if (
+      overlay.paletteOpen ||
+      overlay.helpOpen ||
+      overlay.outputOpen ||
+      overlay.historyOpen ||
+      overlay.workflowOpen ||
+      overlay.memoryOpen ||
+      overlay.settingsOpen
+    ) {
+      setOverlay(null);
       requestAnimationFrame(() => {
         restorePreviousZone();
         composerRef.current?.focus();
       });
-      return;
     }
     // Escape never rejects a plan. Reject stays on the plan's R key and its button.
   }
@@ -1239,22 +1289,28 @@ export function AppShell() {
 
   const shortcuts = useMemo<ShortcutDef[]>(() => {
     const defs: ShortcutDef[] = [
-      { id: "palette",       combo: "ctrl+k",       context: ["global"], action: () => setPaletteOpen(true) },
+      { id: "palette",       combo: "ctrl+k",       context: ["global"], action: () => setOverlay("palette") },
       // Ctrl+Shift variants: the only app chords that work while the terminal has focus
       // (plain Ctrl+<letter> goes to the shell there).
-      { id: "palette-term",  combo: "ctrl+shift+k", context: ["global"], action: () => setPaletteOpen(true) },
+      { id: "palette-term",  combo: "ctrl+shift+k", context: ["global"], action: () => setOverlay("palette") },
       { id: "focus-composer-term", combo: "ctrl+shift+j", context: ["global"], action: focusComposer },
       { id: "clear-terminal-term", combo: "ctrl+shift+l", context: ["global"], action: clearTerminalView },
       { id: "new-session-term", combo: "ctrl+shift+t", context: ["global"], action: handleCreateSession },
-      { id: "history-term",   combo: "ctrl+shift+h", context: ["global"], action: () => setHistoryOpen((v) => !v) },
-      { id: "memory-term",    combo: "ctrl+shift+m", context: ["global"], action: () => setMemoryOpen((v) => !v) },
+      { id: "history-term",   combo: "ctrl+shift+h", context: ["global"], action: () => toggleOverlay("history") },
+      { id: "memory-term",    combo: "ctrl+shift+m", context: ["global"], action: () => toggleOverlay("memory") },
       { id: "focus-composer", combo: "ctrl+j",       context: ["global"], action: focusComposer },
       { id: "clear-terminal", combo: "ctrl+l",       context: ["global"], action: clearTerminalView },
       { id: "new-session",   combo: "ctrl+t",        context: ["global"], action: handleCreateSession },
-      { id: "history",       combo: "ctrl+h",        context: ["global"], action: () => setHistoryOpen((v) => !v) },
-      { id: "workflows",     combo: "ctrl+shift+w",  context: ["global"], action: () => setWorkflowOpen((v) => !v) },
-      { id: "memory",        combo: "ctrl+m",        context: ["global"], action: () => setMemoryOpen((v) => !v) },
-      { id: "settings",      combo: "ctrl+,",        context: ["global"], action: () => setSettingsOpen((v) => !v) },
+      { id: "history",       combo: "ctrl+h",        context: ["global"], action: () => toggleOverlay("history") },
+      { id: "workflows",     combo: "ctrl+shift+w",  context: ["global"], action: () => toggleOverlay("workflow") },
+      { id: "memory",        combo: "ctrl+m",        context: ["global"], action: () => toggleOverlay("memory") },
+      { id: "settings",      combo: "ctrl+,",        context: ["global"], action: () => toggleOverlay("settings") },
+      { id: "help",          combo: "f1",           context: ["global"], action: () => toggleOverlay("help") },
+      { id: "output",        combo: "ctrl+shift+o", context: ["global"], action: () => toggleOverlay("output") },
+      { id: "toggle-mode",   combo: "ctrl+shift+a", context: ["global"], action: () => {
+        const mode = useComposerStore.getState().inputMode;
+        setInputMode(mode === "command" ? "ask" : "command");
+      } },
       { id: "escape",        combo: "escape",        context: ["global"], action: closeAllOverlays },
       // Plan shortcuts. Bare keys do not fire in text fields (see resolveShortcut).
       // Approve uses the edited textarea command, and handleApprovePlan applies canRun.
@@ -1313,10 +1369,12 @@ export function AppShell() {
       { id: "new-session",    label: "New Session",        shortcut: "Ctrl+T",       action: handleCreateSession },
       { id: "focus-composer",  label: "Focus Composer",    shortcut: "Ctrl+J",       action: focusComposer },
       { id: "clear-terminal",  label: "Clear Terminal",    shortcut: "Ctrl+L",       action: clearTerminalView },
-      { id: "open-history",    label: "Open History",      shortcut: "Ctrl+H",       action: () => setHistoryOpen(true) },
-      { id: "open-workflows",  label: "Open Workflows",   shortcut: "Ctrl+Shift+W", action: () => setWorkflowOpen(true) },
-      { id: "open-memory",     label: "Open Memory",      shortcut: "Ctrl+M",       action: () => setMemoryOpen(true) },
-      { id: "open-settings",   label: "Open Settings",    shortcut: "Ctrl+,",       action: () => setSettingsOpen(true) },
+      { id: "open-history",    label: "Open History",      shortcut: "Ctrl+H",       action: () => setOverlay("history") },
+      { id: "open-workflows",  label: "Open Workflows",   shortcut: "Ctrl+Shift+W", action: () => setOverlay("workflow") },
+      { id: "open-memory",     label: "Open Memory",      shortcut: "Ctrl+M",       action: () => setOverlay("memory") },
+      { id: "open-settings",   label: "Open Settings",    shortcut: "Ctrl+,",       action: () => setOverlay("settings") },
+      { id: "open-output",     label: "Open Output",      shortcut: "Ctrl+Shift+O", action: () => setOverlay("output") },
+      { id: "open-help",       label: "Keyboard help",    shortcut: "F1",           action: () => setOverlay("help") },
       ...sessions.map((s, i) => ({
         id: `switch-session-${s.id}`,
         label: `Switch to ${s.label ?? `Session ${i + 1}`}`,
@@ -2318,8 +2376,7 @@ export function AppShell() {
     );
     if (!entry) return;
     const [workflowId] = entry;
-    setHistoryOpen(false);
-    setWorkflowOpen(true);
+    setOverlay("workflow");
     setExpandedRunWorkflowId(workflowId);
   }
 
@@ -2331,10 +2388,9 @@ export function AppShell() {
   }
 
   function handleViewHistoryItemFromRun(historyItemId: string) {
-    setWorkflowOpen(false);
     setExpandedRunWorkflowId(null);
     setHistoryInitialExpandedId(historyItemId);
-    setHistoryOpen(true);
+    setOverlay("history");
   }
 
   // --- Memory handlers ---
@@ -2625,10 +2681,46 @@ export function AppShell() {
       ? simplifyText(plan.plan.explanation)
       : plan?.plan.explanation ?? "";
 
+  const planIntent = plan?.plan.userIntent ?? "";
+  const hasPlan = plan !== null;
+  const finishedText = shownResult && shownResult.announce ? resultText(shownResult) : "";
+  const resultToken = finishedText
+    ? `${activeSessionId ?? ""}:${finishedText}:${sessionResult?.exitKnown ?? ""}:${sessionResult?.exitCode ?? ""}`
+    : "";
+
+  useEffect(() => {
+    if (!hasPlan) return;
+    const text = `A plan is ready to review. ${planIntent}`;
+    const timer = window.setTimeout(() => {
+      setLiveMessage((prev) => (prev === text ? `${text}\u200b` : text));
+    }, 150);
+    document.querySelector<HTMLElement>(".plan-panel")?.focus();
+    return () => window.clearTimeout(timer);
+  }, [hasPlan, planNonce, planIntent]);
+
+  useEffect(() => {
+    if (!finishedText) return;
+    const text = finishedText;
+    const timer = window.setTimeout(() => {
+      setLiveMessage((prev) => (prev === text ? `${text}\u200b` : text));
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [resultToken, finishedText]);
+
   // --- Boot failure screen ---
   if (bootPhase === "failed") {
     return (
       <div className="app-shell">
+        <header className="topbar">
+          <div>
+            <strong>CommandUI</strong>
+          </div>
+          <div className="topbar-actions">
+            <button type="button" onClick={() => toggleOverlay("help")}>
+              Keyboard help
+            </button>
+          </div>
+        </header>
         <div className="boot-failure">
           <h2>CommandUI could not start</h2>
           <p className="muted">{bootError}</p>
@@ -2649,6 +2741,7 @@ export function AppShell() {
             If this keeps happening, choose Retry. If CommandUI still does not start, choose Copy Error and include that text when you ask for help.
           </p>
         </div>
+        {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
       </div>
     );
   }
@@ -2657,6 +2750,10 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <header className="topbar">
+        <h1 className="visually-hidden">CommandUI</h1>
+        <div className="visually-hidden" role="status" aria-atomic="true">
+          {liveMessage}
+        </div>
         <div>
           <strong>CommandUI</strong>
           <span className="muted"> v{APP_VERSION}</span>
@@ -2667,17 +2764,23 @@ export function AppShell() {
           )}
         </div>
         <div className="topbar-actions">
-          <button type="button" onClick={() => setHistoryOpen(true)}>
+          <button type="button" onClick={() => setOverlay("output")}>
+            Output
+          </button>
+          <button type="button" onClick={() => setOverlay("history")}>
             History
           </button>
-          <button type="button" onClick={() => setWorkflowOpen(true)}>
+          <button type="button" onClick={() => setOverlay("workflow")}>
             Workflows
           </button>
-          <button type="button" onClick={() => setMemoryOpen(true)}>
+          <button type="button" onClick={() => setOverlay("memory")}>
             Memory
           </button>
-          <button type="button" onClick={() => setSettingsOpen(true)}>
+          <button type="button" onClick={() => setOverlay("settings")}>
             Settings
+          </button>
+          <button type="button" onClick={() => toggleOverlay("help")}>
+            Keyboard help
           </button>
         </div>
       </header>
@@ -2689,16 +2792,6 @@ export function AppShell() {
             Undo
           </button>
         </div>
-      )}
-
-      {pendingConfirm && (
-        <ConfirmDialog
-          title={pendingConfirm.title}
-          message={pendingConfirm.message}
-          confirmLabel={pendingConfirm.confirmLabel}
-          onConfirm={pendingConfirm.onConfirm}
-          onCancel={cancelConfirm}
-        />
       )}
 
       {browserPreview && (
@@ -2804,7 +2897,7 @@ export function AppShell() {
           )}
 
           {error && (
-            <div className="error-box">
+            <div className="error-box" role="alert">
               <span>{error}</span>
               <button type="button" onClick={() => setError(null)}>
                 Dismiss
@@ -2913,7 +3006,6 @@ export function AppShell() {
         onClose={() => {
           setHistoryOpen(false);
           setHistoryInitialExpandedId(null);
-          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         onRerun={handleRerunHistoryItem}
         onReopenPlan={handleReopenPlan}
@@ -2932,7 +3024,6 @@ export function AppShell() {
         onClose={() => {
           setWorkflowOpen(false);
           setExpandedRunWorkflowId(null);
-          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         onRun={handleRunWorkflow}
         onDelete={handleDeleteWorkflow}
@@ -2948,7 +3039,6 @@ export function AppShell() {
         items={memoryItems}
         onClose={() => {
           setMemoryOpen(false);
-          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         onDelete={handleDeleteMemory}
         loading={bootPhase === "booting"}
@@ -2958,10 +3048,6 @@ export function AppShell() {
         isOpen={paletteOpen}
         onClose={() => {
           setPaletteOpen(false);
-          requestAnimationFrame(() => {
-            restorePreviousZone();
-            composerRef.current?.focus();
-          });
         }}
         actions={paletteActions}
       />
@@ -2970,7 +3056,6 @@ export function AppShell() {
         isOpen={settingsOpen}
         onClose={() => {
           setSettingsOpen(false);
-          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         productMode={productMode}
         onProductModeChange={setProductMode}
@@ -2984,6 +3069,14 @@ export function AppShell() {
         onConfirmMediumRiskChange={setConfirmMediumRisk}
       />
 
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
+      {outputOpen && (
+        <OutputView
+          blocks={activeSessionId ? (outputBlocksBySession[activeSessionId] ?? []) : []}
+          onClose={() => setOutputOpen(false)}
+        />
+      )}
+
       {workflowEditorData && (
         <WorkflowEditor
           initialLabel={workflowEditorData.label}
@@ -2991,6 +3084,16 @@ export function AppShell() {
           projectRoot={workflowEditorData.projectRoot}
           onConfirm={handleWorkflowEditorConfirm}
           onCancel={handleWorkflowEditorCancel}
+        />
+      )}
+
+      {pendingConfirm && (
+        <ConfirmDialog
+          title={pendingConfirm.title}
+          message={pendingConfirm.message}
+          confirmLabel={pendingConfirm.confirmLabel}
+          onConfirm={pendingConfirm.onConfirm}
+          onCancel={cancelConfirm}
         />
       )}
     </div>

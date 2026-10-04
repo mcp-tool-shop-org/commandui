@@ -23,7 +23,14 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCance
   useEffect(() => {
     const inside = (node: EventTarget | null) =>
       node instanceof Node && dialogRef.current !== null && dialogRef.current.contains(node);
+    const isTop = () => {
+      const root = dialogRef.current;
+      if (!root) return false;
+      const dialogs = document.querySelectorAll("[role='dialog'][aria-modal='true']");
+      return dialogs.length === 0 || dialogs[dialogs.length - 1] === root;
+    };
     const onKey = (e: KeyboardEvent) => {
+      if (!isTop()) return;
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();

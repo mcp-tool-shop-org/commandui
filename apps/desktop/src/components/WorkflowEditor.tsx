@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useModalDialog } from "../lib/useModalDialog";
 
 type Props = {
   initialLabel: string;
@@ -18,6 +19,7 @@ export function WorkflowEditor({
   const [steps, setSteps] = useState<string[]>(initialSteps);
   const nameRef = useRef<HTMLInputElement>(null);
   const submittedRef = useRef(false);
+  const dialogRef = useModalDialog(true, onCancel);
 
   useEffect(() => {
     requestAnimationFrame(() => nameRef.current?.focus());
@@ -73,21 +75,27 @@ export function WorkflowEditor({
   return (
     <div className="palette-overlay" onClick={onCancel}>
       <div
+        ref={dialogRef}
         className="palette-panel workflow-editor-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="workflow-editor-title"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         <div className="workflow-editor-header">
-          <h3>Edit Workflow</h3>
+          <h3 id="workflow-editor-title">Edit Workflow</h3>
         </div>
 
         <div className="workflow-editor-body">
           <div className="workflow-editor-field">
-            <label>Name</label>
+            <label htmlFor="workflow-name">Name</label>
             <input
+              id="workflow-name"
               ref={nameRef}
               className="workflow-editor-name"
               type="text"
+              data-autofocus
               value={label}
               onChange={(e) => setLabel(e.target.value)}
             />
@@ -101,6 +109,7 @@ export function WorkflowEditor({
                 <input
                   className="workflow-editor-step-input"
                   type="text"
+                  aria-label={`Step ${i + 1}`}
                   value={step}
                   onChange={(e) => updateStep(i, e.target.value)}
                 />
@@ -109,7 +118,7 @@ export function WorkflowEditor({
                   disabled={i === 0}
                   onClick={() => moveUp(i)}
                   title="Move up"
-                  aria-label="Move up"
+                  aria-label={`Move step ${i + 1} up`}
                 >
                   <span aria-hidden="true">↑</span>
                 </button>
@@ -118,7 +127,7 @@ export function WorkflowEditor({
                   disabled={i === steps.length - 1}
                   onClick={() => moveDown(i)}
                   title="Move down"
-                  aria-label="Move down"
+                  aria-label={`Move step ${i + 1} down`}
                 >
                   <span aria-hidden="true">↓</span>
                 </button>
@@ -128,7 +137,7 @@ export function WorkflowEditor({
                   disabled={steps.length <= 1}
                   onClick={() => removeStep(i)}
                   title="Remove step"
-                  aria-label="Remove step"
+                  aria-label={`Remove step ${i + 1}`}
                 >
                   <span aria-hidden="true">×</span>
                 </button>

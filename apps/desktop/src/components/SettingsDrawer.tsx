@@ -1,3 +1,5 @@
+import { useModalDialog } from "../lib/useModalDialog";
+
 type Props = {
   isOpen: boolean;
   onClose: () => void;
@@ -27,22 +29,31 @@ export function SettingsDrawer({
   confirmMediumRisk,
   onConfirmMediumRiskChange,
 }: Props) {
+  const dialogRef = useModalDialog(isOpen, onClose);
   if (!isOpen) return null;
 
   return (
     <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-drawer" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="settings-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="drawer-header">
-          <strong>Settings</strong>
-          <button type="button" onClick={onClose}>
+          <strong id="settings-title">Settings</strong>
+          <button type="button" data-autofocus onClick={onClose}>
             Close
           </button>
         </div>
 
         <div className="settings-section">
           <div className="settings-row">
-            <label>Mode</label>
+            <label htmlFor="settings-mode">Mode</label>
             <select
+              id="settings-mode"
               value={productMode}
               onChange={(e) =>
                 onProductModeChange(e.target.value as "classic" | "guided")
@@ -54,8 +65,9 @@ export function SettingsDrawer({
           </div>
 
           <div className="settings-row">
-            <label>Default Input Mode</label>
+            <label htmlFor="settings-input-mode">Default Input Mode</label>
             <select
+              id="settings-input-mode"
               value={defaultInputMode}
               onChange={(e) =>
                 onDefaultInputModeChange(e.target.value as "command" | "ask")

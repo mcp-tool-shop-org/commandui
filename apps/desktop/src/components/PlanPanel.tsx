@@ -181,6 +181,7 @@ export function PlanPanel({
       ref={panelRef}
       className="plan-panel"
       tabIndex={0}
+      aria-label="Command plan"
       onFocus={() => setFocusZone("plan")}
     >
       {plannerSource === "mock" && (
@@ -225,8 +226,11 @@ export function PlanPanel({
       </div>
 
       <div className="plan-edit-block">
-        <span className="plan-label">Command</span>
+        <label className="plan-label" htmlFor="plan-command">
+          Command
+        </label>
         <textarea
+          id="plan-command"
           ref={commandTextareaRef}
           className="plan-command-input"
           value={editedCommand}
