@@ -4,9 +4,27 @@ import { FitAddon } from "@xterm/addon-fit";
 import { useFocusStore } from "@commandui/state";
 import "@xterm/xterm/css/xterm.css";
 
+/**
+ * xterm answers the queries inside a replayed stream (cursor position, device attributes,
+ * mode and colour reports) through onData. Those replies, recognised by their shape, must
+ * not reach the live shell. Nothing a user types looks like one: arrow keys, Alt chords and
+ * pastes are never a whole CSI ... R / c / y / n / t report or an OSC/DCS string.
+ */
+const AUTO_REPLY =
+  // eslint-disable-next-line no-control-regex
+  /^(?:\x1b\[\??\d+;\d+R|\x1b\[[?>=]?[\d;]*c|\x1b\[\??\d+;\d+\$y|\x1b\[[0-3]n|\x1b\[\?\d+(?:;\d+)*n|\x1b\[\d+(?:;\d+)+t|\x1b\][\s\S]*(?:\x07|\x1b\\)|\x1bP[\s\S]*\x1b\\)$/;
+
+export function isTerminalAutoReply(data: string): boolean {
+  return AUTO_REPLY.test(data);
+}
+
 export type TerminalPaneHandle = {
   write: (data: string) => void;
-  /** Clear the terminal and write a stored stream with onData muted (queries in it get no reply). */
+  /**
+   * Clear the terminal and write a stored stream. Only xterm's own replies to queries in the
+   * stream are muted; keystrokes still reach the shell. A newer replay (or clear) cancels an
+   * older one, and live output that arrives meanwhile is held until the replay has parsed.
+   */
   replay: (chunks: readonly string[]) => void;
   clear: () => void;
   focus: () => void;
@@ -40,6 +58,10 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
     // True while a stored stream is replayed: xterm answers the queries inside it (cursor
     // position, device attributes) through onData, and those replies must not reach the shell.
     const replayingRef = useRef(false);
+    // Bumped by every replay, clear and session change: a replay whose number is stale stops.
+    const replayGenRef = useRef(0);
+    // Live output that arrives while a replay is still parsing; written after it.
+    const pendingLiveRef = useRef<string[]>([]);
 
     const setFocusZone = useFocusStore((s) => s.setFocusZone);
 
@@ -56,30 +78,49 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
       ref,
       () => ({
         write(data: string) {
+          if (replayingRef.current) {
+            pendingLiveRef.current.push(data);
+            return;
+          }
           terminalRef.current?.write(data);
         },
         replay(chunks: readonly string[]) {
           const term = terminalRef.current;
           if (!term) return;
-          term.clear();
-          term.reset();
-          if (chunks.length === 0) return;
+          const gen = ++replayGenRef.current;
+          const stream = chunks.slice();
+          pendingLiveRef.current = [];
           replayingRef.current = true;
-          const last = chunks.length - 1;
-          chunks.forEach((chunk, i) => {
-            if (i === last) {
-              // The callback runs once xterm has parsed (and answered) everything before it.
-              term.write(chunk, () => {
-                replayingRef.current = false;
-              });
-            } else {
-              term.write(chunk);
+          const finish = () => {
+            if (gen !== replayGenRef.current) return;
+            replayingRef.current = false;
+            const held = pendingLiveRef.current;
+            pendingLiveRef.current = [];
+            for (const data of held) term.write(data);
+          };
+          const writeFrom = (i: number) => {
+            if (gen !== replayGenRef.current) return;
+            if (i >= stream.length) {
+              finish();
+              return;
             }
+            term.write(stream[i], () => writeFrom(i + 1));
+          };
+          // The empty write is a barrier: its callback runs after every write an older
+          // replay already queued, so none of that output can land after the reset.
+          term.write("", () => {
+            if (gen !== replayGenRef.current) return;
+            term.clear();
+            term.reset();
+            writeFrom(0);
           });
         },
         clear() {
           const term = terminalRef.current;
           if (!term) return;
+          replayGenRef.current++;
+          replayingRef.current = false;
+          pendingLiveRef.current = [];
           term.clear();
           term.reset();
         },
@@ -139,7 +180,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
       });
 
       const disposable = term.onData((data) => {
-        if (replayingRef.current) return;
+        if (replayingRef.current && isTerminalAutoReply(data)) return;
         onDataRef.current?.(data);
       });
 
@@ -175,6 +216,9 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
     useEffect(() => {
       const term = terminalRef.current;
       if (!term) return;
+      replayGenRef.current++;
+      replayingRef.current = false;
+      pendingLiveRef.current = [];
       term.clear();
       term.reset();
     }, [sessionId]);

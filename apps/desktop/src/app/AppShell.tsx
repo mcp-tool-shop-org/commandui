@@ -89,13 +89,21 @@ import { WorkflowRunBanner } from "../components/WorkflowRunBanner";
 import { isTauriRuntime } from "../lib/tauriInvoke";
 import { onMockEvent } from "../lib/mockBridge";
 import { waitForTerminalStatus } from "./workflowStepWait";
+import {
+  busyMessageFor,
+  composerDisabled,
+  execIsBusy,
+  execIsForeground,
+  execOwnsBadge,
+} from "./execState";
 
 const APP_VERSION = "1.0.2";
-const SESSION_BUSY_MESSAGE = "A command is already running in this session.";
-const SESSION_USER_RUNNING_MESSAGE =
-  "A command you typed is still running in this session. Wait for the prompt or interrupt it.";
 /** How long a session may stay in "booting" before the UI offers Resync and Close. */
 const BOOT_STALL_MS = 20_000;
+/** How long a typed command (or an interrupt) may hold a session before the UI explains the way out. */
+const FOREGROUND_STUCK_MS = 30_000;
+/** Cadence of the one timer that watches every session's boot and foreground time. */
+const SESSION_WATCH_MS = 2_000;
 const SESSION_NOT_READY_MESSAGE =
   "The terminal is not ready yet. Wait for the session to finish starting, or resync it.";
 const SESSION_EXITED_MESSAGE =
@@ -117,9 +125,17 @@ const TERMINAL_REPLAY_TRUNCATED_MARKER = "\x1b[0m[earlier output truncated]\r\n"
 const TERMINAL_REPLAY_ALT_PREFIX = "\x1b[0m\x1b[?1049h";
 const ALT_SCREEN_SEQ = /\x1b\[\?(?:1049|1047|47)([hl])/g;
 const ALT_SCREEN_TAIL_CHARS = 12;
-/** A hand-typed command is running ("userRunning"); widened here until the shared type carries it. */
-type ExecState = SessionExecState | "userRunning";
-const EXEC_STATES: readonly ExecState[] = [
+/**
+ * Private modes the shell sets (DECSET/DECRST) that a truncated or cleared replay would lose,
+ * and xterm's reset would turn off: cursor keys, mouse and focus reporting, bracketed paste.
+ * The alternate screen has its own tracking above.
+ */
+const TRACKED_PRIVATE_MODES: ReadonlySet<number> = new Set([
+  1, 9, 1000, 1001, 1002, 1003, 1004, 1005, 1006, 1015, 1016, 2004,
+]);
+const PRIVATE_MODE_SEQ = /\x1b\[\?([\d;]+)([hl])/g;
+const PRIVATE_MODE_TAIL_CHARS = 32;
+const EXEC_STATES: readonly SessionExecState[] = [
   "booting",
   "ready",
   "running",
@@ -130,16 +146,34 @@ const EXEC_STATES: readonly ExecState[] = [
 const APP_NOTES_MAX = 200;
 const APP_NOTES_SHOWN = 6;
 
-function execStateOf(sessionId: string): ExecState | undefined {
-  return useExecutionStore.getState().sessionExecStates[sessionId] as ExecState | undefined;
-}
-
-function execIsBusy(exec: ExecState | undefined): boolean {
-  return exec === "running" || exec === "interrupting" || exec === "userRunning";
+function execStateOf(sessionId: string): SessionExecState | undefined {
+  return useExecutionStore.getState().sessionExecStates[sessionId];
 }
 
 function busyMessage(sessionId: string): string {
-  return execStateOf(sessionId) === "userRunning" ? SESSION_USER_RUNNING_MESSAGE : SESSION_BUSY_MESSAGE;
+  return busyMessageFor(execStateOf(sessionId));
+}
+
+/** Fold the DECSET/DECRST sequences in `text` into the last-known value per tracked mode. */
+function privateModesAfter(previous: Record<number, boolean>, text: string): Record<number, boolean> {
+  let next = previous;
+  for (const match of text.matchAll(PRIVATE_MODE_SEQ)) {
+    for (const part of match[1].split(";")) {
+      const mode = Number(part);
+      if (!TRACKED_PRIVATE_MODES.has(mode)) continue;
+      if (next === previous) next = { ...previous };
+      next[mode] = match[2] === "h";
+    }
+  }
+  return next;
+}
+
+/** The sequences that put a freshly reset xterm back into the modes the shell last set. */
+function privateModePrefix(modes: Record<number, boolean> | undefined): string {
+  if (!modes) return "";
+  return Object.entries(modes)
+    .map(([mode, on]) => `\x1b[?${mode}${on ? "h" : "l"}`)
+    .join("");
 }
 
 function isReplayPrefix(entry: string): boolean {
@@ -232,7 +266,7 @@ export function AppShell() {
   // shell's absolute cursor moves know nothing about them and would overwrite them.
   const [appNotes, setAppNotes] = useState<Record<string, string[]>>({});
   const [stalledBoot, setStalledBoot] = useState<ReadonlySet<string>>(new Set());
-  const [bootTimerNonce, setBootTimerNonce] = useState(0);
+  const [stuckForeground, setStuckForeground] = useState<ReadonlySet<string>>(new Set());
 
   const [browserPreview] = useState(() => !isTauriRuntime());
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -273,6 +307,14 @@ export function AppShell() {
   const replayCharsRef = useRef<Record<string, number>>({});
   const altScreenRef = useRef<Record<string, boolean>>({});
   const altTailRef = useRef<Record<string, string>>({});
+  const privateModesRef = useRef<Record<string, Record<number, boolean>>>({});
+  const privateModeTailRef = useRef<Record<string, string>>({});
+  /** When each session entered its current exec state; stall timers read this, not a per-tab timer. */
+  const execSinceRef = useRef<Record<string, { state: SessionExecState; at: number }>>({});
+  const stalledBootRef = useRef<ReadonlySet<string>>(new Set());
+  const stuckForegroundRef = useRef<ReadonlySet<string>>(new Set());
+  /** Per-session tail of the keystroke chain, so writes reach the shell in the order typed. */
+  const terminalWriteChainRef = useRef<Record<string, Promise<unknown>>>({});
   /** Suggestion ids the database already holds as accepted or dismissed (when the API reports them). */
   const settledSuggestionIdsRef = useRef(new Set<string>());
 
@@ -282,6 +324,8 @@ export function AppShell() {
 
   // Keep ref in sync with state (for use in event callbacks)
   activeSessionIdRef.current = activeSessionId;
+  stalledBootRef.current = stalledBoot;
+  stuckForegroundRef.current = stuckForeground;
 
   // A new plan (including a reopen of the same command) starts unconfirmed.
   if (planNonceSeenRef.current !== planNonce || plan === null) {
@@ -292,10 +336,12 @@ export function AppShell() {
   const session =
     sessions.find((s) => s.id === activeSessionId) ?? null;
 
-  const activeExecState: ExecState =
-    ((activeSessionId ? sessionExecStates[activeSessionId] : undefined) as ExecState | undefined) ?? "booting";
+  const activeExecState: SessionExecState =
+    (activeSessionId ? sessionExecStates[activeSessionId] : undefined) ?? "booting";
   const activeBootStalled =
     activeExecState === "booting" && activeSessionId !== null && stalledBoot.has(activeSessionId);
+  const activeForegroundStuck =
+    execIsForeground(activeExecState) && activeSessionId !== null && stuckForeground.has(activeSessionId);
   const activeNotes = activeSessionId ? appNotes[activeSessionId] ?? [] : [];
   const activeExited = activeSessionId ? exitedSessions.has(activeSessionId) : false;
   const activeBadge: SessionBadgeStatus =
@@ -393,12 +439,22 @@ export function AppShell() {
     delete replayCharsRef.current[sessionId];
     delete altScreenRef.current[sessionId];
     delete altTailRef.current[sessionId];
+    delete privateModesRef.current[sessionId];
+    delete privateModeTailRef.current[sessionId];
+    delete execSinceRef.current[sessionId];
+    delete terminalWriteChainRef.current[sessionId];
     setAppNotes((prev) => {
       if (!(sessionId in prev)) return prev;
       const { [sessionId]: _removed, ...rest } = prev;
       return rest;
     });
     setStalledBoot((prev) => {
+      if (!prev.has(sessionId)) return prev;
+      const next = new Set(prev);
+      next.delete(sessionId);
+      return next;
+    });
+    setStuckForeground((prev) => {
       if (!prev.has(sessionId)) return prev;
       const next = new Set(prev);
       next.delete(sessionId);
@@ -424,8 +480,18 @@ export function AppShell() {
   }
 
   /** Every exec-state change goes through here so the I/O failure latch and exit tracking stay in step. */
-  function noteExecState(sessionId: string, state: ExecState) {
-    setSessionExecState(sessionId, state as SessionExecState);
+  function noteExecState(sessionId: string, state: SessionExecState) {
+    setSessionExecState(sessionId, state);
+    // The badge belongs to a command the app started. When the shell reports anything else
+    // (a prompt, a hand-typed command, a desync) and no execute call is in flight, a leftover
+    // "running" badge is stale and would refuse every submit.
+    if (
+      !execOwnsBadge(state) &&
+      sessionBadgeRef.current[sessionId] === "running" &&
+      !inFlightExecRef.current.has(sessionId)
+    ) {
+      publishBadge(sessionId, "idle");
+    }
     if (state !== "booting") {
       setStalledBoot((prev) => {
         if (!prev.has(sessionId)) return prev;
@@ -453,8 +519,9 @@ export function AppShell() {
     }
     const exec = EXEC_STATES.find((e) => e === s.execState);
     if (exec) {
-      setSessionExecState(s.id, exec as SessionExecState);
-      if (execIsBusy(exec)) publishBadge(s.id, "running");
+      setSessionExecState(s.id, exec);
+      // Only a command the app started has a badge; a hand-typed one has no finish event to lower it.
+      if (execOwnsBadge(exec)) publishBadge(s.id, "running");
     } else if (!browserPreview) {
       // State unknown (older backend): offer Resync rather than a dead composer.
       setSessionExecState(s.id, "desynced");
@@ -486,9 +553,14 @@ export function AppShell() {
         }
         const exec = EXEC_STATES.find((e) => e === (s as SessionSummaryWithState).execState);
         const current = execStateOf(s.id);
-        if (exec && exec !== "booting" && (current === undefined || current === "booting")) {
-          setSessionExecState(s.id, exec as SessionExecState);
-          if (execIsBusy(exec)) publishBadge(s.id, "running");
+        if (!exec || exec === "booting") continue;
+        if (current === undefined || current === "booting") {
+          setSessionExecState(s.id, exec);
+          if (execOwnsBadge(exec)) publishBadge(s.id, "running");
+        } else if (current === "userRunning" && exec !== "userRunning") {
+          // A typed command that ended while no event reached this window (a webview
+          // reload adopts the state, and the prompt that follows may predate the listeners).
+          noteExecState(s.id, exec);
         }
       }
     } catch {
@@ -497,8 +569,8 @@ export function AppShell() {
   }
 
   function appendTerminalLine(sessionId: string, line: string) {
-    const clutter = useSettingsStore.getState().reducedClutter;
-    if (clutter && (line.startsWith("[exec:") || line.startsWith("[active]"))) return;
+    // Every PTY chunk is kept and shown: a read of real output can begin with any text, so
+    // reduced clutter must never drop one. (It applies to the app's own annotations.)
 
     // Store in background buffer: chunks are coalesced and the total is capped by size.
     const buffers = terminalLinesBySessionRef.current;
@@ -515,6 +587,13 @@ export function AppShell() {
     const scanned = tail + line;
     altScreenRef.current[sessionId] = altScreenAfter(altScreenRef.current[sessionId] ?? false, scanned);
     altTailRef.current[sessionId] = scanned.slice(-ALT_SCREEN_TAIL_CHARS);
+    // Same for the private modes xterm's reset would drop (bracketed paste, cursor keys, mouse).
+    const modeScanned = (privateModeTailRef.current[sessionId] ?? "") + line;
+    privateModesRef.current[sessionId] = privateModesAfter(
+      privateModesRef.current[sessionId] ?? {},
+      modeScanned,
+    );
+    privateModeTailRef.current[sessionId] = modeScanned.slice(-PRIVATE_MODE_TAIL_CHARS);
 
     let total = (replayCharsRef.current[sessionId] ?? 0) + line.length;
     if (total > TERMINAL_REPLAY_MAX_CHARS) {
@@ -825,25 +904,66 @@ export function AppShell() {
     const pane = terminalPaneRef.current;
     if (!pane) return;
 
-    // replay() clears the terminal and mutes xterm's onData while the stored stream is
-    // parsed, so a stale terminal query in it cannot type a reply into the live shell.
-    pane.replay(terminalLinesBySessionRef.current[activeSessionId] ?? []);
+    // replay() clears the terminal and drops xterm's own query replies while the stored
+    // stream is parsed, so a stale terminal query in it cannot type a reply into the live
+    // shell. The modes the shell last set come first: a truncated or cleared buffer no
+    // longer carries the sequences that set them, and reset turned them off.
+    const stored = terminalLinesBySessionRef.current[activeSessionId] ?? [];
+    const modes = privateModePrefix(privateModesRef.current[activeSessionId]);
+    pane.replay(modes ? [modes, ...stored] : stored);
+    // A hand-typed command may have ended while this tab was in the background.
+    if (execStateOf(activeSessionId) === "userRunning") void reconcileSessionStates();
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- A session stuck in "booting" gets a way out ---
+  // --- Note when every session entered its exec state ---
+  // Stall detection reads these times, so switching tabs never restarts a wait.
   useEffect(() => {
-    if (browserPreview || !activeSessionId || activeExited) return;
-    if (activeExecState !== "booting") return;
-    const sid = activeSessionId;
-    const timer = setTimeout(() => {
-      void reconcileSessionStates().then(() => {
-        if ((execStateOf(sid) ?? "booting") !== "booting") return;
-        setStalledBoot((prev) => (prev.has(sid) ? prev : new Set(prev).add(sid)));
-      });
-    }, BOOT_STALL_MS);
-    return () => clearTimeout(timer);
+    const since = execSinceRef.current;
+    const live = new Set<string>();
+    for (const s of sessions) {
+      live.add(s.id);
+      const state = sessionExecStates[s.id] ?? "booting";
+      const known = since[s.id];
+      if (known?.state === state) continue;
+      since[s.id] = { state, at: Date.now() };
+      if (!execIsForeground(state)) {
+        setStuckForeground((prev) => {
+          if (!prev.has(s.id)) return prev;
+          const next = new Set(prev);
+          next.delete(s.id);
+          return next;
+        });
+      }
+    }
+    for (const sid of Object.keys(since)) {
+      if (!live.has(sid)) delete since[sid];
+    }
+  }, [sessions, sessionExecStates]);
+
+  // --- One watcher over every session: a stalled boot or a long typed command gets a way out ---
+  useEffect(() => {
+    if (browserPreview) return;
+    const timer = setInterval(() => {
+      const now = Date.now();
+      for (const [sid, { state, at }] of Object.entries(execSinceRef.current)) {
+        if (exitedSessionsRef.current.has(sid)) continue;
+        if (state === "booting" && now - at >= BOOT_STALL_MS && !stalledBootRef.current.has(sid)) {
+          void reconcileSessionStates().then(() => {
+            if ((execStateOf(sid) ?? "booting") !== "booting") return;
+            setStalledBoot((prev) => (prev.has(sid) ? prev : new Set(prev).add(sid)));
+          });
+        } else if (
+          execIsForeground(state) &&
+          now - at >= FOREGROUND_STUCK_MS &&
+          !stuckForegroundRef.current.has(sid)
+        ) {
+          setStuckForeground((prev) => (prev.has(sid) ? prev : new Set(prev).add(sid)));
+        }
+      }
+    }, SESSION_WATCH_MS);
+    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [browserPreview, activeSessionId, activeExecState, activeExited, bootTimerNonce]);
+  }, [browserPreview]);
 
   // --- Settings persistence ---
   useEffect(() => {
@@ -1001,14 +1121,14 @@ export function AppShell() {
     if ((activeExecState === "desynced" || activeBootStalled) && !activeExited) {
       actions.push({ id: "resync", label: "Resync Terminal", action: handleResync });
     }
-    if (activeBootStalled && activeSessionId) {
+    if ((activeBootStalled || activeForegroundStuck) && activeSessionId) {
       const stuckId = activeSessionId;
       actions.push({ id: "close-stuck-session", label: "Close Session", action: () => requestCloseSession(stuckId) });
     }
 
     return actions;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions, isRunning, activeExecState, activeExited, activeBootStalled]);
+  }, [sessions, isRunning, activeExecState, activeExited, activeBootStalled, activeForegroundStuck]);
 
   // execute() rejected before any ExecutionFinished event: close the row out.
   function failRejectedExecution(historyId: string, err: unknown) {
@@ -1420,7 +1540,14 @@ export function AppShell() {
   const handleTerminalData = useCallback(
     (data: string) => {
       if (!activeSessionId) return;
-      reportTerminalIoFailure(activeSessionId, writeTerminal({ sessionId: activeSessionId, data }), "write");
+      // terminal_write is an async command, so concurrent invokes can reach the shell out
+      // of order. Each write starts only after the previous one for this session settled.
+      const chain = terminalWriteChainRef.current;
+      const send = (chain[activeSessionId] ?? Promise.resolve())
+        .catch(() => undefined)
+        .then(() => writeTerminal({ sessionId: activeSessionId, data }));
+      chain[activeSessionId] = send;
+      reportTerminalIoFailure(activeSessionId, send, "write");
     },
     [activeSessionId],
   );
@@ -1437,10 +1564,15 @@ export function AppShell() {
   async function handleInterrupt() {
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId || !sessionIsRunning(sessionId)) return;
+    // Already interrupting: a second press has nothing to add and the backend would refuse it.
+    if (execStateOf(sessionId) === "interrupting") return;
     try {
       await interruptTerminal({ sessionId });
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      // The command ended between the press and the call: nothing left to interrupt.
+      if (/no command is currently running/i.test(msg)) return;
+      setError(msg);
     }
   }
 
@@ -1454,7 +1586,8 @@ export function AppShell() {
       next.delete(activeSessionId);
       return next;
     });
-    setBootTimerNonce((n) => n + 1);
+    const known = execSinceRef.current[activeSessionId];
+    if (known) execSinceRef.current[activeSessionId] = { state: known.state, at: Date.now() };
     try {
       await resyncTerminal({ sessionId: activeSessionId });
     } catch (e: unknown) {
@@ -2299,6 +2432,21 @@ export function AppShell() {
             </div>
           )}
 
+          {activeForegroundStuck && !activeExited && activeSessionId && (
+            <div className="desync-banner" role="status">
+              <span>
+                {activeExecState === "interrupting"
+                  ? "The interrupt has not ended the command."
+                  : "A command you typed has held this session for a while."}{" "}
+                A nested shell, ssh session or REPL stays open until you type exit in the terminal.
+                Resync is not offered here because it would type into that program.
+              </span>
+              <button type="button" onClick={() => requestCloseSession(activeSessionId)}>
+                Close Session
+              </button>
+            </div>
+          )}
+
           <WorkflowRunBanner />
 
           {bootPhase === "booting" && (
@@ -2355,7 +2503,7 @@ export function AppShell() {
             busy={composerBusy}
             isRunning={isRunning}
             onInterrupt={handleInterrupt}
-            disabled={activeExecState !== "ready" || activeExited}
+            disabled={composerDisabled(activeExecState, activeExited)}
             disabledReason={
               activeExited
                 ? "Shell exited — open a new session."
