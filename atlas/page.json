@@ -10,7 +10,7 @@
   ],
   "breaks": [
     {
-      "doors": 2,
+      "doors": 1,
       "importedBy": [
         "api-contract",
         "desktop",
@@ -22,7 +22,7 @@
       "partLabel": "domain"
     },
     {
-      "doors": 4,
+      "doors": 3,
       "importedBy": [
         "console",
         "desktop"
@@ -33,7 +33,7 @@
       "partLabel": "runtime-core"
     },
     {
-      "doors": 4,
+      "doors": 3,
       "importedBy": [
         "console",
         "desktop"
@@ -44,7 +44,7 @@
       "partLabel": "runtime-planner"
     },
     {
-      "doors": 2,
+      "doors": 1,
       "importedBy": [
         "desktop",
         "state"
@@ -55,7 +55,7 @@
       "partLabel": "api-contract"
     },
     {
-      "doors": 3,
+      "doors": 2,
       "importedBy": [
         "desktop"
       ],
@@ -65,7 +65,7 @@
       "partLabel": "runtime-persistence"
     },
     {
-      "doors": 2,
+      "doors": 1,
       "importedBy": [
         "desktop"
       ],
@@ -75,42 +75,81 @@
       "partLabel": "state"
     },
     {
-      "doors": 3,
-      "importedBy": [],
-      "importedByTests": [],
-      "kind": "part",
-      "name": "desktop",
-      "partLabel": "desktop"
-    },
-    {
       "doors": 2,
       "importedBy": [],
       "importedByTests": [],
       "kind": "part",
       "name": "console",
       "partLabel": "console"
+    },
+    {
+      "doors": 2,
+      "importedBy": [],
+      "importedByTests": [],
+      "kind": "part",
+      "name": "desktop",
+      "partLabel": "desktop"
     }
   ],
   "changes": {
     "fileCounts": {
-      "added": 2,
-      "changed": 5,
+      "added": 24,
+      "changed": 32,
       "moved": 0,
-      "parts": 1,
-      "removed": 0
+      "parts": 10,
+      "removed": 7
     },
     "items": [
       {
+        "kind": "door",
+        "sentence": "CI's push trigger now also names `codecov.yml`.",
+        "subjects": [
+          ".github/workflows/ci.yml"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "CI no longer runs apps/desktop/src/ and apps/desktop/vite.config.ts.",
+        "subjects": [
+          ".github/workflows/ci.yml",
+          "apps/desktop/src/",
+          "apps/desktop/vite.config.ts"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "Release Desktop no longer runs apps/desktop/src-tauri/build.rs, apps/desktop/src/ and apps/desktop/vite.config.ts.",
+        "subjects": [
+          ".github/workflows/release-desktop.yml",
+          "apps/desktop/src-tauri/build.rs",
+          "apps/desktop/src/",
+          "apps/desktop/vite.config.ts"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "And 2 more changes to doors.",
+        "subjects": []
+      },
+      {
+        "kind": "landing",
+        "sentence": "README.md is now read by apps/desktop/src/lib/mockBridge.test.ts.",
+        "subjects": [
+          "README.md",
+          "apps/desktop/src/lib/mockBridge.test.ts"
+        ]
+      },
+      {
         "kind": "counts",
-        "sentence": "Nothing structural changed since 2026-10-04; 2 files added and 5 changed content.",
+        "sentence": "24 files added, 7 removed and 32 changed content, across 10 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "ae587f870048fb49365b2c0cfafdb3c0fda9c8cd",
-      "generatedAt": "2026-10-04T23:41:42.617Z"
+      "commit": "4929659ade8cf852c00d97a640c044a7026c907e",
+      "generatedAt": "2026-10-05T00:01:25.099Z"
     },
-    "unchanged": true
+    "unchanged": false
   },
   "changesTogether": [
     {
@@ -194,9 +233,9 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 7 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "4929659ade8cf852c00d97a640c044a7026c907e",
+  "commit": "a733e62be3ee41ac5445f4e7848328518fe86ffd",
   "defaultBranch": "main",
-  "derived": "16 parts, mostly TypeScript (119 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
+  "derived": "16 parts, mostly TypeScript (134 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. commandui-console is a command built from apps/console (nothing ships it). commandui-desktop is a desktop app built from apps/desktop/src-tauri (nothing ships it).",
   "doors": [
     {
       "checks": [
@@ -228,7 +267,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 103
+          "files": 13
         },
         {
           "boundary": "domain",
@@ -282,8 +321,6 @@
         "apps/desktop/src-tauri/src/events/tauri_sink.rs",
         "apps/desktop/src-tauri/src/navigation.rs",
         "apps/desktop/src-tauri/src/state.rs",
-        "apps/desktop/src/",
-        "apps/desktop/vite.config.ts",
         "crates/runtime-core/src/errors.rs",
         "crates/runtime-core/src/events.rs",
         "crates/runtime-core/src/lib.rs",
@@ -311,100 +348,15 @@
         "packages/domain/src/workflowPersist.test.ts",
         "packages/state/src/index.test.ts"
       ],
-      "runsCount": 43,
-      "runsMore": 126,
-      "sends": [],
+      "runsCount": 41,
+      "runsMore": 38,
+      "sends": [
+        "uploads coverage to Codecov"
+      ],
       "stages": [],
       "triggers": [
         "on a pull request",
-        "on a push to main touching 18 paths",
-        "or by hand"
-      ]
-    },
-    {
-      "builds": [
-        "apps/desktop/src-tauri/src/main.rs"
-      ],
-      "checks": [
-        "apps/desktop/src-tauri/src/lib.rs"
-      ],
-      "checksCount": 1,
-      "checksMore": 0,
-      "file": ".github/workflows/release-desktop.yml",
-      "held": [
-        {
-          "checks": [],
-          "checksMore": 0,
-          "lead": "on a release event",
-          "runs": [
-            "packaging/check-release-version.mjs"
-          ],
-          "runsMore": 0,
-          "when": "on a release event"
-        }
-      ],
-      "id": ".github/workflows/release-desktop.yml",
-      "landings": [
-        "apps/desktop/src-tauri/gen/schemas/"
-      ],
-      "name": "Release Desktop",
-      "pushes": false,
-      "reach": [
-        {
-          "boundary": "desktop",
-          "depth": 0,
-          "files": 115
-        },
-        {
-          "boundary": "packaging",
-          "depth": 0,
-          "files": 2
-        },
-        {
-          "boundary": "api-contract",
-          "depth": 1,
-          "files": 12
-        },
-        {
-          "boundary": "domain",
-          "depth": 1,
-          "files": 8
-        },
-        {
-          "boundary": "state",
-          "depth": 1,
-          "files": 2
-        },
-        {
-          "boundary": "runtime-core",
-          "depth": 2,
-          "files": 6
-        },
-        {
-          "boundary": "runtime-persistence",
-          "depth": 2,
-          "files": 6
-        },
-        {
-          "boundary": "runtime-planner",
-          "depth": 2,
-          "files": 8
-        }
-      ],
-      "runs": [
-        "packaging/pack-msix.ps1",
-        "apps/desktop/src-tauri/build.rs",
-        "apps/desktop/src/",
-        "apps/desktop/vite.config.ts"
-      ],
-      "runsCount": 4,
-      "runsMore": 1,
-      "sends": [
-        "builds apps/desktop/src-tauri/src/main.rs into MSI and NSIS installers and an MSIX package, and uploads them to the release, on a release event"
-      ],
-      "stages": [],
-      "triggers": [
-        "when a release is published",
+        "on a push to main touching 19 paths",
         "or by hand"
       ]
     },
@@ -441,7 +393,50 @@
       ]
     },
     {
+      "checks": [],
+      "checksCount": 0,
+      "checksMore": 0,
+      "file": ".github/workflows/release-desktop.yml",
+      "held": [
+        {
+          "checks": [],
+          "checksMore": 0,
+          "lead": "on a release event",
+          "runs": [
+            "packaging/check-release-version.mjs"
+          ],
+          "runsMore": 0,
+          "when": "on a release event"
+        }
+      ],
+      "id": ".github/workflows/release-desktop.yml",
+      "landings": [],
+      "name": "Release Desktop",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "packaging",
+          "depth": 0,
+          "files": 2
+        }
+      ],
+      "runs": [
+        "packaging/pack-msix.ps1"
+      ],
+      "runsCount": 1,
+      "runsMore": 0,
+      "sends": [
+        "uploads dist/**/*.exe, dist/**/*.msi and dist/**/*.msix to the release, on a release event"
+      ],
+      "stages": [],
+      "triggers": [
+        "when a release is published",
+        "or by hand"
+      ]
+    },
+    {
       "app": "desktop",
+      "builtFrom": "apps/desktop/src-tauri",
       "checks": [],
       "checksCount": 0,
       "checksMore": 0,
@@ -480,7 +475,8 @@
       "runsMore": 0,
       "sends": [],
       "stages": [],
-      "triggers": []
+      "triggers": [],
+      "unshipped": true
     },
     {
       "builtFrom": "apps/console",
@@ -590,12 +586,12 @@
       ]
     }
   ],
-  "generatedAt": "2026-10-05T00:01:25.099Z",
+  "generatedAt": "2026-10-05T00:41:59.507Z",
   "limits": [
-    "1 import could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository.",
+    "130 imports could not be resolved: `apps/desktop/e2e/large-text.browser.ts` imports `@playwright/test`, which is not declared; `apps/desktop/playwright.config.ts` imports `@playwright/test`, which is not declared; `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `@testing-library/react`, which is not declared; and 127 more.",
     "2 writes and 3 reads use paths built at run time and are not named here.",
-    "2 writes and 1 read go to a path their caller passes, not to this repository.",
     "3 writes go to a temporary directory, not to this repository.",
+    "2 writes go to a path their caller passes, not to this repository.",
     "Statistics confidence is low: fewer than 25 source files reach 10 revisions in the window."
   ],
   "mainDoor": ".github/workflows/ci.yml",
@@ -626,23 +622,29 @@
   ],
   "repo": "mcp-tool-shop-org/commandui",
   "sequences": [],
-  "startDoor": ".github/workflows/ci.yml",
+  "startDoor": "apps/desktop/src-tauri/Cargo.toml#commandui-desktop",
   "startHere": [
-    ".github/workflows/ci.yml",
-    "packages/api-contract/src/errors.ts"
+    "apps/desktop/src-tauri/src/main.rs",
+    "apps/desktop/src-tauri/src/lib.rs",
+    "apps/desktop/src-tauri/src/commands/planner.rs",
+    "crates/runtime-planner/src/lib.rs",
+    "crates/runtime-planner/src/client.rs",
+    "crates/runtime-planner/src/prompt.rs",
+    "crates/runtime-planner/src/types.rs"
   ],
+  "startReason": "This path follows commandui-desktop (a desktop app built from apps/desktop/src-tauri, which nothing ships) from its entry, since CI runs only tests, scripts that import no code here and checks.",
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 74,
+  "testFiles": 88,
   "testedBy": {
-    "api-contract": 11,
+    "api-contract": 20,
     "console": 7,
-    "desktop": 38,
-    "domain": 10,
+    "desktop": 52,
+    "domain": 19,
     "runtime-core": 9,
     "runtime-persistence": 6,
     "runtime-planner": 7,
-    "state": 9,
+    "state": 14,
     "ui": 0
   },
   "testedInside": [
@@ -671,7 +673,8 @@
   "untestedNote": [
     "console is tested only by the unit tests in its own files.",
     "runtime-persistence is tested only by the unit tests in its own files.",
-    "runtime-planner is tested only by the unit tests in its own files."
+    "runtime-planner is tested only by the unit tests in its own files.",
+    "48 test files run in no workflow: apps/desktop/src/app/AppShell.honesty.test.tsx, apps/desktop/src/app/AppShell.result.test.tsx, apps/desktop/src/app/AppShell.runtime.test.tsx and 45 more."
   ],
   "written": 1
 }

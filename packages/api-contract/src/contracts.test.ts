@@ -1,4 +1,5 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
+import * as api from "./index";
 import type {
   PlannerContext,
   PlannerGeneratePlanRequest,
@@ -10,6 +11,10 @@ import type {
 // The enforcement is the `tsc --noEmit` typecheck step (pnpm typecheck).
 
 describe("API Contract shapes", () => {
+  it("loads the barrel, which re-exports types and no runtime values", () => {
+    expect(Object.keys(api)).toEqual([]);
+  });
+
   it("PlannerGeneratePlanRequest keeps its required keys and unions", () => {
     expectTypeOf<PlannerGeneratePlanRequest>().toHaveProperty("sessionId");
     expectTypeOf<PlannerGeneratePlanRequest>().toHaveProperty("userIntent");

@@ -121,8 +121,21 @@ import {
   execIsForeground,
   execOwnsBadge,
 } from "./execState";
+import {
+  APP_NOTES_SHOWN,
+  APP_VERSION,
+  EXEC_STATES,
+  SESSION_EXITED_MESSAGE,
+  SESSION_NOT_READY_MESSAGE,
+  SESSION_WATCH_MS,
+  bootStallDue,
+  capNotes,
+  detectOS,
+  foregroundStuckDue,
+  simplifyText,
+} from "./sessionWatch";
+import { appendReplayChunk, privateModePrefix, type ReplaySession } from "./terminalReplay";
 
-const APP_VERSION = "1.0.2";
 /** How long a delete can be undone, in milliseconds. */
 const UNDO_MS = 10_000;
 
@@ -148,53 +161,7 @@ type UndoRequest = {
   restore: () => void;
   commit: () => void;
 };
-/** How long a session may stay in "booting" before the UI offers Resync and Close. */
-const BOOT_STALL_MS = 20_000;
-/** How long a typed command (or an interrupt) may hold a session before the UI explains the way out. */
-const FOREGROUND_STUCK_MS = 30_000;
-/** Cadence of the one timer that watches every session's boot and foreground time. */
-const SESSION_WATCH_MS = 2_000;
-const SESSION_NOT_READY_MESSAGE =
-  "The terminal is not ready yet. Wait for the session to finish starting, or resync it.";
-const SESSION_EXITED_MESSAGE =
-  "The shell in this session has exited. Open a new session to continue.";
-/**
- * Per-session replay buffer cap, in characters (not entries: a PTY read can be 4 KB, so
- * an entry cap let one session hold tens of MB). xterm keeps its own scrollback.
- */
-const TERMINAL_REPLAY_MAX_CHARS = 600_000;
-/** Chunks are merged up to this size so a flood of tiny reads stays a few entries. */
-const TERMINAL_REPLAY_CHUNK_CHARS = 16_000;
-/** SGR reset, then a marker: truncation can cut mid-escape and mid-line, so start clean. */
-const TERMINAL_REPLAY_TRUNCATED_MARKER = "\x1b[0m[earlier output truncated]\r\n";
-/**
- * Truncation of a session that is inside a full-screen app (alternate screen) must not
- * start the replay on the main screen, or the app's cursor-addressed frames land on the
- * shell's scrollback. Replay re-enters the alternate screen first.
- */
-const TERMINAL_REPLAY_ALT_PREFIX = "\x1b[0m\x1b[?1049h";
-const ALT_SCREEN_SEQ = /\x1b\[\?(?:1049|1047|47)([hl])/g;
-const ALT_SCREEN_TAIL_CHARS = 12;
-/**
- * Private modes the shell sets (DECSET/DECRST) that a truncated or cleared replay would lose,
- * and xterm's reset would turn off: cursor keys, mouse and focus reporting, bracketed paste.
- * The alternate screen has its own tracking above.
- */
-const TRACKED_PRIVATE_MODES: ReadonlySet<number> = new Set([
-  1, 9, 1000, 1001, 1002, 1003, 1004, 1005, 1006, 1015, 1016, 2004,
-]);
-const PRIVATE_MODE_SEQ = /\x1b\[\?([\d;]+)([hl])/g;
-const PRIVATE_MODE_TAIL_CHARS = 32;
-const EXEC_STATES: readonly SessionExecState[] = [
-  "booting",
-  "ready",
-  "running",
-  "interrupting",
-  "desynced",
-  "userRunning",
-];
-const APP_NOTES_MAX = 200;
-const APP_NOTES_SHOWN = 6;
+
 
 function execStateOf(sessionId: string): SessionExecState | undefined {
   return useExecutionStore.getState().sessionExecStates[sessionId];
@@ -204,53 +171,9 @@ function busyMessage(sessionId: string): string {
   return busyMessageFor(execStateOf(sessionId));
 }
 
-/** Fold the DECSET/DECRST sequences in `text` into the last-known value per tracked mode. */
-function privateModesAfter(previous: Record<number, boolean>, text: string): Record<number, boolean> {
-  let next = previous;
-  for (const match of text.matchAll(PRIVATE_MODE_SEQ)) {
-    for (const part of match[1].split(";")) {
-      const mode = Number(part);
-      if (!TRACKED_PRIVATE_MODES.has(mode)) continue;
-      if (next === previous) next = { ...previous };
-      next[mode] = match[2] === "h";
-    }
-  }
-  return next;
-}
-
-/** The sequences that put a freshly reset xterm back into the modes the shell last set. */
-function privateModePrefix(modes: Record<number, boolean> | undefined): string {
-  if (!modes) return "";
-  return Object.entries(modes)
-    .map(([mode, on]) => `\x1b[?${mode}${on ? "h" : "l"}`)
-    .join("");
-}
-
-function isReplayPrefix(entry: string): boolean {
-  return entry === TERMINAL_REPLAY_TRUNCATED_MARKER || entry === TERMINAL_REPLAY_ALT_PREFIX;
-}
-
-function altScreenAfter(previous: boolean, text: string): boolean {
-  let state = previous;
-  for (const match of text.matchAll(ALT_SCREEN_SEQ)) state = match[1] === "h";
-  return state;
-}
-
 type SessionSummaryWithState = SessionSummary & { execState?: string | null };
 
 type SessionBadgeStatus = "idle" | "running" | "success" | "failure";
-
-function simplifyText(text: string): string {
-  const first = text.split(/[.!?]\s/)[0];
-  return first + (first.endsWith(".") ? "" : ".");
-}
-
-function detectOS(): "windows" | "macos" | "linux" {
-  const p = navigator.platform.toLowerCase();
-  if (p.includes("win")) return "windows";
-  if (p.includes("mac")) return "macos";
-  return "linux";
-}
 
 export function AppShell() {
   // --- Stores ---
@@ -614,7 +537,7 @@ export function AppShell() {
     if (line.length === 0) return;
     setAppNotes((prev) => {
       const list = [...(prev[sessionId] ?? []), line];
-      return { ...prev, [sessionId]: list.length > APP_NOTES_MAX ? list.slice(-APP_NOTES_MAX) : list };
+      return { ...prev, [sessionId]: capNotes(list) };
     });
   }
 
@@ -655,61 +578,23 @@ export function AppShell() {
     }
     // Every PTY chunk is kept and shown: a read of real output can begin with any text, so
     // reduced clutter must never drop one. (It applies to the app's own annotations.)
-
-    // Store in background buffer: chunks are coalesced and the total is capped by size.
     const buffers = terminalLinesBySessionRef.current;
-    const buffer = buffers[sessionId] ?? (buffers[sessionId] = []);
-    const last = buffer.length - 1;
-    if (last >= 0 && buffer[last].length < TERMINAL_REPLAY_CHUNK_CHARS && !isReplayPrefix(buffer[last])) {
-      buffer[last] += line;
-    } else {
-      buffer.push(line);
-    }
-    // Track whether the app is in the alternate screen (vim, less, htop), scanning a short
-    // tail too so a sequence split across two reads is still seen.
-    const tail = altTailRef.current[sessionId] ?? "";
-    const scanned = tail + line;
-    altScreenRef.current[sessionId] = altScreenAfter(altScreenRef.current[sessionId] ?? false, scanned);
-    altTailRef.current[sessionId] = scanned.slice(-ALT_SCREEN_TAIL_CHARS);
-    // Same for the private modes xterm's reset would drop (bracketed paste, cursor keys, mouse).
-    const modeScanned = (privateModeTailRef.current[sessionId] ?? "") + line;
-    privateModesRef.current[sessionId] = privateModesAfter(
-      privateModesRef.current[sessionId] ?? {},
-      modeScanned,
-    );
-    privateModeTailRef.current[sessionId] = modeScanned.slice(-PRIVATE_MODE_TAIL_CHARS);
+    const current: ReplaySession = {
+      buffer: buffers[sessionId] ?? [],
+      chars: replayCharsRef.current[sessionId] ?? 0,
+      altScreen: altScreenRef.current[sessionId] ?? false,
+      altTail: altTailRef.current[sessionId] ?? "",
+      privateModes: privateModesRef.current[sessionId] ?? {},
+      privateModeTail: privateModeTailRef.current[sessionId] ?? "",
+    };
+    const next = appendReplayChunk(current, line);
+    buffers[sessionId] = next.buffer;
+    replayCharsRef.current[sessionId] = next.chars;
+    altScreenRef.current[sessionId] = next.altScreen;
+    altTailRef.current[sessionId] = next.altTail;
+    privateModesRef.current[sessionId] = next.privateModes;
+    privateModeTailRef.current[sessionId] = next.privateModeTail;
 
-    let total = (replayCharsRef.current[sessionId] ?? 0) + line.length;
-    if (total > TERMINAL_REPLAY_MAX_CHARS) {
-      // Drop whole chunks from the front.
-      while (buffer.length > 1 && total > TERMINAL_REPLAY_MAX_CHARS) {
-        total -= buffer[0].length;
-        buffer.shift();
-      }
-      const first = buffer[0];
-      if (altScreenRef.current[sessionId]) {
-        // Mid full-screen app: a main-screen marker or a line cut would replay the app's
-        // cursor-addressed frames onto the shell screen. Re-enter the alternate screen
-        // instead and let the app's next frames repaint it.
-        if (first !== undefined && first !== TERMINAL_REPLAY_ALT_PREFIX) {
-          buffer.unshift(TERMINAL_REPLAY_ALT_PREFIX);
-          total += TERMINAL_REPLAY_ALT_PREFIX.length;
-        }
-      } else if (first !== undefined && first !== TERMINAL_REPLAY_TRUNCATED_MARKER) {
-        // Cut the first kept chunk at a line boundary so replay never starts inside an
-        // escape sequence or a line.
-        const nl = first.indexOf("\n");
-        if (nl >= 0) {
-          total -= nl + 1;
-          buffer[0] = first.slice(nl + 1);
-        }
-        buffer.unshift(TERMINAL_REPLAY_TRUNCATED_MARKER);
-        total += TERMINAL_REPLAY_TRUNCATED_MARKER.length;
-      }
-    }
-    replayCharsRef.current[sessionId] = total;
-
-    // Write to terminal if this is the active session
     if (sessionId === activeSessionIdRef.current) {
       terminalPaneRef.current?.write(line);
     }
@@ -1109,7 +994,7 @@ export function AppShell() {
       const now = Date.now();
       for (const [sid, { state, at }] of Object.entries(execSinceRef.current)) {
         if (exitedSessionsRef.current.has(sid)) continue;
-        if (state === "booting" && now - at >= BOOT_STALL_MS && !stalledBootRef.current.has(sid)) {
+        if (state === "booting" && bootStallDue(now - at, stalledBootRef.current.has(sid))) {
           void reconcileSessionStates()
             .then(() => {
               if ((execStateOf(sid) ?? "booting") !== "booting") return;
@@ -1122,8 +1007,7 @@ export function AppShell() {
             });
         } else if (
           execIsForeground(state) &&
-          now - at >= FOREGROUND_STUCK_MS &&
-          !stuckForegroundRef.current.has(sid)
+          foregroundStuckDue(now - at, stuckForegroundRef.current.has(sid))
         ) {
           setStuckForeground((prev) => (prev.has(sid) ? prev : new Set(prev).add(sid)));
         }

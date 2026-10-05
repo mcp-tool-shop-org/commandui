@@ -32,6 +32,7 @@ on:
       - 'site/package-lock.json'
       - 'site/astro.config.mjs'
       - 'atlas/**'
+      - 'codecov.yml'
   # `check-and-test` is a REQUIRED status check on main, but no workflow in
   # this repo had a pull_request trigger -- so the job ran on push, never on a
   # PR head, and every pull request was unmergeable by construction with no
@@ -86,6 +87,12 @@ jobs:
         uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master 2026-10-01
         with:
           toolchain: stable
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@861a07ce7084f55488e375df125cdc99bba60eb7
+        with:
+          tool: cargo-llvm-cov
 
       - name: Cache Cargo registry and target
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -99,10 +106,13 @@ jobs:
       - name: Install zsh for the live shell tests
         run: sudo apt-get install -y zsh
 
-      - name: Cargo test (crates)
+      # Same tests as before, run under cargo-llvm-cov for the Codecov rust flag.
+      - name: Cargo test with coverage (crates)
         env:
           COMMANDUI_REQUIRE_SHELLS: bash,zsh
-        run: cargo test -p commandui-runtime-core -p commandui-runtime-persistence -p commandui-runtime-planner -p commandui-console -p commandui-desktop
+        run: |
+          mkdir -p coverage
+          cargo llvm-cov --lcov --output-path coverage/rust.lcov --remap-path-prefix             -p commandui-runtime-core -p commandui-runtime-persistence -p commandui-runtime-planner             -p commandui-console -p commandui-desktop
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -112,8 +122,28 @@ jobs:
       - name: pnpm typecheck
         run: pnpm typecheck
 
-      - name: pnpm test
-        run: pnpm test
+      - name: pnpm test with coverage
+        run: pnpm test:coverage
+
+      # Vitest writes lcov paths relative to each package; prefix them so
+      # Codecov can match files in a monorepo with many src/index.ts.
+      - name: Merge TypeScript coverage
+        run: |
+          : > coverage/typescript.lcov
+          for f in apps/*/coverage/lcov.info packages/*/coverage/lcov.info; do
+            [ -f "$f" ] || continue
+            sed "s|^SF:|SF:${f%/coverage/lcov.info}/|" "$f" >> coverage/typescript.lcov
+          done
+          test -s coverage/typescript.lcov
+
+      - name: Save coverage for Codecov
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codecov-coverage
+          path: coverage/*.lcov
+          if-no-files-found: error
+          retention-days: 3
+          overwrite: true
 
       # jsdom has no layout, so the unit suite cannot see a zoomed shell.
       # This is Chromium on the built frontend, separate from pnpm test.
@@ -125,6 +155,44 @@ jobs:
 
       - name: pnpm audit
         run: pnpm audit --audit-level=high
+
+  # Uploads with OIDC (no token). Status gates live in codecov.yml: the rust
+  # flag and every patch must reach 90%; typescript is informational.
+  codecov:
+    needs: check-and-test
+    if: ${{ needs.check-and-test.result == 'success' && (github.event_name == 'pull_request' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Download coverage
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: codecov-coverage
+          path: coverage
+      - name: Upload Rust coverage
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          version: v11.3.1
+          use_oidc: true
+          fail_ci_if_error: true
+          disable_search: true
+          files: coverage/rust.lcov
+          flags: rust
+      - name: Upload TypeScript coverage
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          version: v11.3.1
+          use_oidc: true
+          fail_ci_if_error: true
+          disable_search: true
+          files: coverage/typescript.lcov
+          flags: typescript
 
   # The runtime drives real shells through a Windows ConPTY: line endings,
   # repaint-by-position output and clear-line keys all differ from a Unix PTY,

@@ -260,7 +260,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "436a64ef4a96f140e9086d9611b75b4198e60b99b5f2a96f565f41ef46ead5ea",
+          "hash": "591732d583821a86ce8df8e5d9116366724c723bdf9a15d6f8697d299937d58a",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -293,11 +293,11 @@
       "externals": 0,
       "files": [
         {
-          "hash": "11f11fc3237b4f7a0f10019c0a67972791ac962e465204afe61875e8e15550b4",
+          "hash": "a8a3a1199f77ff9da20727573661fd5e949fd5c65c4f08c9c648050d4d616207",
           "path": "packages/api-contract/package.json"
         },
         {
-          "hash": "ce9f0261d86e67bda904dd688d2544304949e46fb1f113d31b92164f526bb0be",
+          "hash": "6dbe1285cc7b82bef4d2473053ff584d6903e9c7df263ea705b550f4eeaabbb8",
           "importsFiles": [
             "packages/api-contract/src/index.ts"
           ],
@@ -428,7 +428,7 @@
       "testRunners": [
         "vitest"
       ],
-      "testedBy": 11,
+      "testedBy": 20,
       "unresolvedSites": 0
     },
     {
@@ -705,10 +705,6 @@
         {
           "hash": "8aa81188a73f4d3fe439c487f77527055838327fc326be493ddd9ea86e423089",
           "path": "apps/desktop/index.html"
-        },
-        {
-          "hash": "d45734a0bc7f1d1ba2059576269c997dc58ca55bfbe94bbe294be7d8d462fb1b",
-          "path": "apps/desktop/package.json"
         },
         {
           "hash": "e9fa39225e8c87ef022203227a24b62d8d550a38181f875ab8a2594358024b07",
@@ -1252,11 +1248,9 @@
             "packages/state/src/index.ts",
             "packages/domain/src/index.ts",
             "apps/desktop/src/lib/commandError.ts",
-            "apps/desktop/src/lib/mockBridge.ts",
-            "apps/desktop/src/app/AppShell.tsx"
+            "apps/desktop/src/lib/mockBridge.ts"
           ],
           "importsFiles": [
-            "apps/desktop/src/app/AppShell.tsx",
             "apps/desktop/src/lib/commandError.ts",
             "apps/desktop/src/lib/mockBridge.ts",
             "packages/domain/src/index.ts",
@@ -1269,11 +1263,9 @@
           "hash": "665ce9fbf62dc97c138a60acf327a8c06f6918b73cd3309954b4bab443ae9f94",
           "importOrder": [
             "packages/state/src/index.ts",
-            "apps/desktop/src/lib/mockBridge.ts",
-            "apps/desktop/src/app/AppShell.tsx"
+            "apps/desktop/src/lib/mockBridge.ts"
           ],
           "importsFiles": [
-            "apps/desktop/src/app/AppShell.tsx",
             "apps/desktop/src/lib/mockBridge.ts",
             "packages/state/src/index.ts"
           ],
@@ -1281,288 +1273,32 @@
           "testFramework": "vitest"
         },
         {
-          "exports": [
-            "AppShell"
-          ],
-          "failurePaths": [
-            {
-              "in": "refreshSessionStatuses",
-              "kind": "catch",
-              "line": 557
-            },
-            {
-              "in": "reconcileSessionStates",
-              "kind": "catch",
-              "line": 646
-            },
-            {
-              "in": "boot",
-              "kind": "catch",
-              "line": 738
-            },
-            {
-              "in": "boot",
-              "kind": "catch",
-              "line": 746
-            },
-            {
-              "in": "boot",
-              "kind": "catch",
-              "line": 772
-            },
-            {
-              "in": "boot",
-              "kind": "catch",
-              "line": 792
-            },
-            {
-              "in": "boot",
-              "kind": "catch",
-              "line": 800
-            },
-            {
-              "in": "boot",
-              "kind": "catch",
-              "line": 807
-            },
-            {
-              "in": "boot",
-              "kind": "catch",
-              "line": 815
-            },
-            {
-              "in": "boot",
-              "kind": "catch",
-              "line": 823
-            },
-            {
-              "in": "handleSubmit",
-              "kind": "catch",
-              "line": 1506
-            },
-            {
-              "in": "handleSubmit",
-              "kind": "throw",
-              "line": 1508
-            },
-            {
-              "in": "handleSubmit",
-              "kind": "catch",
-              "line": 1574
-            },
-            {
-              "in": "handleApprovePlan",
-              "kind": "catch",
-              "line": 1714
-            },
-            {
-              "in": "handleApprovePlan",
-              "kind": "throw",
-              "line": 1724
-            },
-            {
-              "in": "handleApprovePlan",
-              "kind": "catch",
-              "line": 1738
-            },
-            {
-              "in": "handleApprovePlan",
-              "kind": "catch",
-              "line": 1748
-            },
-            {
-              "in": "handleSaveWorkflow",
-              "kind": "catch",
-              "line": 1817
-            },
-            {
-              "in": "handleInterrupt",
-              "kind": "catch",
-              "line": 1886
-            },
-            {
-              "in": "handleResync",
-              "kind": "catch",
-              "line": 1908
-            },
-            {
-              "in": "handleCreateSession",
-              "kind": "catch",
-              "line": 1926
-            },
-            {
-              "in": "handleCloseSession",
-              "kind": "catch",
-              "line": 1973
-            },
-            {
-              "in": "handleRerunHistoryItem",
-              "kind": "catch",
-              "line": 2049
-            },
-            {
-              "in": "handleRerunHistoryItem",
-              "kind": "throw",
-              "line": 2051
-            },
-            {
-              "in": "handleRerunHistoryItem",
-              "kind": "catch",
-              "line": 2057
-            },
-            {
-              "in": "handleSaveWorkflowFromHistory",
-              "kind": "catch",
-              "line": 2145
-            },
-            {
-              "in": "handleRunWorkflow",
-              "kind": "catch",
-              "line": 2333
-            },
-            {
-              "in": "handleRunWorkflow",
-              "kind": "throw",
-              "line": 2335
-            },
-            {
-              "in": "handleRunWorkflow",
-              "kind": "catch",
-              "line": 2411
-            },
-            {
-              "in": "handleAcceptSuggestion",
-              "kind": "throw",
-              "line": 2491
-            },
-            {
-              "in": "handleAcceptSuggestion",
-              "kind": "catch",
-              "line": 2503
-            },
-            {
-              "in": "handleAcceptSuggestion",
-              "kind": "catch",
-              "line": 2520
-            },
-            {
-              "in": "handleWorkflowEditorConfirm",
-              "kind": "catch",
-              "line": 2584
-            },
-            {
-              "in": "handleWorkflowEditorConfirm",
-              "kind": "catch",
-              "line": 2597
-            },
-            {
-              "in": "handleDismissSuggestion",
-              "kind": "catch",
-              "line": 2611
-            },
-            {
-              "in": "generateSuggestions",
-              "kind": "catch",
-              "line": 2681
-            },
-            {
-              "in": "refreshPlannerStatus",
-              "kind": "catch",
-              "line": 2792
-            }
-          ],
-          "hash": "828173a519882e282473f97598516fbea0e8863cf53967ce5707c3a316e207f2",
+          "hash": "d9c6963fcedb588b67353d25ca872301cf9b97d428bc2b93f194c0c82499fc2f",
           "importOrder": [
-            "packages/domain/src/index.ts",
-            "packages/api-contract/src/index.ts",
             "packages/state/src/index.ts",
-            "apps/desktop/src/lib/shortcuts.ts",
-            "apps/desktop/src/lib/buildPlannerContext.ts",
-            "apps/desktop/src/lib/persistInBackground.ts",
-            "apps/desktop/src/hooks/useShortcuts.ts",
-            "apps/desktop/src/features/terminal/terminalClient.ts",
-            "apps/desktop/src/features/terminal/terminalEvents.ts",
-            "apps/desktop/src/features/planner/plannerClient.ts",
-            "apps/desktop/src/features/persistence/persistenceClient.ts",
-            "apps/desktop/src/features/memory/memoryClient.ts",
-            "apps/desktop/src/components/InputComposer.tsx",
-            "apps/desktop/src/components/PlanPanel.tsx",
-            "apps/desktop/src/components/PlannerStatusCard.tsx",
-            "apps/desktop/src/lib/displaySafe.ts",
-            "apps/desktop/src/lib/layoutWidth.ts",
-            "apps/desktop/src/lib/commandResult.ts",
-            "apps/desktop/src/components/TerminalPane.tsx",
-            "apps/desktop/src/components/ResultLine.tsx",
-            "apps/desktop/src/components/CommandPalette.tsx",
-            "apps/desktop/src/components/HistoryDrawer.tsx",
-            "apps/desktop/src/components/SessionTabs.tsx",
-            "apps/desktop/src/components/SettingsDrawer.tsx",
-            "apps/desktop/src/components/FoldPanel.tsx",
-            "apps/desktop/src/components/MemorySuggestions.tsx",
-            "apps/desktop/src/components/MemoryDrawer.tsx",
-            "apps/desktop/src/components/WorkflowDrawer.tsx",
-            "apps/desktop/src/components/WorkflowEditor.tsx",
-            "apps/desktop/src/components/HelpDialog.tsx",
-            "apps/desktop/src/components/OutputView.tsx",
-            "apps/desktop/src/components/WorkflowRunBanner.tsx",
-            "apps/desktop/src/lib/tauriInvoke.ts",
-            "apps/desktop/src/lib/commandError.ts",
-            "apps/desktop/src/lib/plannerSource.ts",
-            "apps/desktop/src/components/ConfirmDialog.tsx",
-            "apps/desktop/src/lib/mockBridge.ts",
-            "apps/desktop/src/lib/displayPath.ts",
-            "apps/desktop/src/lib/fontScale.ts",
-            "apps/desktop/src/lib/welcomePref.ts",
-            "apps/desktop/src/components/WelcomeScreen.tsx",
-            "apps/desktop/src/app/workflowStepWait.ts",
-            "apps/desktop/src/app/execState.ts"
+            "apps/desktop/src/lib/mockBridge.ts"
           ],
           "importsFiles": [
-            "apps/desktop/src/app/execState.ts",
-            "apps/desktop/src/app/workflowStepWait.ts",
-            "apps/desktop/src/components/CommandPalette.tsx",
-            "apps/desktop/src/components/ConfirmDialog.tsx",
-            "apps/desktop/src/components/FoldPanel.tsx",
-            "apps/desktop/src/components/HelpDialog.tsx",
-            "apps/desktop/src/components/HistoryDrawer.tsx",
-            "apps/desktop/src/components/InputComposer.tsx",
-            "apps/desktop/src/components/MemoryDrawer.tsx",
-            "apps/desktop/src/components/MemorySuggestions.tsx",
-            "apps/desktop/src/components/OutputView.tsx",
-            "apps/desktop/src/components/PlanPanel.tsx",
-            "apps/desktop/src/components/PlannerStatusCard.tsx",
-            "apps/desktop/src/components/ResultLine.tsx",
-            "apps/desktop/src/components/SessionTabs.tsx",
-            "apps/desktop/src/components/SettingsDrawer.tsx",
-            "apps/desktop/src/components/TerminalPane.tsx",
-            "apps/desktop/src/components/WelcomeScreen.tsx",
-            "apps/desktop/src/components/WorkflowDrawer.tsx",
-            "apps/desktop/src/components/WorkflowEditor.tsx",
-            "apps/desktop/src/components/WorkflowRunBanner.tsx",
-            "apps/desktop/src/features/memory/memoryClient.ts",
-            "apps/desktop/src/features/persistence/persistenceClient.ts",
-            "apps/desktop/src/features/planner/plannerClient.ts",
-            "apps/desktop/src/features/terminal/terminalClient.ts",
-            "apps/desktop/src/features/terminal/terminalEvents.ts",
-            "apps/desktop/src/hooks/useShortcuts.ts",
-            "apps/desktop/src/lib/buildPlannerContext.ts",
-            "apps/desktop/src/lib/commandError.ts",
-            "apps/desktop/src/lib/commandResult.ts",
-            "apps/desktop/src/lib/displayPath.ts",
-            "apps/desktop/src/lib/displaySafe.ts",
-            "apps/desktop/src/lib/fontScale.ts",
-            "apps/desktop/src/lib/layoutWidth.ts",
             "apps/desktop/src/lib/mockBridge.ts",
-            "apps/desktop/src/lib/persistInBackground.ts",
-            "apps/desktop/src/lib/plannerSource.ts",
-            "apps/desktop/src/lib/shortcuts.ts",
-            "apps/desktop/src/lib/tauriInvoke.ts",
-            "apps/desktop/src/lib/welcomePref.ts",
-            "packages/api-contract/src/index.ts",
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/app/AppShell.runtime.test.tsx",
+          "testFramework": "vitest"
+        },
+        {
+          "hash": "4539e3174719e804f8f3267975f3e17cd77d0f05d991778c78a57fb0bedf8996",
+          "importOrder": [
+            "packages/domain/src/index.ts",
+            "packages/state/src/index.ts",
+            "apps/desktop/src/lib/mockBridge.ts"
+          ],
+          "importsFiles": [
+            "apps/desktop/src/lib/mockBridge.ts",
             "packages/domain/src/index.ts",
             "packages/state/src/index.ts"
           ],
-          "path": "apps/desktop/src/app/AppShell.tsx"
+          "path": "apps/desktop/src/app/AppShell.test.tsx",
+          "testFramework": "vitest"
         },
         {
           "hash": "3cc145cc5bedeeb7ddf6a6b036fbada75dc2a23ad961a222afbb6926e29be362",
@@ -1581,11 +1317,9 @@
             "apps/desktop/src/components/WelcomeScreen.tsx",
             "apps/desktop/src/components/WorkflowDrawer.tsx",
             "apps/desktop/src/components/WorkflowEditor.tsx",
-            "apps/desktop/src/components/WorkflowRunBanner.tsx",
-            "apps/desktop/src/app/AppShell.tsx"
+            "apps/desktop/src/components/WorkflowRunBanner.tsx"
           ],
           "importsFiles": [
-            "apps/desktop/src/app/AppShell.tsx",
             "apps/desktop/src/components/CommandPalette.tsx",
             "apps/desktop/src/components/ConfirmDialog.tsx",
             "apps/desktop/src/components/HelpDialog.tsx",
@@ -1608,7 +1342,6 @@
         {
           "hash": "60de09aea0b4c90d71a9c150bb129c4b032af3ce05ea454abce7d6daef554695",
           "names": [
-            "apps/desktop/src/app/AppShell.tsx",
             "apps/desktop/src/lib/commandError.ts",
             "apps/desktop/src/lib/commandResult.ts",
             "apps/desktop/src/lib/planLanguage.ts"
@@ -1644,6 +1377,48 @@
           "path": "apps/desktop/src/app/execState.ts"
         },
         {
+          "hash": "bfc1d14f001048764941622fb60e683b2d6682e3f03627c14f889b74e30311e4",
+          "importsFiles": [
+            "apps/desktop/src/app/sessionWatch.ts"
+          ],
+          "path": "apps/desktop/src/app/sessionWatch.test.ts",
+          "testFramework": "vitest"
+        },
+        {
+          "exports": [
+            "bootStallDue",
+            "capNotes",
+            "detectOS",
+            "foregroundStuckDue",
+            "simplifyText"
+          ],
+          "hash": "f78022ab0cc0bce1609e23f5a35cc6126eab97fde55a1bfb5c36d93c6bc0deb4",
+          "importsFiles": [
+            "packages/api-contract/src/index.ts"
+          ],
+          "path": "apps/desktop/src/app/sessionWatch.ts"
+        },
+        {
+          "hash": "73d4a1f94d2a02b744f233b7bb88975e56af819382e7e6714a6a4e60c6c7025d",
+          "importsFiles": [
+            "apps/desktop/src/app/terminalReplay.ts"
+          ],
+          "path": "apps/desktop/src/app/terminalReplay.test.ts",
+          "testFramework": "vitest"
+        },
+        {
+          "exports": [
+            "altScreenAfter",
+            "appendReplayChunk",
+            "emptyReplaySession",
+            "isReplayPrefix",
+            "privateModePrefix",
+            "privateModesAfter"
+          ],
+          "hash": "64ea2fbb3954198f4b0f49bad99271b6e0f77b9de73689b8cb5fbd585f602522",
+          "path": "apps/desktop/src/app/terminalReplay.ts"
+        },
+        {
           "hash": "ec8a66049fa4391aa1927854fdd70d8a543ee2ded7cc2fb49427341735aa8201",
           "importOrder": [
             "packages/domain/src/index.ts",
@@ -1652,11 +1427,9 @@
             "apps/desktop/src/lib/useModalDialog.ts",
             "apps/desktop/src/components/HistoryDrawer.tsx",
             "apps/desktop/src/components/WorkflowDrawer.tsx",
-            "apps/desktop/src/components/WorkflowEditor.tsx",
-            "apps/desktop/src/app/AppShell.tsx"
+            "apps/desktop/src/components/WorkflowEditor.tsx"
           ],
           "importsFiles": [
-            "apps/desktop/src/app/AppShell.tsx",
             "apps/desktop/src/components/HistoryDrawer.tsx",
             "apps/desktop/src/components/WorkflowDrawer.tsx",
             "apps/desktop/src/components/WorkflowEditor.tsx",
@@ -1713,6 +1486,14 @@
           "path": "apps/desktop/src/components/ConfirmDialog.tsx"
         },
         {
+          "hash": "b46a44a383551e5068fb2d07621bc18e7d0d55e5c4f85349f898bab7c1eb7d3d",
+          "importsFiles": [
+            "apps/desktop/src/components/ErrorBoundary.tsx"
+          ],
+          "path": "apps/desktop/src/components/ErrorBoundary.test.tsx",
+          "testFramework": "vitest"
+        },
+        {
           "hash": "0a642c091daf9dae4edb27dae24acd00fdaf31af5d6d078d93cc615195dbe24d",
           "path": "apps/desktop/src/components/ErrorBoundary.tsx"
         },
@@ -1742,7 +1523,7 @@
           "path": "apps/desktop/src/components/HelpDialog.tsx"
         },
         {
-          "hash": "d00e4b60ee732a1b7505645e211892d7ffe60695f2a3d3795e496970d078494c",
+          "hash": "8cf929ef13363903e0ed8314ea2dd3efd5270d1cc107fafbd710ca8b7a80355c",
           "importOrder": [
             "packages/domain/src/index.ts",
             "apps/desktop/src/components/HistoryDrawer.tsx"
@@ -1789,6 +1570,19 @@
           "path": "apps/desktop/src/components/InputComposer.tsx"
         },
         {
+          "hash": "7c229df6c46f161a91e6cf65c742070ec0969324fb00784a869249942efc341a",
+          "importOrder": [
+            "packages/domain/src/index.ts",
+            "apps/desktop/src/components/MemoryDrawer.tsx"
+          ],
+          "importsFiles": [
+            "apps/desktop/src/components/MemoryDrawer.tsx",
+            "packages/domain/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/MemoryDrawer.test.tsx",
+          "testFramework": "vitest"
+        },
+        {
           "exports": [
             "MemoryDrawer"
           ],
@@ -1802,19 +1596,6 @@
             "packages/domain/src/index.ts"
           ],
           "path": "apps/desktop/src/components/MemoryDrawer.tsx"
-        },
-        {
-          "hash": "115bfa44bc12800ad479b64517d07d7c745ffa09a7bbc97757ebed08203642f4",
-          "importOrder": [
-            "packages/domain/src/index.ts",
-            "apps/desktop/src/components/MemorySuggestions.tsx"
-          ],
-          "importsFiles": [
-            "apps/desktop/src/components/MemorySuggestions.tsx",
-            "packages/domain/src/index.ts"
-          ],
-          "path": "apps/desktop/src/components/MemorySuggestions.test.tsx",
-          "testFramework": "vitest"
         },
         {
           "exports": [
@@ -1851,7 +1632,7 @@
           "path": "apps/desktop/src/components/OutputView.tsx"
         },
         {
-          "hash": "4a22fcefa42f547b6b6c8140b6c221a0d042d391c55b0b2836fd34f48aa3bb9b",
+          "hash": "65c269cac857d702135561e2991186119a054b4ecc2d9ce89249fdfeaba7c46c",
           "importsFiles": [
             "apps/desktop/src/components/PlanPanel.tsx"
           ],
@@ -1938,6 +1719,19 @@
           "path": "apps/desktop/src/components/ResultLine.tsx"
         },
         {
+          "hash": "e1c6a414bca511fd5ad2d8e9360177a680772094f14c96c593faa263479e875e",
+          "importOrder": [
+            "packages/domain/src/index.ts",
+            "apps/desktop/src/components/SessionTabs.tsx"
+          ],
+          "importsFiles": [
+            "apps/desktop/src/components/SessionTabs.tsx",
+            "packages/domain/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/SessionTabs.test.tsx",
+          "testFramework": "vitest"
+        },
+        {
           "exports": [
             "SessionTabs"
           ],
@@ -1946,6 +1740,14 @@
             "packages/domain/src/index.ts"
           ],
           "path": "apps/desktop/src/components/SessionTabs.tsx"
+        },
+        {
+          "hash": "6c02e1b40511a5e3649452f5c1d07e52cf86bec713e9ac84bc87bbbe2860bd08",
+          "importsFiles": [
+            "apps/desktop/src/components/SettingsDrawer.tsx"
+          ],
+          "path": "apps/desktop/src/components/SettingsDrawer.test.tsx",
+          "testFramework": "vitest"
         },
         {
           "exports": [
@@ -1965,14 +1767,6 @@
             "packages/api-contract/src/index.ts"
           ],
           "path": "apps/desktop/src/components/SettingsDrawer.tsx"
-        },
-        {
-          "hash": "3f1056acc906d3d8556bb3fe20e1fc6f3d2a551d4b62d5efefa12472503bedb6",
-          "importsFiles": [
-            "apps/desktop/src/components/TerminalPane.tsx"
-          ],
-          "path": "apps/desktop/src/components/TerminalPane.test.tsx",
-          "testFramework": "vitest"
         },
         {
           "exports": [
@@ -2008,6 +1802,19 @@
           "path": "apps/desktop/src/components/WelcomeScreen.tsx"
         },
         {
+          "hash": "3033dc8a6f8786a3074d79eef889d257100ecbcf260ff306a7530346f01505f1",
+          "importOrder": [
+            "packages/domain/src/index.ts",
+            "apps/desktop/src/components/WorkflowDrawer.tsx"
+          ],
+          "importsFiles": [
+            "apps/desktop/src/components/WorkflowDrawer.tsx",
+            "packages/domain/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/WorkflowDrawer.test.tsx",
+          "testFramework": "vitest"
+        },
+        {
           "exports": [
             "WorkflowDrawer"
           ],
@@ -2027,14 +1834,37 @@
           "path": "apps/desktop/src/components/WorkflowDrawer.tsx"
         },
         {
+          "hash": "e52f05b2e979fc793393c3b3d6eac9e55313ae94fb15740cc02d48d0bd6bbdb6",
+          "importsFiles": [
+            "apps/desktop/src/components/WorkflowEditor.tsx"
+          ],
+          "path": "apps/desktop/src/components/WorkflowEditor.test.tsx",
+          "testFramework": "vitest"
+        },
+        {
           "exports": [
             "WorkflowEditor"
           ],
-          "hash": "8d8547286dc5009c4d1252448b7e65b1473541096583a33ce77fee809d18a946",
+          "hash": "9efa86bdb82e92b62e9acb3030394e27bc4b52e7869d9240a55d8f5e34d6bf80",
           "importsFiles": [
             "apps/desktop/src/lib/useModalDialog.ts"
           ],
           "path": "apps/desktop/src/components/WorkflowEditor.tsx"
+        },
+        {
+          "hash": "fa79c35bd8c303f0218e8659baa49c97e37dc103b9a80109d09e5813e4bd0820",
+          "importOrder": [
+            "packages/state/src/index.ts",
+            "packages/domain/src/index.ts",
+            "apps/desktop/src/components/WorkflowRunBanner.tsx"
+          ],
+          "importsFiles": [
+            "apps/desktop/src/components/WorkflowRunBanner.tsx",
+            "packages/domain/src/index.ts",
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/components/WorkflowRunBanner.test.tsx",
+          "testFramework": "vitest"
         },
         {
           "exports": [
@@ -2050,6 +1880,25 @@
             "packages/state/src/index.ts"
           ],
           "path": "apps/desktop/src/components/WorkflowRunBanner.tsx"
+        },
+        {
+          "hash": "30330f510d20364ead881ede7f6f9bcacd264fe98f57fc1fba284609d84872cf",
+          "importOrder": [
+            "apps/desktop/src/lib/mockBridge.ts",
+            "apps/desktop/src/features/memory/memoryClient.ts",
+            "apps/desktop/src/features/persistence/persistenceClient.ts",
+            "apps/desktop/src/features/planner/plannerClient.ts",
+            "apps/desktop/src/features/terminal/terminalClient.ts"
+          ],
+          "importsFiles": [
+            "apps/desktop/src/features/memory/memoryClient.ts",
+            "apps/desktop/src/features/persistence/persistenceClient.ts",
+            "apps/desktop/src/features/planner/plannerClient.ts",
+            "apps/desktop/src/features/terminal/terminalClient.ts",
+            "apps/desktop/src/lib/mockBridge.ts"
+          ],
+          "path": "apps/desktop/src/features/clients.test.ts",
+          "testFramework": "vitest"
         },
         {
           "exports": [
@@ -2138,6 +1987,14 @@
           "path": "apps/desktop/src/features/terminal/terminalClient.ts"
         },
         {
+          "hash": "560837aa85cc1978c76961894a834a88f7eb6798363a96a39c0b7d9093cd448d",
+          "importsFiles": [
+            "apps/desktop/src/features/terminal/terminalEvents.ts"
+          ],
+          "path": "apps/desktop/src/features/terminal/terminalEvents.test.ts",
+          "testFramework": "vitest"
+        },
+        {
           "exports": [
             "subscribeToExecStateChanged",
             "subscribeToExecutionFinished",
@@ -2153,6 +2010,19 @@
           "path": "apps/desktop/src/features/terminal/terminalEvents.ts"
         },
         {
+          "hash": "c6f727f5abccd3ff45334322ed338d4590d3ded7c0177206551978012120d90c",
+          "importOrder": [
+            "packages/state/src/index.ts",
+            "apps/desktop/src/hooks/useFocusZone.ts"
+          ],
+          "importsFiles": [
+            "apps/desktop/src/hooks/useFocusZone.ts",
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/hooks/useFocusZone.test.tsx",
+          "testFramework": "vitest"
+        },
+        {
           "exports": [
             "useFocusZone"
           ],
@@ -2161,6 +2031,21 @@
             "packages/state/src/index.ts"
           ],
           "path": "apps/desktop/src/hooks/useFocusZone.ts"
+        },
+        {
+          "hash": "d30c80b577d5693c9a33eb0d26d1935769e19afbfafa23d1518d862fb739032f",
+          "importOrder": [
+            "packages/state/src/index.ts",
+            "apps/desktop/src/lib/shortcuts.ts",
+            "apps/desktop/src/hooks/useShortcuts.ts"
+          ],
+          "importsFiles": [
+            "apps/desktop/src/hooks/useShortcuts.ts",
+            "apps/desktop/src/lib/shortcuts.ts",
+            "packages/state/src/index.ts"
+          ],
+          "path": "apps/desktop/src/hooks/useShortcuts.test.tsx",
+          "testFramework": "vitest"
         },
         {
           "exports": [
@@ -2176,6 +2061,19 @@
             "packages/state/src/index.ts"
           ],
           "path": "apps/desktop/src/hooks/useShortcuts.ts"
+        },
+        {
+          "hash": "41c6fdbbec43e1d10c299582c9a4a88da263594da8243cf6af9cc3218475e6d9",
+          "importOrder": [
+            "packages/domain/src/index.ts",
+            "apps/desktop/src/lib/buildPlannerContext.ts"
+          ],
+          "importsFiles": [
+            "apps/desktop/src/lib/buildPlannerContext.ts",
+            "packages/domain/src/index.ts"
+          ],
+          "path": "apps/desktop/src/lib/buildPlannerContext.test.ts",
+          "testFramework": "vitest"
         },
         {
           "exports": [
@@ -2232,7 +2130,7 @@
           "path": "apps/desktop/src/lib/commandResult.ts"
         },
         {
-          "hash": "59cbe8aea1ca026b21610da84d23a721a058406c34b70384eb41d861f9032ebc",
+          "hash": "e8562ebc7d2d8322d309a5db8de606e3f16c172abef1f1425334011cde66c1a5",
           "importsFiles": [
             "apps/desktop/src/lib/displayPath.ts"
           ],
@@ -2246,14 +2144,6 @@
           ],
           "hash": "2680a638bab0164e2a2f0c15d4ab8e547d467ba51288667502b1f61df9e650a3",
           "path": "apps/desktop/src/lib/displayPath.ts"
-        },
-        {
-          "hash": "bb10c97de3d1087c9c8455e0b0cb1babc79383656524a58a5824da7d8c941697",
-          "importsFiles": [
-            "apps/desktop/src/lib/displaySafe.ts"
-          ],
-          "path": "apps/desktop/src/lib/displaySafe.test.ts",
-          "testFramework": "vitest"
         },
         {
           "exports": [
@@ -2303,12 +2193,20 @@
           "path": "apps/desktop/src/lib/layoutWidth.ts"
         },
         {
+          "hash": "ee8fb44407700e322ed2a1a4e5b23a6563e708e7ad51e08d486687a10a588be7",
+          "importsFiles": [
+            "apps/desktop/src/lib/mockBridge.ts"
+          ],
+          "path": "apps/desktop/src/lib/mockBridge.test.ts",
+          "testFramework": "vitest"
+        },
+        {
           "exports": [
             "mockInvoke",
             "onMockEvent",
             "resetMockBridge"
           ],
-          "hash": "75bc2b2e60df3e8742de89c95905070405bdb1996e50a02d20c9950c070e787a",
+          "hash": "8aeeecaf619d6465a2cc7cc1c3cc429e481f76f42ff174bb2ca0418c4553b840",
           "path": "apps/desktop/src/lib/mockBridge.ts"
         },
         {
@@ -2415,15 +2313,6 @@
           "path": "apps/desktop/src/lib/shortcuts.ts"
         },
         {
-          "hash": "c457f8f73b824cbba206ee100ad5f4d2fe862bfcf9bd47204c312bcab06b38a9",
-          "importsFiles": [
-            "apps/desktop/src/lib/commandError.ts",
-            "apps/desktop/src/lib/tauriInvoke.ts"
-          ],
-          "path": "apps/desktop/src/lib/tauriInvoke.test.ts",
-          "testFramework": "vitest"
-        },
-        {
           "exports": [
             "isTauriRuntime",
             "tauriInvoke"
@@ -2499,14 +2388,17 @@
           "path": "apps/desktop/src/lib/welcomePref.ts"
         },
         {
-          "hash": "488b1c0be122c942b29ca18f0c89f2d4ede66da966b245c2d58ea59910930d62",
-          "importOrder": [
-            "apps/desktop/src/components/ErrorBoundary.tsx",
-            "apps/desktop/src/app/AppShell.tsx",
-            "apps/desktop/src/styles/globals.css"
-          ],
+          "hash": "9f39c51530c0dbc7fa39834a910acef5e6a88ee800c86d639b758c3c9130850f",
           "importsFiles": [
-            "apps/desktop/src/app/AppShell.tsx",
+            "apps/desktop/src/lib/mockBridge.ts",
+            "apps/desktop/src/main.tsx"
+          ],
+          "path": "apps/desktop/src/main.test.tsx",
+          "testFramework": "vitest"
+        },
+        {
+          "hash": "488b1c0be122c942b29ca18f0c89f2d4ede66da966b245c2d58ea59910930d62",
+          "importsFiles": [
             "apps/desktop/src/components/ErrorBoundary.tsx",
             "apps/desktop/src/styles/globals.css"
           ],
@@ -2557,7 +2449,7 @@
       "origin": "mixed",
       "outsidePlaces": [
         {
-          "reads": 1,
+          "reads": 0,
           "where": [
             "caller"
           ],
@@ -2571,22 +2463,30 @@
           "writes": 1
         }
       ],
-      "outsideReads": 1,
       "outsideWrites": 3,
       "role": "code",
       "testRunners": [
-        "cargo test",
-        "vitest"
+        "cargo test"
       ],
-      "testedBy": 38,
+      "testedBy": 52,
       "unresolvedNamed": [
         {
+          "path": "apps/desktop/e2e/large-text.browser.ts",
+          "specifier": "@playwright/test",
+          "why": "undeclared"
+        },
+        {
+          "path": "apps/desktop/playwright.config.ts",
+          "specifier": "@playwright/test",
+          "why": "undeclared"
+        },
+        {
           "path": "apps/desktop/src/app/AppShell.honesty.test.tsx",
-          "specifier": "./AppShell.tsx?raw",
-          "why": "missing"
+          "specifier": "@testing-library/react",
+          "why": "undeclared"
         }
       ],
-      "unresolvedSites": 1
+      "unresolvedSites": 130
     },
     {
       "dynamicReads": 0,
@@ -2601,7 +2501,7 @@
           "path": "docs/dogfood-log.md"
         },
         {
-          "hash": "7c4d5441dc301089d6d665c1269e7168311e26ea28793ac851bfd79d8b89bab3",
+          "hash": "70216cabac9d153ab45a667c928f444202faaaf225459233943f71e534003360",
           "path": "docs/handbook/SUMMARY.md"
         },
         {
@@ -2641,11 +2541,11 @@
           "path": "docs/handbook/src/developer-guide/testing.md"
         },
         {
-          "hash": "59b35ee3e026aace51c56888f83f65d92c511ce0ec62363dbdeee8c17f0c992b",
+          "hash": "b5f6869f4c0dbc2d203745c732cfb48eb72cee058598fd82dc6033161a14fea4",
           "path": "docs/handbook/src/intelligence/context-enrichment.md"
         },
         {
-          "hash": "e2bf2c1062fcd5c2fb94eebce2b2466d6fdb3a15d311172c4005e911ca03d797",
+          "hash": "e430389e359fdc8f0239135c80024406ab987913539f0c84670c10328ec72547",
           "path": "docs/handbook/src/intelligence/memory-detectors.md"
         },
         {
@@ -2661,6 +2561,10 @@
           "path": "docs/handbook/src/operations/release-checklist.md"
         },
         {
+          "hash": "68940089da508f82b8f54a3a4d75ff789546e8a27fb55e99972668a513590b44",
+          "path": "docs/handbook/src/orientation/accessibility.md"
+        },
+        {
           "hash": "8ed8edbd91a16e405a704b194fecd505e6ffc1b3cf9f2303991cc76d3b0b2977",
           "path": "docs/handbook/src/orientation/core-concepts.md"
         },
@@ -2673,7 +2577,7 @@
           "path": "docs/handbook/src/orientation/what-is-commandui.md"
         },
         {
-          "hash": "ab497e46c4de39f282be9cc0b1dad7a90f29e347d3c292f501b54ffc6451c068",
+          "hash": "07f6fb685dedd9bb732fb00cf18f95b4a4d3522a39add10daa701d33d3818e60",
           "path": "docs/handbook/src/product-behavior/keyboard-shortcuts.md"
         },
         {
@@ -2711,6 +2615,10 @@
         {
           "hash": "ae5bb52212e08e2aa6a5055f74119ab846ffadd914d8d24e9eb563a5cdef3375",
           "path": "docs/handoff-2026-10-04-accessible-commandui.md"
+        },
+        {
+          "hash": "20e6c7037ee3378d160481e8ef15a414f93960fc0a1825fa2c449f64881f86c3",
+          "path": "docs/handoff-2026-10-04-ui-coverage.md"
         },
         {
           "hash": "54afb4f8328d6b3c0a1033892158f4ccbde29b52d416f272cfc128d70ec3bd2a",
@@ -2761,7 +2669,7 @@
           "path": "docs/specs/tui-spine.md"
         },
         {
-          "hash": "e92e6ace69da27834a91455534ce0be8d8d57e29740688a82488901f50b5a3b5",
+          "hash": "49352da32dfb1a744bc91234ba15919e3d8fa476d39247e008e983d5031587be",
           "path": "docs/store-listing.md"
         }
       ],
@@ -2786,7 +2694,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "949381eeb06781ab6ec6f985ad3ec2e9ff895f71be33d34274e205660df36fc4",
+          "hash": "1b0609785d93fac46f4cb8063ad8594eefb270b06df60076913cc913876f9433",
           "path": "packages/domain/package.json"
         },
         {
@@ -2904,7 +2812,7 @@
       "testRunners": [
         "vitest"
       ],
-      "testedBy": 10,
+      "testedBy": 19,
       "unresolvedSites": 0
     },
     {
@@ -3136,35 +3044,35 @@
           "path": "LICENSE"
         },
         {
-          "hash": "17e5f975a3c93d3dc31f694432d6b736c6b8656bc535369ebee9350427baab2d",
+          "hash": "e6cb4d68dd8432423066220bd93e8759c01fd2e8cf99f67a83beeeef5b58ee2a",
           "path": "README.es.md"
         },
         {
-          "hash": "69bd8a64facc7a79a6e45885131c9d87165b3321fa4f41bc77f40816777d616a",
+          "hash": "ee54851e7bfdd520768f45d7e6e19a6fdea5b3ab9ecbcb93fa974be6565b4c0b",
           "path": "README.fr.md"
         },
         {
-          "hash": "59a86c14347408f678ecd14f7536c5fa5a3a4d7c85935ba39788382c804d4820",
+          "hash": "69c15187ef6a1d3dbdf50d072cde0d1f6c84ad6fc64f64f98807fe23d5e1e263",
           "path": "README.hi.md"
         },
         {
-          "hash": "2b8b22b74fd108c3b809c1f81c030b9cd8626da2e5fc7a38372295ebbb868664",
+          "hash": "be6983ec76c9c1c7c0cf33b09625c664d147e3cbb51bf7c2ff5312edefe85f86",
           "path": "README.it.md"
         },
         {
-          "hash": "5c7ff117577473aa9a74164b646fbd8cfb2678aaa36faf489efc82c56b4af8d9",
+          "hash": "ad30d5f9a1f721a2ac5981366b8f75feffb0a3a9763e49dffa1c6ae765c69881",
           "path": "README.ja.md"
         },
         {
-          "hash": "3631933ee4ef9b5d73d92f019c3687e6b489c74e106df03aec721d255f788920",
+          "hash": "5a20231c9f3e8d030ebe14d278ca5012cd98ec43f78681ee2e022af6ea2c18c0",
           "path": "README.md"
         },
         {
-          "hash": "3dcd9499c77b5ece758f400b6aeccb2df123ad438627e5769875d0df60ae38e0",
+          "hash": "5e40da729b87b6aaf3fa8df4d0fe7498e22fd3cb1026666932e20336ce124ebb",
           "path": "README.pt-BR.md"
         },
         {
-          "hash": "ee137304a70c1621d2f8d92e96463015f7ba2aa6bff5db6c58a9979d30598b34",
+          "hash": "79e8e5d33a5690d7bbdeaa1cd848849398ce2a8e1e5d1cec2e407b5414ab66f5",
           "path": "README.zh.md"
         },
         {
@@ -3176,16 +3084,16 @@
           "path": "SECURITY.md"
         },
         {
-          "hash": "3fb53654ce2e7b931a0c60a3ff58cfe41afc1a232da07149379f519e4f00f9c8",
+          "hash": "3e27ed6e87a9195ebbc0d49209d9207309ed6f26a84bebaab9590d4f714794f6",
           "path": "SHIP_GATE.md"
         },
         {
-          "hash": "cb0d057cd08c4609df3f37624f41ba806f24ab8be284f00933a4b5278d45069c",
-          "path": "package.json"
+          "hash": "ea19ec2c3236baeab79505025712437167a152c1daa8d35791b91eb2adf0778c",
+          "path": "codecov.yml"
         },
         {
-          "hash": "6bffbabdacd7349d4afb536f47a8bde6fa94f070a166476dfa7533bfd1965cc3",
-          "path": "pnpm-lock.yaml"
+          "hash": "0d710422be397f5bba2ee144ad27cb733d8024f7ee03163573ce6248ad2f286c",
+          "path": "package.json"
         },
         {
           "hash": "54a86b14bb292cc301ce2f36b2f3aa49b48993bc44d5217a756f13823285fcab",
@@ -3315,7 +3223,7 @@
               "line": 1510
             }
           ],
-          "hash": "5f5002a24e92472b7efbb31a343de2d150b9bb1383a655533ee34da7c4623155",
+          "hash": "dad70857e08464018df1b3fe8ed2684798be0fd1d35748976cdac27c6b3389c0",
           "path": "crates/runtime-core/src/pty.rs",
           "testsInside": true
         },
@@ -3992,6 +3900,10 @@
           "path": "site/src/content.config.ts"
         },
         {
+          "hash": "304728a14ffe8bafefdcafd5224edbc48f319d321b50094348691e680ad52389",
+          "path": "site/src/content/docs/handbook/accessibility.md"
+        },
+        {
           "hash": "2adfad327826cf65852c4c3d1625ccd521eb25331d92b9b1a3cb158b2d78217b",
           "path": "site/src/content/docs/handbook/beginners.md"
         },
@@ -4032,11 +3944,11 @@
           "path": "site/src/content/docs/handbook/input-modes.md"
         },
         {
-          "hash": "dff4a4bbbe5a9fbbf9b5cf55f5a7d8dde1161e1d3c7aa1c319ccdf7148ba8177",
+          "hash": "dbd61cdd5798a4ac9d04336e67cc66da2748d928f60366ff863e4f5665880826",
           "path": "site/src/content/docs/handbook/intelligence/context-enrichment.md"
         },
         {
-          "hash": "83fdefac481e1c07232c6c5d9ee4771c46962a1c253f328d9d41981e886417c4",
+          "hash": "e75eb0fe39995b98b1898d5ed0d8b0e1a18411c9eb4e0b6f951e592bcd07113b",
           "path": "site/src/content/docs/handbook/intelligence/memory-detectors.md"
         },
         {
@@ -4044,7 +3956,7 @@
           "path": "site/src/content/docs/handbook/intelligence/workflow-promotion.md"
         },
         {
-          "hash": "a5bb74936ce90a64d44082d451ca9ad63fbf17dbdf834b9099aeaceb2ad2e573",
+          "hash": "fbb4cbd4e1d83d2f77d49ba02520899172349891c3aa7b09bff02408da500b9b",
           "path": "site/src/content/docs/handbook/keyboard-shortcuts.md"
         },
         {
@@ -4129,7 +4041,7 @@
         },
         {
           "constantOnly": true,
-          "hash": "801fb83df3974660609d8cb2c9707696608cbcf2b3e55a320681ab191c6b3c3f",
+          "hash": "9c6165444af6535cbcfd964d9d88106a913521e1311d7b57276dc340487b4f72",
           "path": "site/src/site-config.ts"
         },
         {
@@ -4166,11 +4078,11 @@
       "externals": 0,
       "files": [
         {
-          "hash": "2ca4284e3eac04916a03d2cdfd115765f26297c81b8009870c0b907757e3d082",
+          "hash": "7e0168a27171826961533170cfd808da69b3a9729a037961eb2bc35af156f48c",
           "path": "packages/state/package.json"
         },
         {
-          "hash": "e557a88b550efde9afe8242798dba68af2893e281ea7a2f193c6b3eff2f90f6f",
+          "hash": "46f45aafb8d9827d07e8a9ed074383f05ccabdd3598b30de155f149947d48aad",
           "importOrder": [
             "packages/state/src/index.ts",
             "packages/domain/src/index.ts"
@@ -4224,7 +4136,7 @@
       "testRunners": [
         "vitest"
       ],
-      "testedBy": 9,
+      "testedBy": 14,
       "unresolvedSites": 0
     },
     {
@@ -4238,7 +4150,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "faead0aa6fa1a36b93867e6eea21e469650a1d25c79b4c5d7a9bace4a1395b16",
+          "hash": "7647de74bf1ca7204dfbd770fbfcc37f1da2da9afac8589e8011d3bfc1c0cfb5",
           "path": "packages/ui/package.json"
         },
         {
@@ -4333,9 +4245,10 @@
           "dir": "",
           "job": "check-and-test",
           "programs": [
-            "cargo"
+            "cargo",
+            "mkdir"
           ],
-          "step": "Cargo test (crates)"
+          "step": "Cargo test with coverage (crates)"
         },
         {
           "dir": "",
@@ -4359,7 +4272,16 @@
           "programs": [
             "pnpm"
           ],
-          "step": "pnpm test"
+          "step": "pnpm test with coverage"
+        },
+        {
+          "dir": "",
+          "job": "check-and-test",
+          "programs": [
+            "sed",
+            "test"
+          ],
+          "step": "Merge TypeScript coverage"
         },
         {
           "dir": "apps/desktop",
@@ -4420,6 +4342,22 @@
         },
         {
           "basis": "declared",
+          "name": "codecov",
+          "runsOn": [
+            {
+              "labels": [
+                "ubuntu-latest"
+              ],
+              "platform": {
+                "cpu": "x64",
+                "libc": "glibc",
+                "os": "linux"
+              }
+            }
+          ]
+        },
+        {
+          "basis": "declared",
           "name": "windows-shells",
           "runsOn": [
             {
@@ -4440,7 +4378,8 @@
       "mentions": [],
       "name": "CI",
       "permissions": [
-        "contents:read"
+        "contents:read",
+        "id-token:write"
       ],
       "pushes": false,
       "reach": [
@@ -4457,7 +4396,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 103
+          "files": 13
         },
         {
           "boundary": "domain",
@@ -4594,21 +4533,6 @@
           "path": "apps/desktop/src-tauri/src/state.rs",
           "runKind": "executes",
           "via": "cargo test"
-        },
-        {
-          "directory": true,
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/src/",
-          "runKind": "executes",
-          "via": "tsc apps/desktop/tsconfig.json"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "apps/desktop/vite.config.ts",
-          "runKind": "executes",
-          "via": "vite build"
         },
         {
           "job": "check-and-test",
@@ -4895,7 +4819,7 @@
           "runKind": "executes"
         }
       ],
-      "runsCount": 47,
+      "runsCount": 45,
       "secrets": [],
       "sends": {
         "deploysPages": false,
@@ -4910,74 +4834,58 @@
       "stages": [],
       "tests": [
         {
+          "coverage": true,
           "files": 36,
           "job": "check-and-test",
           "runner": "cargo test",
-          "step": "Cargo test (crates)"
+          "step": "Cargo test with coverage (crates)"
         },
         {
-          "config": "apps/desktop/vite.config.ts",
-          "dir": "apps/desktop",
-          "files": 34,
-          "job": "check-and-test",
-          "runner": "vitest",
-          "step": "pnpm test",
-          "through": [
-            "pnpm test",
-            "pnpm test (apps/desktop)"
-          ]
-        },
-        {
+          "coverage": true,
           "dir": "packages/api-contract",
           "files": 1,
           "job": "check-and-test",
           "runner": "vitest",
-          "step": "pnpm test",
+          "step": "pnpm test with coverage",
           "through": [
-            "pnpm test",
-            "pnpm test (packages/api-contract)"
+            "pnpm run test:coverage",
+            "pnpm run test:coverage (packages/api-contract)"
           ]
         },
         {
+          "coverage": true,
           "dir": "packages/domain",
           "files": 2,
           "job": "check-and-test",
           "runner": "vitest",
-          "step": "pnpm test",
+          "step": "pnpm test with coverage",
           "through": [
-            "pnpm test",
-            "pnpm test (packages/domain)"
+            "pnpm run test:coverage",
+            "pnpm run test:coverage (packages/domain)"
           ]
         },
         {
+          "coverage": true,
           "dir": "packages/state",
           "files": 1,
           "job": "check-and-test",
           "runner": "vitest",
-          "step": "pnpm test",
+          "step": "pnpm test with coverage",
           "through": [
-            "pnpm test",
-            "pnpm test (packages/state)"
+            "pnpm run test:coverage",
+            "pnpm run test:coverage (packages/state)"
           ]
         },
         {
+          "coverage": true,
           "dir": "packages/ui",
           "files": 0,
           "job": "check-and-test",
           "runner": "vitest",
-          "step": "pnpm test",
+          "step": "pnpm test with coverage",
           "through": [
-            "pnpm test",
-            "pnpm test (packages/ui)"
-          ]
-        },
-        {
-          "dir": "apps/desktop",
-          "job": "check-and-test",
-          "runner": "playwright test",
-          "step": "Large-text layout in Chromium",
-          "through": [
-            "pnpm run test:layout (apps/desktop)"
+            "pnpm run test:coverage",
+            "pnpm run test:coverage (packages/ui)"
           ]
         },
         {
@@ -5004,6 +4912,7 @@
             "Cargo.toml",
             "apps/**",
             "atlas/**",
+            "codecov.yml",
             "crates/**",
             "package.json",
             "packages/**",
@@ -5024,9 +4933,13 @@
       "uses": [
         "Swatinem/rust-cache",
         "actions/checkout",
+        "actions/download-artifact",
         "actions/setup-node",
+        "actions/upload-artifact",
+        "codecov/codecov-action",
         "dtolnay/rust-toolchain",
-        "pnpm/action-setup"
+        "pnpm/action-setup",
+        "taiki-e/install-action"
       ],
       "usesWorkflowToken": false
     },
@@ -5199,7 +5112,7 @@
       "usesWorkflowToken": false
     },
     {
-      "checksCount": 1,
+      "checksCount": 0,
       "commands": [
         {
           "dir": "",
@@ -5244,9 +5157,9 @@
           ],
           "pushes": false,
           "sends": [
-            "assets:msi",
-            "assets:msix",
-            "assets:nsis"
+            "assets:file:dist/**/*.exe",
+            "assets:file:dist/**/*.msi",
+            "assets:file:dist/**/*.msix"
           ],
           "stages": [],
           "when": {
@@ -5300,9 +5213,7 @@
           ]
         }
       ],
-      "landings": [
-        "apps/desktop/src-tauri/gen/schemas"
-      ],
+      "landings": [],
       "mentions": [],
       "name": "Release Desktop",
       "permissions": [
@@ -5312,109 +5223,13 @@
       "pushes": false,
       "reach": [
         {
-          "boundary": "desktop",
-          "depth": 0,
-          "files": 115
-        },
-        {
           "boundary": "packaging",
           "depth": 0,
           "files": 2
-        },
-        {
-          "boundary": "api-contract",
-          "depth": 1,
-          "enters": {
-            "file": "packages/api-contract/src/index.ts",
-            "from": "apps/desktop/src/app/AppShell.tsx"
-          },
-          "files": 12
-        },
-        {
-          "boundary": "domain",
-          "depth": 1,
-          "enters": {
-            "file": "packages/domain/src/index.ts",
-            "from": "apps/desktop/src/app/AppShell.honesty.test.tsx"
-          },
-          "files": 8
-        },
-        {
-          "boundary": "state",
-          "depth": 1,
-          "enters": {
-            "file": "packages/state/src/index.ts",
-            "from": "apps/desktop/src/app/AppShell.honesty.test.tsx"
-          },
-          "files": 2
-        },
-        {
-          "boundary": "runtime-core",
-          "depth": 2,
-          "enters": {
-            "file": "crates/runtime-core/src/services/session_service.rs",
-            "from": "apps/desktop/src-tauri/src/commands/session.rs"
-          },
-          "files": 6
-        },
-        {
-          "boundary": "runtime-persistence",
-          "depth": 2,
-          "enters": {
-            "file": "crates/runtime-persistence/src/db.rs",
-            "from": "apps/desktop/src-tauri/src/commands/history.rs"
-          },
-          "files": 6
-        },
-        {
-          "boundary": "runtime-planner",
-          "depth": 2,
-          "enters": {
-            "file": "crates/runtime-planner/src/lib.rs",
-            "from": "apps/desktop/src-tauri/src/commands/planner.rs"
-          },
-          "files": 8
         }
       ],
       "readers": [],
       "runs": [
-        {
-          "job": "build-windows",
-          "matched": true,
-          "path": "apps/desktop/src-tauri/build.rs",
-          "runKind": "executes",
-          "via": "tauri build"
-        },
-        {
-          "job": "build-windows",
-          "matched": true,
-          "path": "apps/desktop/src-tauri/src/lib.rs",
-          "runKind": "checks",
-          "via": "tauri build"
-        },
-        {
-          "built": true,
-          "job": "build-windows",
-          "matched": true,
-          "path": "apps/desktop/src-tauri/src/main.rs",
-          "runKind": "executes",
-          "via": "tauri build"
-        },
-        {
-          "directory": true,
-          "job": "build-windows",
-          "matched": true,
-          "path": "apps/desktop/src/",
-          "runKind": "executes",
-          "via": "tauri build → tsc apps/desktop/tsconfig.json"
-        },
-        {
-          "job": "build-windows",
-          "matched": true,
-          "path": "apps/desktop/vite.config.ts",
-          "runKind": "executes",
-          "via": "tauri build → vite build"
-        },
         {
           "job": "build-windows",
           "path": "packaging/check-release-version.mjs",
@@ -5429,7 +5244,7 @@
           "runKind": "executes"
         }
       ],
-      "runsCount": 7,
+      "runsCount": 2,
       "secrets": [],
       "sends": {
         "deploysPages": false,
@@ -5593,6 +5408,7 @@
       },
       "stages": [],
       "triggers": [],
+      "unshipped": true,
       "uses": [],
       "usesWorkflowToken": false
     }
@@ -5656,8 +5472,8 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "4929659ade8cf852c00d97a640c044a7026c907e",
-    "tracked": 439
+    "commit": "a733e62be3ee41ac5445f4e7848328518fe86ffd",
+    "tracked": 456
   },
   "landings": [
     {
@@ -5669,6 +5485,18 @@
         }
       ],
       "target": "Cargo.toml",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
+          "by": "apps/desktop/src/lib/mockBridge.test.ts",
+          "call": "literal",
+          "confidence": "ast",
+          "fromTests": true
+        }
+      ],
+      "target": "README.md",
       "writers": []
     },
     {
@@ -5691,17 +5519,6 @@
         }
       ],
       "target": "apps/console/src/main.rs",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "packaging/check-release-version.mjs",
-          "call": "literal",
-          "confidence": "ast"
-        }
-      ],
-      "target": "apps/desktop/package.json",
       "writers": []
     },
     {
@@ -6014,10 +5831,59 @@
   "overlaps": [],
   "submodules": [],
   "symlinks": [],
-  "testFiles": 74,
+  "testFiles": 88,
+  "testsNotRun": [
+    "apps/desktop/src/app/AppShell.honesty.test.tsx",
+    "apps/desktop/src/app/AppShell.result.test.tsx",
+    "apps/desktop/src/app/AppShell.runtime.test.tsx",
+    "apps/desktop/src/app/AppShell.test.tsx",
+    "apps/desktop/src/app/a11y.test.tsx",
+    "apps/desktop/src/app/bannedWords.test.ts",
+    "apps/desktop/src/app/execState.test.ts",
+    "apps/desktop/src/app/sessionWatch.test.ts",
+    "apps/desktop/src/app/terminalReplay.test.ts",
+    "apps/desktop/src/app/workflowMaking.test.tsx",
+    "apps/desktop/src/app/workflowStepWait.test.ts",
+    "apps/desktop/src/components/CommandPalette.test.tsx",
+    "apps/desktop/src/components/ErrorBoundary.test.tsx",
+    "apps/desktop/src/components/FoldPanel.test.tsx",
+    "apps/desktop/src/components/HistoryDrawer.test.tsx",
+    "apps/desktop/src/components/InputComposer.test.tsx",
+    "apps/desktop/src/components/MemoryDrawer.test.tsx",
+    "apps/desktop/src/components/OutputView.test.tsx",
+    "apps/desktop/src/components/PlanPanel.test.tsx",
+    "apps/desktop/src/components/PlannerStatusCard.test.tsx",
+    "apps/desktop/src/components/ResultLine.test.tsx",
+    "apps/desktop/src/components/SessionTabs.test.tsx",
+    "apps/desktop/src/components/SettingsDrawer.test.tsx",
+    "apps/desktop/src/components/WelcomeScreen.test.tsx",
+    "apps/desktop/src/components/WorkflowDrawer.test.tsx",
+    "apps/desktop/src/components/WorkflowEditor.test.tsx",
+    "apps/desktop/src/components/WorkflowRunBanner.test.tsx",
+    "apps/desktop/src/features/clients.test.ts",
+    "apps/desktop/src/features/persistence/persistenceClient.test.ts",
+    "apps/desktop/src/features/terminal/terminalEvents.test.ts",
+    "apps/desktop/src/hooks/useFocusZone.test.tsx",
+    "apps/desktop/src/hooks/useShortcuts.test.tsx",
+    "apps/desktop/src/lib/buildPlannerContext.test.ts",
+    "apps/desktop/src/lib/commandError.test.ts",
+    "apps/desktop/src/lib/commandResult.test.ts",
+    "apps/desktop/src/lib/displayPath.test.ts",
+    "apps/desktop/src/lib/fontScale.test.ts",
+    "apps/desktop/src/lib/layoutWidth.test.ts",
+    "apps/desktop/src/lib/mockBridge.test.ts",
+    "apps/desktop/src/lib/persistInBackground.test.ts",
+    "apps/desktop/src/lib/planLanguage.test.ts",
+    "apps/desktop/src/lib/plannerSource.test.ts",
+    "apps/desktop/src/lib/relativeTime.test.ts",
+    "apps/desktop/src/lib/shortcuts.test.ts",
+    "apps/desktop/src/lib/welcomePref.test.ts",
+    "apps/desktop/src/main.test.tsx",
+    "apps/desktop/src/styles/contrast.test.ts",
+    "apps/desktop/src/styles/reflow.test.ts"
+  ],
   "unassigned": [],
   "workspaces": [
-    "apps/desktop",
     "packages/api-contract",
     "packages/domain",
     "packages/state",

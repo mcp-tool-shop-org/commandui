@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useModalDialog } from "../lib/useModalDialog";
 
 type Props = {
@@ -21,6 +21,7 @@ export function WorkflowEditor({
   const [label, setLabel] = useState(initialLabel);
   const [steps, setSteps] = useState<string[]>(initialSteps.length > 0 ? initialSteps : [""]);
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
+  const submittedRef = useRef(false);
   const dialogRef = useModalDialog(true, onCancel);
   const creating = mode === "create";
 
@@ -71,7 +72,8 @@ export function WorkflowEditor({
     steps.every((s) => s.trim() !== "");
 
   function handleConfirm() {
-    if (!canConfirm) return;
+    if (!canConfirm || submittedRef.current) return;
+    submittedRef.current = true;
     onConfirm(
       label.trim(),
       steps.map((s) => s.trim()),

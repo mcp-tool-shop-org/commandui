@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ERROR_CODES } from "./commandError";
-import { tauriInvoke } from "./tauriInvoke";
+import { resetMockBridge } from "./mockBridge";
+import { isTauriRuntime, tauriInvoke } from "./tauriInvoke";
 
 const invoke = vi.hoisted(() => vi.fn());
 
@@ -10,9 +11,17 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 describe("tauriInvoke", () => {
   afterEach(() => {
+    resetMockBridge();
     invoke.mockReset();
     vi.useRealTimers();
     delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+  });
+
+  it("uses the mock bridge when the window is not running inside Tauri", async () => {
+    expect(isTauriRuntime()).toBe(false);
+    const listed = await tauriInvoke<{ sessions: unknown[] }>("session_list");
+    expect(listed.sessions).toEqual([]);
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   function asTauri() {

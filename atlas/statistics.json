@@ -84,7 +84,7 @@
       "confidence": "full",
       "highWater": null,
       "name": "desktop",
-      "qualifyingSourceCommits": 30,
+      "qualifyingSourceCommits": 31,
       "rebaseline": null
     },
     {
@@ -168,12 +168,12 @@
           "desktop"
         ]
       },
-      "cohesion": 0.781443,
+      "cohesion": 0.776156,
       "cohesionDropped": false,
       "confidence": "low",
       "highWater": null,
       "name": "runtime-core",
-      "qualifyingSourceCommits": 19,
+      "qualifyingSourceCommits": 20,
       "rebaseline": null
     },
     {
@@ -231,7 +231,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "site",
-      "qualifyingSourceCommits": 1,
+      "qualifyingSourceCommits": 2,
       "rebaseline": null
     },
     {
@@ -639,43 +639,43 @@
         "path": "LICENSE"
       },
       {
-        "commits": 1,
-        "lines": 65,
+        "commits": 2,
+        "lines": 182,
         "path": "README.es.md"
       },
       {
-        "commits": 1,
-        "lines": 65,
+        "commits": 2,
+        "lines": 182,
         "path": "README.fr.md"
       },
       {
-        "commits": 1,
-        "lines": 65,
+        "commits": 2,
+        "lines": 180,
         "path": "README.hi.md"
       },
       {
-        "commits": 1,
-        "lines": 65,
+        "commits": 2,
+        "lines": 180,
         "path": "README.it.md"
       },
       {
-        "commits": 1,
-        "lines": 65,
+        "commits": 2,
+        "lines": 182,
         "path": "README.ja.md"
       },
       {
-        "commits": 4,
-        "lines": 172,
+        "commits": 5,
+        "lines": 294,
         "path": "README.md"
       },
       {
-        "commits": 1,
-        "lines": 65,
+        "commits": 2,
+        "lines": 180,
         "path": "README.pt-BR.md"
       },
       {
-        "commits": 1,
-        "lines": 65,
+        "commits": 2,
+        "lines": 182,
         "path": "README.zh.md"
       },
       {
@@ -689,8 +689,8 @@
         "path": "SECURITY.md"
       },
       {
-        "commits": 1,
-        "lines": 84,
+        "commits": 2,
+        "lines": 86,
         "path": "SHIP_GATE.md"
       },
       {
@@ -1364,8 +1364,8 @@
         "path": "apps/desktop/src/lib/commandResult.ts"
       },
       {
-        "commits": 1,
-        "lines": 49,
+        "commits": 2,
+        "lines": 65,
         "path": "apps/desktop/src/lib/displayPath.test.ts"
       },
       {
@@ -1539,8 +1539,8 @@
         "path": "apps/desktop/vite.config.ts"
       },
       {
-        "commits": 16,
-        "lines": 403,
+        "commits": 17,
+        "lines": 417,
         "path": "atlas/README.md"
       },
       {
@@ -1549,18 +1549,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 16,
-        "lines": 1937,
+        "commits": 17,
+        "lines": 2013,
         "path": "atlas/page.json"
       },
       {
-        "commits": 16,
-        "lines": 5018,
+        "commits": 17,
+        "lines": 5114,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 16,
-        "lines": 8780,
+        "commits": 17,
+        "lines": 8900,
         "path": "atlas/structure.json"
       },
       {
@@ -1589,8 +1589,8 @@
         "path": "crates/runtime-core/src/parity.rs"
       },
       {
-        "commits": 16,
-        "lines": 4227,
+        "commits": 17,
+        "lines": 4229,
         "path": "crates/runtime-core/src/pty.rs"
       },
       {
@@ -1709,8 +1709,8 @@
         "path": "docs/dogfood-log.md"
       },
       {
-        "commits": 1,
-        "lines": 48,
+        "commits": 2,
+        "lines": 49,
         "path": "docs/handbook/SUMMARY.md"
       },
       {
@@ -1759,13 +1759,13 @@
         "path": "docs/handbook/src/developer-guide/testing.md"
       },
       {
-        "commits": 2,
-        "lines": 100,
+        "commits": 3,
+        "lines": 104,
         "path": "docs/handbook/src/intelligence/context-enrichment.md"
       },
       {
-        "commits": 1,
-        "lines": 69,
+        "commits": 2,
+        "lines": 79,
         "path": "docs/handbook/src/intelligence/memory-detectors.md"
       },
       {
@@ -1785,6 +1785,11 @@
       },
       {
         "commits": 1,
+        "lines": 46,
+        "path": "docs/handbook/src/orientation/accessibility.md"
+      },
+      {
+        "commits": 1,
         "lines": 62,
         "path": "docs/handbook/src/orientation/core-concepts.md"
       },
@@ -1799,8 +1804,8 @@
         "path": "docs/handbook/src/orientation/what-is-commandui.md"
       },
       {
-        "commits": 4,
-        "lines": 205,
+        "commits": 5,
+        "lines": 206,
         "path": "docs/handbook/src/product-behavior/keyboard-shortcuts.md"
       },
       {
@@ -1909,8 +1914,8 @@
         "path": "docs/specs/tui-spine.md"
       },
       {
-        "commits": 1,
-        "lines": 29,
+        "commits": 2,
+        "lines": 90,
         "path": "docs/store-listing.md"
       },
       {
@@ -2359,6 +2364,11 @@
         "path": "site/src/content.config.ts"
       },
       {
+        "commits": 1,
+        "lines": 51,
+        "path": "site/src/content/docs/handbook/accessibility.md"
+      },
+      {
         "commits": 3,
         "lines": 215,
         "path": "site/src/content/docs/handbook/beginners.md"
@@ -2409,13 +2419,13 @@
         "path": "site/src/content/docs/handbook/input-modes.md"
       },
       {
-        "commits": 2,
-        "lines": 105,
+        "commits": 3,
+        "lines": 109,
         "path": "site/src/content/docs/handbook/intelligence/context-enrichment.md"
       },
       {
-        "commits": 1,
-        "lines": 74,
+        "commits": 2,
+        "lines": 84,
         "path": "site/src/content/docs/handbook/intelligence/memory-detectors.md"
       },
       {
@@ -2424,8 +2434,8 @@
         "path": "site/src/content/docs/handbook/intelligence/workflow-promotion.md"
       },
       {
-        "commits": 2,
-        "lines": 166,
+        "commits": 3,
+        "lines": 167,
         "path": "site/src/content/docs/handbook/keyboard-shortcuts.md"
       },
       {
@@ -2509,8 +2519,8 @@
         "path": "site/src/pages/privacy.astro"
       },
       {
-        "commits": 3,
-        "lines": 183,
+        "commits": 4,
+        "lines": 229,
         "path": "site/src/site-config.ts"
       },
       {
@@ -2554,9 +2564,9 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-10-05T00:01:25.099Z",
+  "generatedAt": "2026-10-05T00:41:59.507Z",
   "generatedFrom": {
-    "commit": "4929659ade8cf852c00d97a640c044a7026c907e"
+    "commit": "a733e62be3ee41ac5445f4e7848328518fe86ffd"
   },
   "pairs": [
     {
@@ -2625,65 +2635,65 @@
     {
       "a": "atlas/README.md",
       "b": "atlas/page.json",
-      "either": 15,
-      "shared": 15,
+      "either": 16,
+      "shared": 16,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/statistics.json",
-      "either": 15,
-      "shared": 15,
+      "either": 16,
+      "shared": 16,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/structure.json",
-      "either": 15,
-      "shared": 15,
+      "either": 16,
+      "shared": 16,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/statistics.json",
-      "either": 15,
-      "shared": 15,
+      "either": 16,
+      "shared": 16,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/structure.json",
-      "either": 15,
-      "shared": 15,
+      "either": 16,
+      "shared": 16,
       "strength": 1
     },
     {
       "a": "atlas/statistics.json",
       "b": "atlas/structure.json",
-      "either": 15,
-      "shared": 15,
+      "either": 16,
+      "shared": 16,
       "strength": 1
     },
     {
       "a": "crates/runtime-core/src/pty.rs",
       "b": "crates/runtime-core/src/services/session_service.rs",
-      "either": 17,
+      "either": 18,
       "shared": 12,
-      "strength": 0.705882
+      "strength": 0.666667
     },
     {
       "a": "crates/runtime-core/src/pty.rs",
       "b": "crates/runtime-core/src/services/terminal_service.rs",
-      "either": 16,
+      "either": 17,
       "shared": 10,
-      "strength": 0.625
+      "strength": 0.588235
     },
     {
       "a": "crates/runtime-core/src/pty.rs",
       "b": "crates/runtime-core/src/session.rs",
-      "either": 14,
+      "either": 15,
       "shared": 8,
-      "strength": 0.571429
+      "strength": 0.533333
     },
     {
       "a": "crates/runtime-core/src/services/session_service.rs",
@@ -2745,16 +2755,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-10-04T20:01:16-04:00",
-    "inScopeFiles": 444,
+    "headDate": "2026-10-04T20:20:49-04:00",
+    "inScopeFiles": 487,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 85,
+    "qualifyingCommits": 89,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-08T00:01:16.000Z",
+    "since": "2026-04-08T00:20:49.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

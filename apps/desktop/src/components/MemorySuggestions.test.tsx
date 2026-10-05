@@ -64,4 +64,55 @@ describe("MemorySuggestions", () => {
     expect(screen.getByRole("region", { name: "Memory suggestions" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Accept" })).toBeVisible();
   });
+
+  it("renders nothing when every suggestion is already settled", () => {
+    const { container } = render(
+      <MemorySuggestions
+        suggestions={[suggestion({ id: "a", status: "accepted" })]}
+        onAccept={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("shows the pending suggestion and reports accept or dismiss", async () => {
+    const user = userEvent.setup();
+    const onAccept = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <MemorySuggestions
+        onAccept={onAccept}
+        onDismiss={onDismiss}
+        suggestions={[
+          suggestion({ id: "keep", status: "dismissed", label: "You frequently run 'git status'" }),
+          suggestion({ id: "show", kind: "made_up" as MemorySuggestion["kind"], derivedFromHistoryIds: [], confidence: 0.5, label: "Odd one" }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText("You frequently run 'git status'")).toBeNull();
+    expect(screen.getByText("made_up")).toBeInTheDocument();
+    expect(screen.getByText("Odd one")).toBeInTheDocument();
+    expect(screen.getByText("CommandUI is 50% sure.")).toBeInTheDocument();
+    expect(screen.queryByText(/Based on/)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Accept" }));
+    expect(onAccept).toHaveBeenCalledWith("show");
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(onDismiss).toHaveBeenCalledWith("show");
+  });
+
+  it("names a known kind and counts the commands it came from", () => {
+    render(
+      <MemorySuggestions
+        suggestions={[suggestion({ id: "s", label: "You frequently run 'git status'", derivedFromHistoryIds: ["h1", "h2"], confidence: 0.66 })]}
+        onAccept={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Frequent command")).toBeInTheDocument();
+    expect(screen.getByText("Seen in 2 commands you ran.")).toBeInTheDocument();
+    expect(screen.getByText("CommandUI is 66% sure.")).toBeInTheDocument();
+  });
 });

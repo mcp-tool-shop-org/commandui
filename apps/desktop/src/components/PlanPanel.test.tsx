@@ -179,4 +179,76 @@ describe("PlanPanel", () => {
     );
     expect(screen.getByText(/Looked at:/)).toHaveTextContent("Project folder C:\\Work\\other");
   });
+
+  it("rejects, saves, and shows where the plan runs", async () => {
+    const onReject = vi.fn();
+    const onSaveWorkflow = vi.fn();
+    render(
+      <PlanPanel
+        {...defaultProps}
+        plannerSource="mock"
+        target={{ label: "Session 1", cwd: "/work" }}
+        contextSources={["cwd: /work", "workflow:Ship"]}
+        onReject={onReject}
+        onSaveWorkflow={onSaveWorkflow}
+      />,
+    );
+    expect(screen.getByText("Practice plan — Ollama is not connected. This is not a real plan.")).toBeInTheDocument();
+    expect(screen.getByText("Session 1")).toBeInTheDocument();
+    expect(screen.getByText("Looked at: Working folder /work, Workflow Ship")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save Workflow" }));
+    expect(onSaveWorkflow).toHaveBeenCalledWith("git status --short");
+    await userEvent.click(screen.getByRole("button", { name: "Reject" }));
+    expect(onReject).toHaveBeenCalledOnce();
+  });
+
+  it("explains why a plan cannot run and offers both ways forward", async () => {
+    const onGoToTarget = vi.fn();
+    const onRetarget = vi.fn();
+    render(
+      <PlanPanel
+        {...defaultProps}
+        blockedReason="The session this plan was made for is closed."
+        notice="It will run in the open session."
+        onGoToTarget={onGoToTarget}
+        onRetarget={onRetarget}
+        retargetLabel="Run here"
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("The session this plan was made for is closed.");
+    expect(screen.getByText("It will run in the open session.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run Plan" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Go to that session" }));
+    await userEvent.click(screen.getByRole("button", { name: "Run here" }));
+    expect(onGoToTarget).toHaveBeenCalledOnce();
+    expect(onRetarget).toHaveBeenCalledOnce();
+  });
+
+  it("shows safety flags and blocks a command that hides characters", async () => {
+    const onApprove = vi.fn();
+    render(
+      <PlanPanel
+        {...defaultProps}
+        command={"git status\u202e"}
+        risk="low"
+        flags={{ destructive: true, touchesFiles: true, touchesNetwork: true, escalatesPrivileges: true, requiresConfirmation: true }}
+        safetyFlags={["deletes files"]}
+        ambiguityFlags={["which repo?"]}
+        onApprove={onApprove}
+      />,
+    );
+    expect(screen.getByText("Deletes files: cannot be undone")).toBeInTheDocument();
+    expect(screen.getByText("Runs with higher permissions")).toBeInTheDocument();
+    expect(screen.getByText("Uses the network")).toBeInTheDocument();
+    expect(screen.getByText("This needs a careful look before it runs")).toBeInTheDocument();
+    expect(screen.getByText(/which repo/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run Plan" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save Workflow" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Remove hidden characters" }));
+    // A destructive plan still needs the typed phrase once the hidden characters are gone.
+    expect(screen.getByRole("button", { name: "Run Plan" })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("Type confirm to run this"), "confirm");
+    await userEvent.click(screen.getByRole("button", { name: "Run Plan" }));
+    expect(onApprove).toHaveBeenCalledWith("git status");
+  });
 });
