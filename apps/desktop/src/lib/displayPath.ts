@@ -2,9 +2,9 @@
  * How a folder is shown in the UI: the user's home folder as `~`, and a long
  * path shortened in the middle so the folder you are in stays readable.
  *
- * The full path is kept everywhere else (history, runs, the shell itself);
- * this is display only. Showing `~` also keeps the account name off the
- * screen, which matters in screenshots and screen shares.
+ * History uses the same shortening. The shell's own output is unchanged.
+ * Showing `~` keeps the account name off the screen, which matters in
+ * screenshots and screen shares.
  */
 
 const WINDOWS_HOME = /^([A-Za-z]:[\\/](?:Users|Documents and Settings)[\\/][^\\/]+)(?=[\\/]|$)/i;

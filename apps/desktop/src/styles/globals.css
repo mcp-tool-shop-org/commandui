@@ -540,9 +540,11 @@ select {
 
 .history-drawer {
   width: 420px;
+  max-width: 100%;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border);
   padding: 16px;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -602,6 +604,9 @@ select {
   flex: 1;
   min-width: 0;
   min-height: 24px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   text-align: left;
   background: transparent;
   border: none;
@@ -658,6 +663,9 @@ select {
 .history-status--unknown { color: var(--text-muted); }
 
 .history-main {
+  display: block;
+  flex: 1;
+  min-width: 0;
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -666,7 +674,9 @@ select {
 
 .history-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+  min-width: 0;
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 4px;
@@ -703,6 +713,12 @@ select {
   gap: 10px;
   margin-bottom: 6px;
   font-size: 13px;
+  min-width: 0;
+}
+
+.history-detail-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .detail-label {
@@ -1352,12 +1368,11 @@ select {
 
 .history-wf-badge {
   background: var(--accent);
-  color: var(--bg-primary);
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  cursor: pointer;
+  color: var(--on-accent);
+  font-size: 12px;
   font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 3px;
 }
 
 .link-btn {

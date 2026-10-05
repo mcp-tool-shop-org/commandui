@@ -134,7 +134,7 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
               : disabled && disabledReason
                 ? disabledReason
                 : mode === "command"
-                ? "Submit a command explicitly…"
+                ? "Type a command…"
                 : "Describe what you want to do…"
           }
           readOnly={isRunning}

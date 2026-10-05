@@ -358,8 +358,8 @@ export function resultText(result: CommandResult): string {
 }
 
 function withExit(code: number | null | undefined, known: boolean): string {
-  if (!known || code == null) return "Did not work";
-  return `Did not work (exit code ${code})`;
+  if (!known || code == null) return "Did not work.";
+  return `Did not work (exit code ${code}).`;
 }
 
 function finishedLines(count: number): string {
@@ -433,7 +433,7 @@ export function describeResult(input: DescribeInput): CommandResult {
     return {
       phase: "failure",
       cause: "input_not_accepted",
-      headline: "Did not work",
+      headline: "Did not work.",
       reason: "The terminal did not accept that input.",
       next: "Try again. If the terminal is stuck, open a new session.",
       actions: ["run-again"],
@@ -494,7 +494,7 @@ export function describeResult(input: DescribeInput): CommandResult {
     return {
       phase: "unknown",
       cause: "exit_unknown",
-      headline: "CommandUI could not tell whether this worked",
+      headline: "CommandUI could not tell whether this worked.",
       reason: "The shell did not report an exit code.",
       next: "Show the output, or run the command again.",
       actions: FAILURE_ACTIONS,

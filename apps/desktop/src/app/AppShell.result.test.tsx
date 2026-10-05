@@ -84,7 +84,7 @@ describe("Workstream 1 result line", () => {
     const user = userEvent.setup();
     await renderReadyShell();
     await user.click(screen.getByRole("button", { name: /^Command$/ }));
-    const box = await screen.findByPlaceholderText("Submit a command explicitly…");
+    const box = await screen.findByPlaceholderText("Type a command…");
     await user.type(box, "list the files");
     await user.click(screen.getByRole("button", { name: /^Run$/ }));
 
@@ -101,7 +101,7 @@ describe("Workstream 1 result line", () => {
     const user = userEvent.setup();
     await renderReadyShell();
     await user.click(screen.getByRole("button", { name: /^Command$/ }));
-    const box = await screen.findByPlaceholderText("Submit a command explicitly…");
+    const box = await screen.findByPlaceholderText("Type a command…");
     await user.type(box, "echo hello");
     await user.click(screen.getByRole("button", { name: /^Run$/ }));
 
