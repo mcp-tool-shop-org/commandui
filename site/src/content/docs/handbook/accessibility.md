@@ -9,7 +9,7 @@ CommandUI is built for people the terminal shuts out: people who use a screen re
 
 ## Not tested yet
 
-Narrator, NVDA, and Windows contrast themes have **not** been tested by people on this build. Those runs come before the next Microsoft Store update. Until then, read this page as what the app is built to do. It is not a tested claim. If something here does not work for you, please [open an issue](https://github.com/mcp-tool-shop-org/commandui/issues).
+Narrator, NVDA, and Windows contrast themes have **not** been tested by people on this build. Those runs come in a later update. Until then, read this page as what the app is built to do. It is not a tested claim. If something here does not work for you, please [open an issue](https://github.com/mcp-tool-shop-org/commandui/issues).
 
 ## Screen readers
 

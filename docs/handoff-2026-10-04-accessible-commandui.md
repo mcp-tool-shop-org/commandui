@@ -7,6 +7,12 @@ around the machine rather than the person using it. Two concrete triggers: a
 red **FAILURE** badge with no other information, and no visible way to add a
 workflow.
 
+> **Superseded in part, 2026-10-05 (owner's decision).** 1.0.2 ships to the
+> Store as the functional update, without workstream 6's assistive-technology
+> runs. Those runs move to the next update, which is the one that may claim
+> tested accessibility. 1.0.2 makes no such claim, and "Tested for
+> accessibility" stays unticked.
+
 The 1.0.2 Store submission (Partner Center product 9NTN1GFQJ91M, Submission 2)
 stays in draft until the workstreams below marked **release gate** are done and
 their checks pass. Nothing in this file is done yet unless it says so.

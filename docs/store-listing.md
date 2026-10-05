@@ -1,14 +1,15 @@
 # Store listing (Partner Center, product 9NTN1GFQJ91M)
 
 The listing text for the 1.0.2 update, used for both English and English
-(United States). It is entered into the Submission 2 draft. The draft is
-submitted only after the accessibility release gate passes (Narrator, NVDA,
-two contrast themes, and three people). "Tested for accessibility" stays
-unticked until then.
+(United States). It is entered into the Submission 2 draft.
 
-Every line below is backed by the app and its tests. Do not add a claim that
-a screen reader, contrast theme, or group of people has tested this build
-until those receipts exist.
+1.0.2 is the functional update. It is submitted without the assistive-technology
+runs (Narrator, NVDA, two contrast themes, and three people), which come in the
+next update. "Tested for accessibility" stays unticked for 1.0.2.
+
+Every line below describes what the app is designed to do and is backed by the
+app and its tests. It makes no claim that the app is certified or tested for
+accessibility. Do not add one until the receipts of those runs exist.
 
 ## Name
 
@@ -16,7 +17,7 @@ CommandUI
 
 ## Short description
 
-An accessible Windows shell. Every result in a plain sentence, ask for commands in plain words, and nothing runs until you approve it.
+A Windows shell designed for accessibility. Every result in a plain sentence, ask for commands in plain words, and nothing runs until you approve it.
 
 ## Description
 
@@ -26,7 +27,7 @@ Every command ends with one plain sentence that says whether it worked, and what
 
 Ask lets you describe what you want in plain words. CommandUI drafts a command, explains it, and shows its risk in words. Nothing runs until you choose Run Plan. A command that deletes files or needs higher permissions also waits until you type the folder name.
 
-Built for the keyboard and for screen readers:
+Designed for the keyboard and for screen readers:
 • Results and errors are announced once, without moving your focus.
 • Output lists each command as plain text, one region per command.
 • F1 opens keyboard help. Ctrl+Shift+R jumps to the last result. Ctrl+Shift+A switches between Command and Ask.
@@ -38,7 +39,7 @@ Everything stays on your computer. Ask uses a model on this computer through Oll
 
 ## What's new in this version
 
-A new design around accessibility. Every result now ends in a plain sentence, with Ask how to fix it and Run again. Results and errors are announced to screen readers, Output shows each command as plain text, and every action has a keyboard path (F1 lists them). Text size goes from 100% to 200%. Workflows can be created and edited, and a delete can be undone. PowerShell sessions start cleanly in your home folder. Ask says when its local model is not ready instead of guessing. New icon.
+A new design around accessibility. Every result now ends in a plain sentence, with Ask how to fix it and Run again. Results and errors are announced to screen readers, Output shows each command as plain text, and every action has a keyboard path (F1 lists them). Text size goes from 100% to 200%. Workflows can be created and edited, and a delete can be undone. PowerShell sessions start cleanly in your home folder. Ask says when its local model is not ready instead of guessing, and the first request waits while the model loads. New icon. Testing with Narrator, NVDA and Windows contrast themes comes in a later update.
 
 ## Product features
 
