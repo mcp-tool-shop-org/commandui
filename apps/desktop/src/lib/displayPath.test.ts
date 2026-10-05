@@ -3,15 +3,15 @@ import { displayPath, tildeHome } from "./displayPath";
 
 describe("tildeHome", () => {
   it("shows a Windows home folder as ~", () => {
-    expect(tildeHome("C:\\Users\\sam")).toBe("~");
-    expect(tildeHome("C:\\Users\\sam\\work\\api")).toBe("~\\work\\api");
-    expect(tildeHome("d:/users/Sam Lee/src")).toBe("~/src");
+    expect(tildeHome("C:\\Users\\Default")).toBe("~");
+    expect(tildeHome("C:\\Users\\Default\\work\\api")).toBe("~\\work\\api");
+    expect(tildeHome("d:/users/Default User/src")).toBe("~/src");
   });
 
   it("shows a Unix or macOS home folder as ~", () => {
-    expect(tildeHome("/home/sam")).toBe("~");
-    expect(tildeHome("/home/sam/projects/api")).toBe("~/projects/api");
-    expect(tildeHome("/Users/sam/Desktop")).toBe("~/Desktop");
+    expect(tildeHome("/home/default")).toBe("~");
+    expect(tildeHome("/home/default/projects/api")).toBe("~/projects/api");
+    expect(tildeHome("/Users/Default/Desktop")).toBe("~/Desktop");
     expect(tildeHome("/root/.config")).toBe("~/.config");
   });
 
@@ -32,12 +32,12 @@ describe("displayPath", () => {
   });
 
   it("keeps a short path whole", () => {
-    expect(displayPath("C:\\Users\\sam\\api")).toBe("~\\api");
+    expect(displayPath("C:\\Users\\Default\\api")).toBe("~\\api");
     expect(displayPath("/srv/app")).toBe("/srv/app");
   });
 
   it("shortens a long path in the middle, keeping the last two folders", () => {
-    const long = "C:\\Users\\sam\\source\\repos\\company\\platform\\services\\orders-api";
+    const long = "C:\\Users\\Default\\source\\repos\\company\\platform\\services\\orders-api";
     expect(displayPath(long, 24)).toBe("~\\…\\services\\orders-api");
     expect(displayPath("/var/lib/some/very/deep/tree/of/folders/app/src", 20)).toBe("/…/app/src");
     expect(displayPath("E:\\a-long-folder\\another-long-folder\\third\\leaf", 20)).toBe("E:\\…\\third\\leaf");

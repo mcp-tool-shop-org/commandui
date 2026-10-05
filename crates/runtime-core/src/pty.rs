@@ -1595,7 +1595,7 @@ mod tests {
     #[test]
     fn a_session_never_defaults_to_the_windows_folder() {
         use std::path::PathBuf;
-        let home = Some(PathBuf::from(r"C:\Users\someone"));
+        let home = Some(PathBuf::from(r"C:\Users\Default"));
         let win = Some(PathBuf::from(r"C:\WINDOWS"));
         let pick = |dir: &str| default_session_cwd(Some(PathBuf::from(dir)), home.clone(), win.clone());
         // A packaged app launched from Start runs in System32: start at home.
