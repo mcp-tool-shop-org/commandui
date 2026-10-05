@@ -93,8 +93,8 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 0,
-      "changed": 13,
+      "added": 2,
+      "changed": 11,
       "moved": 0,
       "parts": 3,
       "removed": 0
@@ -102,13 +102,13 @@
     "items": [
       {
         "kind": "counts",
-        "sentence": "Nothing structural changed since 2026-10-05; 13 files changed content.",
+        "sentence": "Nothing structural changed since 2026-10-05; 2 files added and 11 changed content.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "3a7d7d7cdf9aefa523b6210915b4baf1c31a53ba",
-      "generatedAt": "2026-10-05T00:48:26.422Z"
+      "commit": "e6cbe8438e17f599b5287419f49e8655bea91091",
+      "generatedAt": "2026-10-05T01:27:27.315Z"
     },
     "unchanged": true
   },
@@ -194,9 +194,9 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 6 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "e6cbe8438e17f599b5287419f49e8655bea91091",
+  "commit": "df8c39e2eed8ebc66b54bd4e657fd2eb0442eaa3",
   "defaultBranch": "main",
-  "derived": "16 parts, mostly TypeScript (139 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
+  "derived": "16 parts, mostly TypeScript (141 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
     {
       "checks": [
@@ -228,7 +228,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 123
+          "files": 125
         },
         {
           "boundary": "domain",
@@ -312,7 +312,7 @@
         "packages/state/src/index.test.ts"
       ],
       "runsCount": 43,
-      "runsMore": 146,
+      "runsMore": 148,
       "sends": [
         "uploads coverage to Codecov"
       ],
@@ -355,7 +355,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 135
+          "files": 137
         },
         {
           "boundary": "packaging",
@@ -592,7 +592,7 @@
       ]
     }
   ],
-  "generatedAt": "2026-10-05T01:27:27.315Z",
+  "generatedAt": "2026-10-05T01:51:09.853Z",
   "limits": [
     "1 import could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository.",
     "2 writes and 3 reads use paths built at run time and are not named here.",
@@ -635,11 +635,11 @@
   ],
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 92,
+  "testFiles": 93,
   "testedBy": {
     "api-contract": 21,
     "console": 7,
-    "desktop": 56,
+    "desktop": 57,
     "domain": 20,
     "runtime-core": 9,
     "runtime-persistence": 6,

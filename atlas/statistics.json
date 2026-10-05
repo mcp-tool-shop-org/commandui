@@ -84,7 +84,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "desktop",
-      "qualifyingSourceCommits": 21,
+      "qualifyingSourceCommits": 22,
       "rebaseline": null
     },
     {
@@ -1086,8 +1086,8 @@
         "path": "apps/desktop/src/app/AppShell.honesty.test.tsx"
       },
       {
-        "commits": 2,
-        "lines": 119,
+        "commits": 3,
+        "lines": 123,
         "path": "apps/desktop/src/app/AppShell.result.test.tsx"
       },
       {
@@ -1096,8 +1096,8 @@
         "path": "apps/desktop/src/app/AppShell.runtime.test.tsx"
       },
       {
-        "commits": 3,
-        "lines": 592,
+        "commits": 4,
+        "lines": 610,
         "path": "apps/desktop/src/app/AppShell.test.tsx"
       },
       {
@@ -1206,33 +1206,33 @@
         "path": "apps/desktop/src/components/HelpDialog.tsx"
       },
       {
-        "commits": 4,
-        "lines": 246,
+        "commits": 5,
+        "lines": 254,
         "path": "apps/desktop/src/components/HistoryDrawer.test.tsx"
       },
       {
-        "commits": 7,
-        "lines": 477,
+        "commits": 8,
+        "lines": 491,
         "path": "apps/desktop/src/components/HistoryDrawer.tsx"
       },
       {
-        "commits": 4,
-        "lines": 157,
+        "commits": 5,
+        "lines": 169,
         "path": "apps/desktop/src/components/InputComposer.test.tsx"
       },
       {
-        "commits": 5,
-        "lines": 179,
+        "commits": 6,
+        "lines": 181,
         "path": "apps/desktop/src/components/InputComposer.tsx"
       },
       {
-        "commits": 1,
-        "lines": 76,
+        "commits": 2,
+        "lines": 91,
         "path": "apps/desktop/src/components/MemoryDrawer.test.tsx"
       },
       {
-        "commits": 3,
-        "lines": 78,
+        "commits": 4,
+        "lines": 96,
         "path": "apps/desktop/src/components/MemoryDrawer.tsx"
       },
       {
@@ -1241,8 +1241,8 @@
         "path": "apps/desktop/src/components/MemorySuggestions.test.tsx"
       },
       {
-        "commits": 3,
-        "lines": 138,
+        "commits": 4,
+        "lines": 156,
         "path": "apps/desktop/src/components/MemorySuggestions.tsx"
       },
       {
@@ -1441,13 +1441,13 @@
         "path": "apps/desktop/src/lib/commandError.ts"
       },
       {
-        "commits": 2,
-        "lines": 357,
+        "commits": 3,
+        "lines": 366,
         "path": "apps/desktop/src/lib/commandResult.test.ts"
       },
       {
-        "commits": 2,
-        "lines": 569,
+        "commits": 3,
+        "lines": 577,
         "path": "apps/desktop/src/lib/commandResult.ts"
       },
       {
@@ -1456,8 +1456,8 @@
         "path": "apps/desktop/src/lib/displayPath.test.ts"
       },
       {
-        "commits": 2,
-        "lines": 40,
+        "commits": 3,
+        "lines": 46,
         "path": "apps/desktop/src/lib/displayPath.ts"
       },
       {
@@ -1489,6 +1489,16 @@
         "commits": 1,
         "lines": 19,
         "path": "apps/desktop/src/lib/layoutWidth.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 26,
+        "path": "apps/desktop/src/lib/memoryLabels.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 44,
+        "path": "apps/desktop/src/lib/memoryLabels.ts"
       },
       {
         "commits": 2,
@@ -1606,8 +1616,8 @@
         "path": "apps/desktop/src/styles/contrast.test.ts"
       },
       {
-        "commits": 7,
-        "lines": 2025,
+        "commits": 8,
+        "lines": 2050,
         "path": "apps/desktop/src/styles/globals.css"
       },
       {
@@ -1616,8 +1626,8 @@
         "path": "apps/desktop/src/styles/nodeBuiltins.d.ts"
       },
       {
-        "commits": 2,
-        "lines": 53,
+        "commits": 3,
+        "lines": 60,
         "path": "apps/desktop/src/styles/reflow.test.ts"
       },
       {
@@ -1636,8 +1646,8 @@
         "path": "apps/desktop/vite.config.ts"
       },
       {
-        "commits": 7,
-        "lines": 335,
+        "commits": 11,
+        "lines": 409,
         "path": "atlas/README.md"
       },
       {
@@ -1646,18 +1656,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 7,
-        "lines": 2055,
+        "commits": 11,
+        "lines": 2323,
         "path": "atlas/page.json"
       },
       {
-        "commits": 7,
-        "lines": 4412,
+        "commits": 11,
+        "lines": 5594,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 7,
-        "lines": 10162,
+        "commits": 11,
+        "lines": 10364,
         "path": "atlas/structure.json"
       },
       {
@@ -1861,8 +1871,8 @@
         "path": "docs/handbook/src/developer-guide/testing.md"
       },
       {
-        "commits": 2,
-        "lines": 104,
+        "commits": 3,
+        "lines": 110,
         "path": "docs/handbook/src/intelligence/context-enrichment.md"
       },
       {
@@ -1891,8 +1901,8 @@
         "path": "docs/handbook/src/orientation/accessibility.md"
       },
       {
-        "commits": 1,
-        "lines": 62,
+        "commits": 2,
+        "lines": 64,
         "path": "docs/handbook/src/orientation/core-concepts.md"
       },
       {
@@ -1926,8 +1936,8 @@
         "path": "docs/handbook/src/product-behavior/settings.md"
       },
       {
-        "commits": 3,
-        "lines": 66,
+        "commits": 5,
+        "lines": 72,
         "path": "docs/handbook/src/user-guide/history.md"
       },
       {
@@ -1936,8 +1946,8 @@
         "path": "docs/handbook/src/user-guide/input-modes.md"
       },
       {
-        "commits": 1,
-        "lines": 77,
+        "commits": 2,
+        "lines": 103,
         "path": "docs/handbook/src/user-guide/memory.md"
       },
       {
@@ -2481,8 +2491,8 @@
         "path": "site/src/content/docs/handbook/beginners.md"
       },
       {
-        "commits": 1,
-        "lines": 67,
+        "commits": 2,
+        "lines": 69,
         "path": "site/src/content/docs/handbook/core-concepts.md"
       },
       {
@@ -2511,8 +2521,8 @@
         "path": "site/src/content/docs/handbook/first-ten-minutes.md"
       },
       {
-        "commits": 3,
-        "lines": 71,
+        "commits": 5,
+        "lines": 77,
         "path": "site/src/content/docs/handbook/history.md"
       },
       {
@@ -2526,8 +2536,8 @@
         "path": "site/src/content/docs/handbook/input-modes.md"
       },
       {
-        "commits": 2,
-        "lines": 109,
+        "commits": 3,
+        "lines": 115,
         "path": "site/src/content/docs/handbook/intelligence/context-enrichment.md"
       },
       {
@@ -2551,8 +2561,8 @@
         "path": "site/src/content/docs/handbook/layers.md"
       },
       {
-        "commits": 1,
-        "lines": 82,
+        "commits": 2,
+        "lines": 108,
         "path": "site/src/content/docs/handbook/memory.md"
       },
       {
@@ -2671,9 +2681,9 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-10-05T01:27:27.315Z",
+  "generatedAt": "2026-10-05T01:51:09.853Z",
   "generatedFrom": {
-    "commit": "e6cbe8438e17f599b5287419f49e8655bea91091"
+    "commit": "df8c39e2eed8ebc66b54bd4e657fd2eb0442eaa3"
   },
   "pairs": [
     {
@@ -2735,43 +2745,43 @@
     {
       "a": "atlas/README.md",
       "b": "atlas/page.json",
-      "either": 5,
-      "shared": 5,
+      "either": 8,
+      "shared": 8,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/statistics.json",
-      "either": 5,
-      "shared": 5,
+      "either": 8,
+      "shared": 8,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/structure.json",
-      "either": 5,
-      "shared": 5,
+      "either": 8,
+      "shared": 8,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/statistics.json",
-      "either": 5,
-      "shared": 5,
+      "either": 8,
+      "shared": 8,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/structure.json",
-      "either": 5,
-      "shared": 5,
+      "either": 8,
+      "shared": 8,
       "strength": 1
     },
     {
       "a": "atlas/statistics.json",
       "b": "atlas/structure.json",
-      "either": 5,
-      "shared": 5,
+      "either": 8,
+      "shared": 8,
       "strength": 1
     },
     {
@@ -2855,16 +2865,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-10-04T21:27:14-04:00",
-    "inScopeFiles": 468,
+    "headDate": "2026-10-04T21:51:05-04:00",
+    "inScopeFiles": 470,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 63,
+    "qualifyingCommits": 65,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-08T01:27:14.000Z",
+    "since": "2026-04-08T01:51:05.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

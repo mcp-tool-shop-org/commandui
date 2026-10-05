@@ -7,7 +7,7 @@ import { MemoryDrawer } from "./MemoryDrawer";
 function item(partial: Partial<MemoryItem> & Pick<MemoryItem, "id">): MemoryItem {
   return {
     scope: "project",
-    projectRoot: "/work/app",
+    projectRoot: String.raw`C:\Users\Default\app`,
     kind: "preferred_cwd",
     key: "workspace",
     value: "/work/app",
@@ -61,14 +61,19 @@ describe("MemoryDrawer", () => {
       expect.stringContaining("workspace"),
       expect.stringContaining("rg"),
     ]);
-    expect(mains[0]).toContain("/work/app");
-    expect(screen.getByText("/work/app")).toBeInTheDocument();
-    expect(screen.getAllByText("preferred_cwd")).toHaveLength(2);
+    // Plain names, and the home folder shortened, never the account name.
+    expect(screen.getAllByText("Preferred workspace")).toHaveLength(2);
+    expect(screen.getByText(String.raw`Only in ~\app`)).toBeInTheDocument();
+    expect(screen.getByText("Everywhere")).toBeInTheDocument();
+    expect(screen.queryByText(/Users.Default/)).toBeNull();
+    expect(screen.queryByText("preferred_cwd")).toBeNull();
+    // Each Delete says which item it removes.
+    expect(screen.getAllByRole("button", { name: "Delete" })[1]).toHaveAccessibleDescription(/tool.*rg/);
 
     await user.click(screen.getAllByRole("button", { name: "Delete" })[0]);
     expect(onDelete).toHaveBeenCalledWith("m1");
 
-    await user.click(screen.getAllByText("preferred_cwd")[0]);
+    await user.click(screen.getAllByText("Preferred workspace")[0]);
     expect(onClose).not.toHaveBeenCalled();
     await user.click(document.querySelector(".settings-overlay")!);
     expect(onClose).toHaveBeenCalledOnce();

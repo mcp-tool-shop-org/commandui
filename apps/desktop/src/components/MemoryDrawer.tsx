@@ -1,4 +1,5 @@
 import type { MemoryItem } from "@commandui/domain";
+import { memoryKindLabel, memoryScopeLabel, memoryValueLabel } from "../lib/memoryLabels";
 import { useModalDialog } from "../lib/useModalDialog";
 
 type Props = {
@@ -45,16 +46,17 @@ export function MemoryDrawer({ isOpen, items, onClose, onDelete, loading = false
           items.map((item) => (
             <div key={item.id} className="memory-item">
               <div className="history-row">
-                <span className="history-source">{item.kind}</span>
-                <span className="muted">{item.scope}</span>
+                <span className="history-source">{memoryKindLabel(item.kind)}</span>
+                <span className="muted">{memoryScopeLabel(item.scope, item.projectRoot)}</span>
               </div>
-              <div className="history-main">
-                {item.key} <span aria-hidden="true">→</span> {item.value}
+              <div className="history-main" id={`memory-item-${item.id}`}>
+                {item.key} <span aria-hidden="true">→</span> {memoryValueLabel(item.kind, item.value)}
               </div>
-              {item.projectRoot && (
-                <div className="history-sub muted">{item.projectRoot}</div>
-              )}
-              <button type="button" onClick={() => onDelete(item.id)}>
+              <button
+                type="button"
+                aria-describedby={`memory-item-${item.id}`}
+                onClick={() => onDelete(item.id)}
+              >
                 Delete
               </button>
             </div>
