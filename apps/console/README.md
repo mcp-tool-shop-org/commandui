@@ -85,7 +85,7 @@ Approval is refused while the command is clipped, while confirmation is pending,
 
 **Ask** — Intent composer. Type what you want in natural language, press Enter. Console sends your intent to the local AI planner, which generates a command proposal.
 
-**Review** — Shows the generated command, risk level, confidence score, safety flags, and explanation. Approve to execute, cancel to go back and refine. If the local model can't be reached, the planner falls back to a mock proposal and the Review title says so.
+**Review** — Shows the generated command, risk level, confidence score, safety flags, and explanation. Approve to execute, cancel to go back and refine. If the local model can't be reached, a release build returns no command. A debug build may show a stand-in, and the Review title says the model call failed.
 
 **Runs** — Run selector overlay. See all sessions with state badges (IDLE, RUN, FOREGROUND, BOOT, STOP, DONE, ERR!), unread markers, and CWD. Switch, create, or close sessions.
 

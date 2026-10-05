@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import type {
   CommandPlan,
   HistoryItem,
@@ -11,6 +12,7 @@ import type {
 import { runDetectors } from "@commandui/domain";
 import type {
   PlannerGeneratePlanResponse,
+  PlannerStatus,
   SessionExecState,
   TerminalExecutionFinishedEvent,
   TerminalExecutionStartedEvent,
@@ -72,22 +74,45 @@ import {
 import { InputComposer } from "../components/InputComposer";
 import type { InputComposerHandle } from "../components/InputComposer";
 import { PlanPanel, planCanRun } from "../components/PlanPanel";
-import { commandProblem, escapeForTerminal } from "../lib/displaySafe";
+import { PlannerStatusCard } from "../components/PlannerStatusCard";
+import { commandProblem, escapeForNote, escapeForTerminal } from "../lib/displaySafe";
+import { layoutIsNarrow, layoutWidth } from "../lib/layoutWidth";
+import {
+  askFixPrompt,
+  collapseRedraws,
+  countOutputLines,
+  describeResult,
+  looksLikeRequest,
+  resultText,
+} from "../lib/commandResult";
+import type { CommandResult, ResultAction } from "../lib/commandResult";
 import type { PlanRunGate } from "../components/PlanPanel";
 import { TerminalPane } from "../components/TerminalPane";
+import { ResultLine } from "../components/ResultLine";
 import type { TerminalPaneHandle } from "../components/TerminalPane";
 import { CommandPalette } from "../components/CommandPalette";
 import type { PaletteAction } from "../components/CommandPalette";
 import { HistoryDrawer } from "../components/HistoryDrawer";
 import { SessionTabs } from "../components/SessionTabs";
 import { SettingsDrawer } from "../components/SettingsDrawer";
+import { FoldPanel } from "../components/FoldPanel";
 import { MemorySuggestions } from "../components/MemorySuggestions";
 import { MemoryDrawer } from "../components/MemoryDrawer";
 import { WorkflowDrawer } from "../components/WorkflowDrawer";
 import { WorkflowEditor } from "../components/WorkflowEditor";
+import { HelpDialog } from "../components/HelpDialog";
+import { OutputView } from "../components/OutputView";
+import type { OutputBlock } from "../components/OutputView";
 import { WorkflowRunBanner } from "../components/WorkflowRunBanner";
 import { isTauriRuntime } from "../lib/tauriInvoke";
+import { errorText, isNotFoundError, isSessionExitedError } from "../lib/commandError";
+import { recordedPlannerSource } from "../lib/plannerSource";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { onMockEvent } from "../lib/mockBridge";
+import { displayPath } from "../lib/displayPath";
+import { fontScale } from "../lib/fontScale";
+import { readShowWelcome, writeShowWelcome } from "../lib/welcomePref";
+import { WelcomeScreen } from "../components/WelcomeScreen";
 import { waitForTerminalStatus } from "./workflowStepWait";
 import {
   busyMessageFor,
@@ -110,6 +135,33 @@ import {
   simplifyText,
 } from "./sessionWatch";
 import { appendReplayChunk, privateModePrefix, type ReplaySession } from "./terminalReplay";
+
+/** How long a delete can be undone, in milliseconds. */
+const UNDO_MS = 10_000;
+
+type SessionResult = {
+  command: string;
+  view: CommandResult;
+  output: string;
+  outputOpen: boolean;
+  exitCode: number | null;
+  exitKnown: boolean;
+};
+
+type ConfirmRequest = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+};
+
+type UndoRequest = {
+  token: string;
+  message: string;
+  restore: () => void;
+  commit: () => void;
+};
+
 
 function execStateOf(sessionId: string): SessionExecState | undefined {
   return useExecutionStore.getState().sessionExecStates[sessionId];
@@ -155,14 +207,16 @@ export function AppShell() {
   } = useMemoryStore();
   const {
     productMode,
-    reducedClutter,
+    fontSize,
     simplifiedSummaries,
-    confirmMediumRisk,
+    plannerModel,
+    plannerEndpoint,
     defaultInputMode,
     setProductMode,
-    setReducedClutter,
+    setFontSize,
     setSimplifiedSummaries,
-    setConfirmMediumRisk,
+    setPlannerModel,
+    setPlannerEndpoint,
     setDefaultInputMode,
   } = useSettingsStore();
   const { items: workflows, setWorkflows, addWorkflow, removeWorkflow } = useWorkflowStore();
@@ -171,7 +225,12 @@ export function AppShell() {
   const { restorePreviousZone } = useFocusStore();
 
   // --- Local state ---
-  const [plan, setPlan] = useState<PlannerGeneratePlanResponse | null>(null);
+  const [plan, setPlan] = useState<{
+    plan: CommandPlan;
+    review: NonNullable<PlannerGeneratePlanResponse["review"]>;
+    status: PlannerStatus;
+  } | null>(null);
+  const [plannerStatus, setPlannerStatus] = useState<PlannerStatus | null>(null);
   const [planNonce, setPlanNonce] = useState(0);
   const [currentPlanHistoryId, setCurrentPlanHistoryId] = useState<
     string | null
@@ -196,13 +255,31 @@ export function AppShell() {
   const [historyInitialExpandedId, setHistoryInitialExpandedId] = useState<string | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The welcome opens at launch until the user turns it off.
+  const [showWelcomeAtStartup, setShowWelcomeAtStartup] = useState(() => readShowWelcome());
+  const [welcomeOpen, setWelcomeOpen] = useState(showWelcomeAtStartup);
+  const [pendingConfirm, setPendingConfirm] = useState<ConfirmRequest | null>(null);
+  const confirmResolveRef = useRef<((accepted: boolean) => void) | null>(null);
+  const pendingUndoRef = useRef<UndoRequest | null>(null);
+  const undoTimerRef = useRef<number | null>(null);
+  const [undoMessage, setUndoMessage] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [outputOpen, setOutputOpen] = useState(false);
+  const [outputBlocksBySession, setOutputBlocksBySession] = useState<Record<string, OutputBlock[]>>({});
+  const [liveMessage, setLiveMessage] = useState("");
+  const [resultsBySession, setResultsBySession] = useState<Record<string, SessionResult>>({});
+  const [requestOffers, setRequestOffers] = useState<Record<string, string>>({});
   const [workflowEditorData, setWorkflowEditorData] = useState<{
     workflowId: string;
-    suggestionId: string;
+    suggestionId?: string;
     label: string;
     steps: string[];
     projectRoot?: string;
+    createdAt?: string;
+    source?: Workflow["source"];
+    originalIntent?: string;
+    mode: "create" | "edit";
   } | null>(null);
 
   // Background buffer for session-switch replay
@@ -210,6 +287,9 @@ export function AppShell() {
   // session; xterm keeps the real scrollback.
   const terminalLinesBySessionRef = useRef<Record<string, string[]>>({});
   const executionToHistoryRef = useRef<Record<string, string>>({});
+  const outputByExecRef = useRef<Record<string, string>>({});
+  const commandByExecRef = useRef<Record<string, string>>({});
+  const runningExecBySessionRef = useRef<Record<string, string>>({});
   const bootedRef = useRef(false);
   const settingsHydratedRef = useRef(false);
   const sessionBadgeRef = useRef<Record<string, SessionBadgeStatus>>({});
@@ -218,6 +298,8 @@ export function AppShell() {
   const workflowAbortBySessionRef = useRef(new Map<string, AbortController>());
   const terminalPaneRef = useRef<TerminalPaneHandle>(null);
   const composerRef = useRef<InputComposerHandle>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [narrowLayout, setNarrowLayout] = useState(false);
   const activeSessionIdRef = useRef<string | null>(null);
   const planGateRef = useRef<PlanRunGate>({ command: "", confirmed: false });
   const approvePlanRef = useRef<(command: string) => void>(() => {});
@@ -490,6 +572,10 @@ export function AppShell() {
   }
 
   function appendTerminalLine(sessionId: string, line: string) {
+    const runningExec = runningExecBySessionRef.current[sessionId];
+    if (runningExec) {
+      outputByExecRef.current[runningExec] = (outputByExecRef.current[runningExec] ?? "") + line;
+    }
     // Every PTY chunk is kept and shown: a read of real output can begin with any text, so
     // reduced clutter must never drop one. (It applies to the app's own annotations.)
     const buffers = terminalLinesBySessionRef.current;
@@ -529,9 +615,10 @@ export function AppShell() {
             const s = settingsRes.settings as Record<string, unknown>;
             if (typeof s.productMode === "string") setProductMode(s.productMode as "classic" | "guided");
             if (typeof s.defaultInputMode === "string") setDefaultInputMode(s.defaultInputMode as "command" | "ask");
-            if (typeof s.reducedClutter === "boolean") setReducedClutter(s.reducedClutter);
+            if (typeof s.fontSize === "string" && s.fontSize.trim()) setFontSize(s.fontSize);
             if (typeof s.simplifiedSummaries === "boolean") setSimplifiedSummaries(s.simplifiedSummaries);
-            if (typeof s.confirmMediumRisk === "boolean") setConfirmMediumRisk(s.confirmMediumRisk);
+            if (typeof s.plannerModel === "string" && s.plannerModel.trim()) setPlannerModel(s.plannerModel);
+            if (typeof s.plannerEndpoint === "string" && s.plannerEndpoint.trim()) setPlannerEndpoint(s.plannerEndpoint);
           }
         } catch {
           // settings not critical — do not hydrate, or a later write would replace saved preferences
@@ -619,10 +706,10 @@ export function AppShell() {
         }
         setBootPhase("ready");
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorText(e);
         setBootError(msg);
         setBootPhase("failed");
-        setError(`Boot failed: ${msg}`);
+        setError(`CommandUI did not start. ${msg}`);
       }
     }
     boot();
@@ -637,10 +724,20 @@ export function AppShell() {
   function noteExecutionStarted(event: TerminalExecutionStartedEvent) {
     const sessionId = event.execution.sessionId;
     if (!sessionId) return;
+    const executionId = event.execution.id;
+    commandByExecRef.current[executionId] = event.execution.command ?? "";
+    outputByExecRef.current[executionId] = "";
+    runningExecBySessionRef.current[sessionId] = executionId;
+    setRequestOffers((prev) => {
+      if (!(sessionId in prev)) return prev;
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
     publishBadge(sessionId, "running");
     noteExecState(sessionId, "running");
     if (sessionId === activeSessionIdRef.current) {
-      setActiveExecution(event.execution.id);
+      setActiveExecution(executionId);
     }
   }
 
@@ -648,6 +745,40 @@ export function AppShell() {
     const status = event.status;
     const badge: SessionBadgeStatus =
       status === "failure" ? "failure" : status === "success" ? "success" : "idle";
+    const output = outputByExecRef.current[event.executionId] ?? "";
+    const command =
+      commandByExecRef.current[event.executionId] ??
+      useHistoryStore.getState().items.find((item) => item.id === event.executionId)?.executedCommand ??
+      "";
+    delete outputByExecRef.current[event.executionId];
+    delete commandByExecRef.current[event.executionId];
+    if (event.sessionId && runningExecBySessionRef.current[event.sessionId] === event.executionId) {
+      delete runningExecBySessionRef.current[event.sessionId];
+    }
+    const exitKnown =
+      event.exitKnown !== false &&
+      event.status !== "unknown" &&
+      event.reason !== "exit_unknown" &&
+      event.reason !== "shell_exited" &&
+      event.reason !== "input_not_accepted";
+    const phase =
+      event.status === "success"
+        ? "success"
+        : event.status === "interrupted"
+          ? "interrupted"
+          : event.status === "unknown" || event.reason === "exit_unknown"
+            ? "unknown"
+            : "failure";
+    const visible = collapseRedraws(output, command);
+    const view = describeResult({
+      phase,
+      exitCode: event.exitCode,
+      exitKnown: event.exitKnown,
+      reason: event.reason,
+      outputText: visible,
+      outputLines: countOutputLines(visible),
+      command,
+    });
     if (event.sessionId) {
       publishBadge(event.sessionId, badge);
       const exec = useExecutionStore.getState().sessionExecStates[event.sessionId];
@@ -657,6 +788,29 @@ export function AppShell() {
       if (event.sessionId === activeSessionIdRef.current) {
         setActiveExecution(null);
       }
+      const sessionId = event.sessionId;
+      setResultsBySession((prev) => ({
+        ...prev,
+        [sessionId]: {
+          command,
+          view,
+          output: visible,
+          outputOpen: false,
+          exitCode: exitKnown ? event.exitCode : null,
+          exitKnown,
+        },
+      }));
+      setOutputBlocksBySession((prev) => {
+        const list = prev[sessionId] ?? [];
+        const block: OutputBlock = {
+          id: event.executionId,
+          command,
+          headline: resultText(view),
+          output: visible,
+        };
+        const without = list.filter((item) => item.id !== block.id);
+        return { ...prev, [sessionId]: [...without, block].slice(-40) };
+      });
     }
     setLastExecutionId(event.executionId);
 
@@ -670,14 +824,14 @@ export function AppShell() {
 
     updateHistoryItem(historyId, {
       status,
-      exitCode: event.exitCode,
+      exitCode: exitKnown ? event.exitCode : undefined,
       finishedAt,
       durationMs,
     });
     persistInBackground("history update", historyUpdate({
       historyId,
       status,
-      exitCode: event.exitCode,
+      exitCode: exitKnown ? event.exitCode : undefined,
       finishedAt,
       durationMs,
     }));
@@ -769,9 +923,9 @@ export function AppShell() {
         if (!disposed) void reconcileSessionStates();
       })
       .catch((e: unknown) => {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorText(e);
         console.error("[AppShell] Listener setup failed:", msg);
-        setError(`A background initialization step failed: ${msg}. Some features may not work correctly.`);
+        setError(`CommandUI could not finish starting. ${msg} Some parts may not work until you close the window and open CommandUI again.`);
       });
 
     return () => {
@@ -782,13 +936,12 @@ export function AppShell() {
             unlisten();
           })
           .catch((e: unknown) => {
-            const msg = e instanceof Error ? e.message : String(e);
+            const msg = errorText(e);
             console.warn("[AppShell] Unsubscribe failed:", msg);
           });
       }
     };
-    // Subscriptions live for the whole shell: appendTerminalLine reads reducedClutter from
-    // getState(), and resubscribing is asynchronous so events in the gap would be lost.
+    // Subscriptions live for the whole shell. Resubscribing is asynchronous, so events in the gap would be lost.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -848,9 +1001,9 @@ export function AppShell() {
               setStalledBoot((prev) => (prev.has(sid) ? prev : new Set(prev).add(sid)));
             })
             .catch((e: unknown) => {
-              const msg = e instanceof Error ? e.message : String(e);
+              const msg = errorText(e);
               console.error("[AppShell] Reconcile session states failed during stall check:", msg);
-              setError(`Session sync failed: ${msg}. Click Resync if a session appears stuck.`);
+              setError(`CommandUI could not check this session (${msg}). Choose Resync if a session looks stuck.`);
             });
         } else if (
           execIsForeground(state) &&
@@ -871,13 +1024,14 @@ export function AppShell() {
     persistInBackground("settings update", settingsUpdate({
       settings: {
         productMode,
-        reducedClutter,
+        fontSize,
         simplifiedSummaries,
-        confirmMediumRisk,
+        plannerModel,
+        plannerEndpoint,
         defaultInputMode,
       },
     }));
-  }, [browserPreview, productMode, reducedClutter, simplifiedSummaries, confirmMediumRisk, defaultInputMode]);
+  }, [browserPreview, productMode, fontSize, simplifiedSummaries, plannerModel, plannerEndpoint, defaultInputMode]);
 
   // --- Background persistence failure banner ---
   useEffect(() => {
@@ -886,10 +1040,72 @@ export function AppShell() {
         what: string;
         message: string;
       };
-      setError(`Background save failed (${detail.what}): ${detail.message}. Your data may not be persisted.`);
+      setError(`CommandUI could not save your latest change: ${detail.message}. Try again. If this keeps happening, the change may be lost when you close the window.`);
     };
     window.addEventListener("commandui:persist-failed", handler);
     return () => window.removeEventListener("commandui:persist-failed", handler);
+  }, []);
+
+  function cancelConfirm() {
+    const resolve = confirmResolveRef.current;
+    confirmResolveRef.current = null;
+    setPendingConfirm(null);
+    resolve?.(false);
+  }
+
+  function askConfirm(choice: Omit<ConfirmRequest, "onConfirm">): Promise<boolean> {
+    cancelConfirm();
+    return new Promise((resolve) => {
+      confirmResolveRef.current = resolve;
+      setPendingConfirm({
+        ...choice,
+        onConfirm: () => {
+          confirmResolveRef.current = null;
+          setPendingConfirm(null);
+          resolve(true);
+        },
+      });
+    });
+  }
+
+  function clearUndoTimer() {
+    if (undoTimerRef.current !== null) {
+      window.clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+  }
+
+  function armUndo(next: UndoRequest) {
+    const previous = pendingUndoRef.current;
+    if (previous && previous.token !== next.token) previous.commit();
+    pendingUndoRef.current = next;
+    setUndoMessage(next.message);
+    clearUndoTimer();
+    undoTimerRef.current = window.setTimeout(() => {
+      if (pendingUndoRef.current?.token !== next.token) return;
+      pendingUndoRef.current = null;
+      undoTimerRef.current = null;
+      setUndoMessage(null);
+      next.commit();
+    }, UNDO_MS);
+  }
+
+  function undoPending() {
+    const current = pendingUndoRef.current;
+    if (!current) return;
+    pendingUndoRef.current = null;
+    clearUndoTimer();
+    setUndoMessage(null);
+    current.restore();
+  }
+
+  useEffect(() => {
+    return () => {
+      clearUndoTimer();
+      const current = pendingUndoRef.current;
+      pendingUndoRef.current = null;
+      current?.commit();
+    };
   }, []);
 
   // --- Centralized keyboard shortcuts ---
@@ -899,6 +1115,8 @@ export function AppShell() {
     memoryOpen: false,
     settingsOpen: false,
     paletteOpen: false,
+    helpOpen: false,
+    outputOpen: false,
     editorOpen: false,
     planOpen: false,
   });
@@ -908,54 +1126,99 @@ export function AppShell() {
     memoryOpen,
     settingsOpen,
     paletteOpen,
+    helpOpen,
+    outputOpen,
     editorOpen: workflowEditorData !== null,
     planOpen: plan !== null,
   };
 
+  function setOverlay(name: "history" | "workflow" | "memory" | "settings" | "palette" | "help" | "output" | null) {
+    setHistoryOpen(name === "history");
+    setWorkflowOpen(name === "workflow");
+    setMemoryOpen(name === "memory");
+    setSettingsOpen(name === "settings");
+    setPaletteOpen(name === "palette");
+    setHelpOpen(name === "help");
+    setOutputOpen(name === "output");
+  }
+
+  function toggleOverlay(name: "history" | "workflow" | "memory" | "settings" | "palette" | "help" | "output") {
+    const overlay = overlayRef.current;
+    const open =
+      (name === "history" && overlay.historyOpen) ||
+      (name === "workflow" && overlay.workflowOpen) ||
+      (name === "memory" && overlay.memoryOpen) ||
+      (name === "settings" && overlay.settingsOpen) ||
+      (name === "palette" && overlay.paletteOpen) ||
+      (name === "help" && overlay.helpOpen) ||
+      (name === "output" && overlay.outputOpen);
+    setOverlay(open ? null : name);
+  }
+
   function closeAllOverlays() {
     const overlay = overlayRef.current;
     if (overlay.editorOpen) { setWorkflowEditorData(null); return; }
-    if (overlay.paletteOpen) { setPaletteOpen(false); return; }
-    if (overlay.historyOpen || overlay.workflowOpen || overlay.memoryOpen || overlay.settingsOpen) {
-      setHistoryOpen(false);
-      setWorkflowOpen(false);
-      setMemoryOpen(false);
-      setSettingsOpen(false);
+    if (
+      overlay.paletteOpen ||
+      overlay.helpOpen ||
+      overlay.outputOpen ||
+      overlay.historyOpen ||
+      overlay.workflowOpen ||
+      overlay.memoryOpen ||
+      overlay.settingsOpen
+    ) {
+      setOverlay(null);
       requestAnimationFrame(() => {
         restorePreviousZone();
         composerRef.current?.focus();
       });
-      return;
     }
-    // Escape at the shell prompt belongs to the shell (readline, completion): it must not
-    // also reject the pending plan. Reject stays on the plan's R key and button.
-    if (overlay.planOpen && useFocusStore.getState().currentZone !== "terminal") {
-      handleRejectPlan();
-    }
+    // Escape never rejects a plan. Reject stays on the plan's R key and its button.
+  }
+
+  function closeWelcome() {
+    setWelcomeOpen(false);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }
+
+  function changeShowWelcome(show: boolean) {
+    setShowWelcomeAtStartup(show);
+    writeShowWelcome(show);
   }
 
   function focusComposer() {
     composerRef.current?.focus();
   }
 
+  function focusResultLine() {
+    document.getElementById("result-line")?.focus();
+  }
+
   const shortcuts = useMemo<ShortcutDef[]>(() => {
     const defs: ShortcutDef[] = [
-      { id: "palette",       combo: "ctrl+k",       context: ["global"], action: () => setPaletteOpen(true) },
+      { id: "palette",       combo: "ctrl+k",       context: ["global"], action: () => setOverlay("palette") },
       // Ctrl+Shift variants: the only app chords that work while the terminal has focus
       // (plain Ctrl+<letter> goes to the shell there).
-      { id: "palette-term",  combo: "ctrl+shift+k", context: ["global"], action: () => setPaletteOpen(true) },
+      { id: "palette-term",  combo: "ctrl+shift+k", context: ["global"], action: () => setOverlay("palette") },
       { id: "focus-composer-term", combo: "ctrl+shift+j", context: ["global"], action: focusComposer },
       { id: "clear-terminal-term", combo: "ctrl+shift+l", context: ["global"], action: clearTerminalView },
       { id: "new-session-term", combo: "ctrl+shift+t", context: ["global"], action: handleCreateSession },
-      { id: "history-term",   combo: "ctrl+shift+h", context: ["global"], action: () => setHistoryOpen((v) => !v) },
-      { id: "memory-term",    combo: "ctrl+shift+m", context: ["global"], action: () => setMemoryOpen((v) => !v) },
+      { id: "history-term",   combo: "ctrl+shift+h", context: ["global"], action: () => toggleOverlay("history") },
+      { id: "memory-term",    combo: "ctrl+shift+m", context: ["global"], action: () => toggleOverlay("memory") },
       { id: "focus-composer", combo: "ctrl+j",       context: ["global"], action: focusComposer },
       { id: "clear-terminal", combo: "ctrl+l",       context: ["global"], action: clearTerminalView },
       { id: "new-session",   combo: "ctrl+t",        context: ["global"], action: handleCreateSession },
-      { id: "history",       combo: "ctrl+h",        context: ["global"], action: () => setHistoryOpen((v) => !v) },
-      { id: "workflows",     combo: "ctrl+shift+w",  context: ["global"], action: () => setWorkflowOpen((v) => !v) },
-      { id: "memory",        combo: "ctrl+m",        context: ["global"], action: () => setMemoryOpen((v) => !v) },
-      { id: "settings",      combo: "ctrl+,",        context: ["global"], action: () => setSettingsOpen((v) => !v) },
+      { id: "history",       combo: "ctrl+h",        context: ["global"], action: () => toggleOverlay("history") },
+      { id: "workflows",     combo: "ctrl+shift+w",  context: ["global"], action: () => toggleOverlay("workflow") },
+      { id: "memory",        combo: "ctrl+m",        context: ["global"], action: () => toggleOverlay("memory") },
+      { id: "settings",      combo: "ctrl+,",        context: ["global"], action: () => toggleOverlay("settings") },
+      { id: "help",          combo: "f1",           context: ["global"], action: () => toggleOverlay("help") },
+      { id: "output",        combo: "ctrl+shift+o", context: ["global"], action: () => toggleOverlay("output") },
+      { id: "focus-result",  combo: "ctrl+shift+r", context: ["global"], action: focusResultLine },
+      { id: "toggle-mode",   combo: "ctrl+shift+a", context: ["global"], action: () => {
+        const mode = useComposerStore.getState().inputMode;
+        setInputMode(mode === "command" ? "ask" : "command");
+      } },
       { id: "escape",        combo: "escape",        context: ["global"], action: closeAllOverlays },
       // Plan shortcuts. Bare keys do not fire in text fields (see resolveShortcut).
       // Approve uses the edited textarea command, and handleApprovePlan applies canRun.
@@ -1014,10 +1277,13 @@ export function AppShell() {
       { id: "new-session",    label: "New Session",        shortcut: "Ctrl+T",       action: handleCreateSession },
       { id: "focus-composer",  label: "Focus Composer",    shortcut: "Ctrl+J",       action: focusComposer },
       { id: "clear-terminal",  label: "Clear Terminal",    shortcut: "Ctrl+L",       action: clearTerminalView },
-      { id: "open-history",    label: "Open History",      shortcut: "Ctrl+H",       action: () => setHistoryOpen(true) },
-      { id: "open-workflows",  label: "Open Workflows",   shortcut: "Ctrl+Shift+W", action: () => setWorkflowOpen(true) },
-      { id: "open-memory",     label: "Open Memory",      shortcut: "Ctrl+M",       action: () => setMemoryOpen(true) },
-      { id: "open-settings",   label: "Open Settings",    shortcut: "Ctrl+,",       action: () => setSettingsOpen(true) },
+      { id: "open-history",    label: "Open History",      shortcut: "Ctrl+H",       action: () => setOverlay("history") },
+      { id: "open-workflows",  label: "Open Workflows",   shortcut: "Ctrl+Shift+W", action: () => setOverlay("workflow") },
+      { id: "open-memory",     label: "Open Memory",      shortcut: "Ctrl+M",       action: () => setOverlay("memory") },
+      { id: "open-settings",   label: "Open Settings",    shortcut: "Ctrl+,",       action: () => setOverlay("settings") },
+      { id: "open-output",     label: "Open Output",      shortcut: "Ctrl+Shift+O", action: () => setOverlay("output") },
+      { id: "focus-result",    label: "Focus the result", shortcut: "Ctrl+Shift+R", action: focusResultLine },
+      { id: "open-help",       label: "Keyboard help",    shortcut: "F1",           action: () => setOverlay("help") },
       ...sessions.map((s, i) => ({
         id: `switch-session-${s.id}`,
         label: `Switch to ${s.label ?? `Session ${i + 1}`}`,
@@ -1027,7 +1293,7 @@ export function AppShell() {
     ];
 
     if (isRunning) {
-      actions.push({ id: "interrupt", label: "Interrupt Command", action: handleInterrupt });
+      actions.push({ id: "interrupt", label: "Stop the command", action: handleInterrupt });
     }
     // A dead shell cannot be resynced; New Session (above) is its way forward.
     if ((activeExecState === "desynced" || activeBootStalled) && !activeExited) {
@@ -1052,19 +1318,20 @@ export function AppShell() {
 
   // --- Submit handler ---
   // Resolves false when the submit was rejected, so the composer keeps the user's text.
-  async function handleSubmit(value: string): Promise<boolean> {
+  async function handleSubmit(value: string, modeOverride?: "command" | "ask"): Promise<boolean> {
+    const mode = modeOverride ?? inputMode;
     if (!session) return false;
     if (busySessionsRef.current.has(session.id)) return false;
-    if (inputMode === "command" && sessionIsRunning(session.id)) {
+    if (mode === "command" && sessionIsRunning(session.id)) {
       setError(busyMessage(session.id));
       return false;
     }
     const sessionId = session.id;
-    if (inputMode === "command" && sessionNotReady(sessionId)) {
+    if (mode === "command" && sessionNotReady(sessionId)) {
       setError(notReadyMessage(sessionId));
       return false;
     }
-    if (inputMode === "command") {
+    if (mode === "command") {
       // Checked before any history row exists: a command the backend would refuse
       // (multi-line, control character) or that hides text must not leave a failure row.
       const problem = commandProblem(value);
@@ -1072,13 +1339,24 @@ export function AppShell() {
         setError(problem);
         return false;
       }
+      if (looksLikeRequest(value)) {
+        setRequestOffers((prev) => ({ ...prev, [sessionId]: value }));
+        setError(null);
+        return false;
+      }
     }
+    setRequestOffers((prev) => {
+      if (!(sessionId in prev)) return prev;
+      const next = { ...prev };
+      delete next[sessionId];
+      return next;
+    });
     let accepted = true;
     lockSession(sessionId);
     setError(null);
 
     try {
-      if (inputMode === "command") {
+      if (mode === "command") {
         // --- Raw command flow ---
         if (sessionIsRunning(sessionId)) {
           setError(busyMessage(sessionId));
@@ -1134,15 +1412,24 @@ export function AppShell() {
           sessionId: session.id,
           userIntent: value,
           context,
+          model: plannerModel,
+          endpoint: plannerEndpoint,
         });
 
         // The user switched tabs while the plan was generating: drop it rather than show
         // a plan for another session that Approve could run in the wrong place.
         if (activeSessionIdRef.current !== sessionId) return true;
 
+        setPlannerStatus(res.status);
+        if (!res.plan || !res.review) {
+          setPlan(null);
+          setPlanNotice(null);
+          return true;
+        }
+
         planGateRef.current = { command: "", confirmed: false };
         setPlanNotice(null);
-        setPlan(res);
+        setPlan({ plan: res.plan, review: res.review, status: res.status });
         setPlanNonce((n) => n + 1);
         setCurrentPlanHistoryId(historyId);
 
@@ -1156,7 +1443,7 @@ export function AppShell() {
           status: "planned",
           createdAt: new Date().toISOString(),
           cwd: session.cwd,
-          plannerSource: browserPreview ? "mock" : "ollama",
+          plannerSource: recordedPlannerSource(String(res.plan.source)),
         };
         appendHistoryItem(historyItem);
 
@@ -1165,11 +1452,11 @@ export function AppShell() {
 
         // Lines the app writes itself are escaped: model text must not move the cursor
         // or hide characters in the transcript.
-        appendAppNote(session.id, `? ${escapeForTerminal(value)}\r\n`);
-        appendAppNote(session.id, `[plan] ${escapeForTerminal(res.plan.command)}\r\n`);
+        appendAppNote(session.id, `? ${escapeForNote(value)}\n`);
+        appendAppNote(session.id, `Drafted: ${escapeForTerminal(res.plan.command)}\r\n`);
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorText(e);
       setError(msg);
       accepted = false;
     } finally {
@@ -1210,7 +1497,6 @@ export function AppShell() {
       !planCanRun({
         command: trimmed,
         risk: plan.plan.risk,
-        requireMediumRiskConfirmation: confirmMediumRisk,
         confirmed: gate.confirmed,
         flags: plan.plan,
       })
@@ -1299,7 +1585,7 @@ export function AppShell() {
         }
       }
 
-      appendAppNote(session.id, `[approved] ${escapeForTerminal(trimmed)}\r\n`);
+      appendAppNote(session.id, `Approved: ${escapeForTerminal(trimmed)}\r\n`);
 
       try {
         await executeCommand({
@@ -1335,7 +1621,7 @@ export function AppShell() {
           setMemorySuggestions((prev) => [toStore, ...prev]);
         } catch (storeErr) {
           setError(
-            `Could not save the memory suggestion: ${storeErr instanceof Error ? storeErr.message : String(storeErr)}`,
+            `Could not save the memory suggestion: ${errorText(storeErr)}`,
           );
         }
       }
@@ -1344,7 +1630,7 @@ export function AppShell() {
       setPlanNotice(null);
       setCurrentPlanHistoryId(null);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorText(e);
       setError(msg);
     } finally {
       approveInFlightRef.current = false;
@@ -1373,7 +1659,7 @@ export function AppShell() {
     // Works with no session open, or when the plan's session is gone.
     const noteSessionId =
       planSessionId && sessions.some((s) => s.id === planSessionId) ? planSessionId : session?.id;
-    if (noteSessionId) appendAppNote(noteSessionId, "[rejected]\r\n");
+    if (noteSessionId) appendAppNote(noteSessionId, "Rejected the draft.\r\n");
     setPlan(null);
     setPlanNotice(null);
     setCurrentPlanHistoryId(null);
@@ -1404,6 +1690,7 @@ export function AppShell() {
       source: "semantic",
       originalIntent: plan.plan.userIntent,
       command,
+      steps: [{ command }],
       projectRoot: session.cwd,
       createdAt: new Date().toISOString(),
     };
@@ -1412,11 +1699,11 @@ export function AppShell() {
     try {
       await workflowAdd({ workflow });
     } catch (e: unknown) {
-      setError(`Could not save the workflow: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Could not save the workflow: ${errorText(e)}`);
       return;
     }
     addWorkflow(workflow);
-    appendAppNote(session.id, `[workflow:saved] ${escapeForTerminal(workflow.label)}\r\n`);
+    appendAppNote(session.id, `Saved workflow ${escapeForTerminal(workflow.label)}.\r\n`);
   }
 
   // --- Terminal handlers ---
@@ -1434,7 +1721,7 @@ export function AppShell() {
         if (kind === "write") terminalIoFailedRef.current.delete(sessionId);
       },
       (e: unknown) => {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorText(e);
         if (kind === "resize") {
           console.warn("[terminal] resize failed:", msg);
           return;
@@ -1481,7 +1768,7 @@ export function AppShell() {
     try {
       await interruptTerminal({ sessionId });
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorText(e);
       // The command ended between the press and the call: nothing left to interrupt.
       if (/no command is currently running/i.test(msg)) return;
       setError(msg);
@@ -1503,13 +1790,11 @@ export function AppShell() {
     try {
       await resyncTerminal({ sessionId: activeSessionId });
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (/has exited/i.test(msg)) {
-        // Not a desync: the shell is gone. Show it as exited instead of an error.
+      if (isSessionExitedError(e)) {
         markSessionExited(activeSessionId);
         return;
       }
-      setError(msg);
+      setError(errorText(e));
     }
   }
 
@@ -1521,19 +1806,21 @@ export function AppShell() {
       addSession(res.session);
       setActiveSessionId(res.session.id);
       void reconcileSessionStates();
-      appendAppNote(res.session.id, `[session] ${escapeForTerminal(res.session.label)}\r\n`);
+      appendAppNote(res.session.id, `Opened ${escapeForTerminal(res.session.label)}.\r\n`);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
   /** Asks first when a command is running; used by the tab X and both close chords. */
-  function requestCloseSession(sessionId: string) {
-    if (
-      sessionIsRunning(sessionId) &&
-      !window.confirm("A command is still running in this session. Close it and stop the command?")
-    ) {
-      return;
+  async function requestCloseSession(sessionId: string) {
+    if (sessionIsRunning(sessionId)) {
+      const accepted = await askConfirm({
+        title: "Close this session?",
+        message: "A command is still running in this session. Close it and stop the command?",
+        confirmLabel: "Close session",
+      });
+      if (!accepted) return;
     }
     void handleCloseSession(sessionId);
   }
@@ -1568,7 +1855,7 @@ export function AppShell() {
       inFlightExecRef.current.delete(sessionId);
       unlockSession(sessionId);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -1599,14 +1886,15 @@ export function AppShell() {
     // A rerun skips the plan panel's risk checkbox, and the row does not record the risk it
     // was approved at: confirm when the directory differs or the command came from a plan.
     const cwdDiffers = item.cwd !== undefined && item.cwd !== session.cwd;
-    if (
-      (cwdDiffers || item.source === "semantic") &&
-      !window.confirm(
-        `Run again in "${session.label}" (${session.cwd})?\n\n${escapeForTerminal(command)}` +
-          (cwdDiffers ? `\n\nIt first ran in ${item.cwd}.` : ""),
-      )
-    ) {
-      return;
+    if (cwdDiffers || item.source === "semantic") {
+      const accepted = await askConfirm({
+        title: "Run this again?",
+        message:
+          `Run again in "${session.label}" (${displayPath(session.cwd)})?\n\n${escapeForTerminal(command)}` +
+          (cwdDiffers ? `\n\nIt first ran in ${displayPath(item.cwd)}.` : ""),
+        confirmLabel: "Run again",
+      });
+      if (!accepted) return;
     }
 
     const sessionId = session.id;
@@ -1651,7 +1939,7 @@ export function AppShell() {
 
       setHistoryOpen(false);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       unlockSession(sessionId);
     }
@@ -1671,7 +1959,7 @@ export function AppShell() {
       const original = sessions.some((s) => s.id === item.sessionId)
         ? "was made in another session"
         : "was made in a session that is closed";
-      setPlanNotice(`This plan ${original}. It will run in "${live.label}" (${live.cwd}) instead.`);
+      setPlanNotice(`This plan ${original}. It will run in "${live.label}" (${displayPath(live.cwd)}) instead.`);
     } else {
       setPlanNotice(null);
     }
@@ -1704,6 +1992,15 @@ export function AppShell() {
         memoryUsed: [],
         retrievedContext: [],
       },
+      status: {
+        state: "ready",
+        model: plannerModel,
+        endpoint: plannerEndpoint,
+        headline: "Ready.",
+        fix: `Ask can draft a command with ${plannerModel}.`,
+        link: "https://ollama.com/library",
+        linkLabel: "Model library",
+      },
     });
     setPlanNonce((n) => n + 1);
     // Do NOT adopt the historical id: reject/approve must not rewrite that row.
@@ -1722,6 +2019,7 @@ export function AppShell() {
       source: item.source,
       originalIntent: item.source === "semantic" ? item.userInput : undefined,
       command,
+      steps: [{ command }],
       projectRoot: session.cwd,
       createdAt: new Date().toISOString(),
     };
@@ -1729,12 +2027,54 @@ export function AppShell() {
     try {
       await workflowAdd({ workflow });
     } catch (e: unknown) {
-      setError(`Could not save the workflow: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Could not save the workflow: ${errorText(e)}`);
       return;
     }
     addWorkflow(workflow);
-    appendAppNote(session.id, `[workflow:saved] ${escapeForTerminal(workflow.label)}\r\n`);
+    appendAppNote(session.id, `Saved workflow ${escapeForTerminal(workflow.label)}.\r\n`);
     setHistoryOpen(false);
+  }
+
+  function handleNewWorkflow() {
+    setWorkflowEditorData({
+      workflowId: crypto.randomUUID(),
+      label: "",
+      steps: [""],
+      projectRoot: session?.cwd,
+      mode: "create",
+    });
+  }
+
+  function handleEditWorkflow(workflow: Workflow) {
+    const steps =
+      workflow.steps && workflow.steps.length > 0
+        ? workflow.steps.map((step) => step.command)
+        : workflow.command
+          ? [workflow.command]
+          : [""];
+    setWorkflowEditorData({
+      workflowId: workflow.id,
+      label: workflow.label,
+      steps,
+      projectRoot: workflow.projectRoot,
+      createdAt: workflow.createdAt,
+      source: workflow.source,
+      originalIntent: workflow.originalIntent,
+      mode: "edit",
+    });
+  }
+
+  function handleSaveSelectedWorkflows(items: HistoryItem[]) {
+    const chosen = items.filter((item) => item.executedCommand ?? item.generatedCommand);
+    if (chosen.length === 0) return;
+    const only = chosen.length === 1 ? chosen[0] : undefined;
+    setWorkflowEditorData({
+      workflowId: crypto.randomUUID(),
+      label: only ? only.userInput.slice(0, 48) : "",
+      steps: chosen.map((item) => item.executedCommand ?? item.generatedCommand ?? ""),
+      projectRoot: session?.cwd,
+      mode: "create",
+    });
   }
 
   // --- Workflow run helpers ---
@@ -1759,14 +2099,14 @@ export function AppShell() {
     const durSuffix = duration ? ` (${duration})` : "";
 
     if (finalStatus === "success") {
-      appendAppNote(sessionId, `[workflow:done] ${escapeForTerminal(run.workflowName)} — ${succeeded}/${total} succeeded${durSuffix}\r\n`);
+      appendAppNote(sessionId, `Finished workflow ${escapeForTerminal(run.workflowName)}. ${succeeded} of ${total} steps worked${durSuffix}.\r\n`);
     } else if (finalStatus === "failed") {
       const failedStep = run.steps.find((s) => s.status === "failed");
-      appendAppNote(sessionId, `[workflow:failed] ${escapeForTerminal(run.workflowName)} — ${succeeded}/${total} succeeded, failed on step ${(failedStep?.index ?? 0) + 1}${durSuffix}\r\n`);
+      appendAppNote(sessionId, `Workflow ${escapeForTerminal(run.workflowName)} stopped. ${succeeded} of ${total} steps worked, and step ${(failedStep?.index ?? 0) + 1} did not${durSuffix}.\r\n`);
     } else {
       const skipped = run.steps.filter((s) => s.status === "skipped").length;
       const interruptedStep = run.steps.find((s) => s.status === "interrupted");
-      appendAppNote(sessionId, `[workflow:interrupted] ${escapeForTerminal(run.workflowName)} — interrupted during step ${(interruptedStep?.index ?? 0) + 1}; ${skipped} skipped${durSuffix}\r\n`);
+      appendAppNote(sessionId, `Workflow ${escapeForTerminal(run.workflowName)} was stopped during step ${(interruptedStep?.index ?? 0) + 1}. ${skipped} steps were skipped${durSuffix}.\r\n`);
     }
   }
 
@@ -1792,14 +2132,13 @@ export function AppShell() {
     }
     // A workflow records no risk; running it in a different directory than it was saved in is
     // the case worth a second look.
-    if (
-      workflow.projectRoot &&
-      workflow.projectRoot !== session.cwd &&
-      !window.confirm(
-        `Run "${escapeForTerminal(workflow.label)}" in "${session.label}" (${session.cwd})? It was saved for ${workflow.projectRoot}.\n\n${stepCommands.map(escapeForTerminal).join("\n")}`,
-      )
-    ) {
-      return;
+    if (workflow.projectRoot && workflow.projectRoot !== session.cwd) {
+      const accepted = await askConfirm({
+        title: "Run this workflow here?",
+        message: `Run "${escapeForTerminal(workflow.label)}" in "${session.label}" (${displayPath(session.cwd)})? It was saved for ${displayPath(workflow.projectRoot)}.\n\n${stepCommands.map(escapeForTerminal).join("\n")}`,
+        confirmLabel: "Run workflow",
+      });
+      if (!accepted) return;
     }
     lockSession(runSessionId);
     const controller = new AbortController();
@@ -1893,7 +2232,7 @@ export function AppShell() {
         ) {
           appendAppNote(
             runSessionId,
-            `[workflow:waiting] step ${i + 1}/${commands.length} is still running. Use Interrupt to stop it.`,
+            `Step ${i + 1} of ${commands.length} is still running. Choose Stop to end it.`,
           );
           waited = await waitForStepCompletion(executionId, controller.signal);
         }
@@ -1964,7 +2303,7 @@ export function AppShell() {
         }
       }
       completeActiveRun("failed");
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       if (workflowAbortBySessionRef.current.get(runSessionId) === controller) {
         workflowAbortBySessionRef.current.delete(runSessionId);
@@ -1975,17 +2314,27 @@ export function AppShell() {
 
   // --- Workflow delete handler ---
   async function handleDeleteWorkflow(workflowId: string) {
-    try {
-      await workflowDelete({ id: workflowId });
-      removeWorkflow(workflowId);
-    } catch (e: unknown) {
-      // The row never reached the database: it can only be removed from the UI.
-      if (isMissingIdError(e)) {
-        removeWorkflow(workflowId);
-        return;
-      }
-      setError(e instanceof Error ? e.message : String(e));
-    }
+    const workflow = useWorkflowStore.getState().items.find((item) => item.id === workflowId);
+    if (!workflow) return;
+    const accepted = await askConfirm({
+      title: "Delete this workflow?",
+      message: `Delete "${workflow.label}"? You can bring it back for 10 seconds.`,
+      confirmLabel: "Delete workflow",
+    });
+    if (!accepted) return;
+    removeWorkflow(workflowId);
+    armUndo({
+      token: `workflow:${workflowId}`,
+      message: `Deleted ${workflow.label}.`,
+      restore: () => addWorkflow(workflow),
+      commit: () => {
+        void workflowDelete({ id: workflowId }).catch((e: unknown) => {
+          if (isNotFoundError(e)) return;
+          addWorkflow(workflow);
+          setError(errorText(e));
+        });
+      },
+    });
   }
 
   // --- Cross-drawer navigation (Phase 6D) ---
@@ -1997,8 +2346,7 @@ export function AppShell() {
     );
     if (!entry) return;
     const [workflowId] = entry;
-    setHistoryOpen(false);
-    setWorkflowOpen(true);
+    setOverlay("workflow");
     setExpandedRunWorkflowId(workflowId);
   }
 
@@ -2010,10 +2358,9 @@ export function AppShell() {
   }
 
   function handleViewHistoryItemFromRun(historyItemId: string) {
-    setWorkflowOpen(false);
     setExpandedRunWorkflowId(null);
     setHistoryInitialExpandedId(historyItemId);
-    setHistoryOpen(true);
+    setOverlay("history");
   }
 
   // --- Memory handlers ---
@@ -2034,6 +2381,7 @@ export function AppShell() {
           label: suggestion.proposedKey,
           steps,
           projectRoot: suggestion.projectRoot,
+          mode: "create",
         });
         return;
       } catch (error: unknown) {
@@ -2054,7 +2402,7 @@ export function AppShell() {
         ),
       );
     } catch (e: unknown) {
-      if (isMissingIdError(e)) {
+      if (isNotFoundError(e)) {
         // The database no longer holds it as pending (accepted or dismissed earlier, or never
         // stored). Stop offering it, but say plainly that nothing was created: an explicit
         // Accept must not read as success or as a quiet dismissal.
@@ -2064,11 +2412,11 @@ export function AppShell() {
           ),
         );
         setError(
-          "That suggestion is no longer pending in the database (it was accepted or dismissed before), so no memory item was created and it was removed from the list.",
+          "That suggestion was already handled, so nothing new was saved and it was taken off the list.",
         );
         return;
       }
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -2076,29 +2424,37 @@ export function AppShell() {
   async function handleWorkflowEditorConfirm(label: string, steps: string[]) {
     if (!workflowEditorData || confirmingRef.current) return;
     confirmingRef.current = true;
-    const { workflowId, suggestionId, projectRoot } = workflowEditorData;
+    const data = workflowEditorData;
+    const existing = useWorkflowStore.getState().items.find((item) => item.id === data.workflowId);
 
     try {
-      // 1. Create and persist the workflow first. The editor stays open until this
-      //    succeeds so the user's edits are never lost to a failed write.
+      // Persist first. The editor stays open until this succeeds so a failed
+      // write does not throw away the name and steps.
       const workflow: Workflow = {
-        id: workflowId,
+        id: data.workflowId,
         label,
-        source: "promoted",
+        source: data.suggestionId ? "promoted" : (data.source ?? existing?.source ?? "raw"),
+        originalIntent: data.originalIntent ?? existing?.originalIntent,
         command: steps.join(" && "),
         steps: steps.map((cmd) => ({ command: cmd })),
-        projectRoot,
-        createdAt: new Date().toISOString(),
+        projectRoot: data.projectRoot ?? existing?.projectRoot,
+        createdAt: data.createdAt ?? existing?.createdAt ?? new Date().toISOString(),
       };
       await workflowAdd({ workflow });
       addWorkflow(workflow);
       setWorkflowEditorData(null);
       if (session) {
-        appendAppNote(session.id, `[workflow:promoted] ${escapeForTerminal(workflow.label)}\r\n`);
+        const verb = data.mode === "edit" ? "Updated workflow" : "Saved workflow";
+        appendAppNote(session.id, `${verb} ${escapeForTerminal(workflow.label)}.\r\n`);
+      }
+      if (!data.suggestionId) {
+        setOverlay("workflow");
+        return;
       }
 
-      // 2. Accept the memory suggestion. A failure here is partial success: the
-      //    workflow exists, so report it instead of discarding anything.
+      // Accept the memory suggestion. A failure here is partial success: the
+      // workflow exists, so report it instead of discarding anything.
+      const suggestionId = data.suggestionId;
       try {
         const res = await memoryAcceptSuggestion({ suggestionId });
         if (res.createdItem) {
@@ -2110,7 +2466,7 @@ export function AppShell() {
           ),
         );
       } catch (acceptErr: unknown) {
-        if (isMissingIdError(acceptErr)) {
+        if (isNotFoundError(acceptErr)) {
           setMemorySuggestions((prev) =>
             prev.map((s) =>
               s.id === suggestionId ? { ...s, status: "accepted" as const } : s,
@@ -2118,12 +2474,12 @@ export function AppShell() {
           );
         } else {
           setError(
-            `Workflow saved, but the suggestion could not be marked accepted: ${acceptErr instanceof Error ? acceptErr.message : String(acceptErr)}`,
+            `Workflow saved, but the suggestion could not be marked accepted: ${errorText(acceptErr)}`,
           );
         }
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       confirmingRef.current = false;
     }
@@ -2137,8 +2493,8 @@ export function AppShell() {
     try {
       await memoryDismissSuggestion({ suggestionId });
     } catch (e: unknown) {
-      if (!isMissingIdError(e)) {
-        setError(e instanceof Error ? e.message : String(e));
+      if (!isNotFoundError(e)) {
+        setError(errorText(e));
         return;
       }
       // Not stored or already handled: dismissing locally is the intended end state.
@@ -2152,23 +2508,27 @@ export function AppShell() {
   }
 
   async function handleDeleteMemory(memoryId: string) {
-    try {
-      await memoryDelete({ memoryId });
-      removeMemoryItem(memoryId);
-    } catch (e: unknown) {
-      if (isMissingIdError(e)) {
-        removeMemoryItem(memoryId);
-        return;
-      }
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  // The backend reports an id it does not hold (or a suggestion no longer pending) as an error.
-  // For the UI that is the state the user asked for, so callers reconcile instead of looping on it.
-  function isMissingIdError(e: unknown): boolean {
-    const msg = e instanceof Error ? e.message : String(e);
-    return /not found|not pending|no suggestion|no memory item|no workflow/i.test(msg);
+    const item = useMemoryStore.getState().items.find((entry) => entry.id === memoryId);
+    if (!item) return;
+    const accepted = await askConfirm({
+      title: "Delete this memory?",
+      message: `Delete "${item.key}"? You can bring it back for 10 seconds.`,
+      confirmLabel: "Delete memory",
+    });
+    if (!accepted) return;
+    removeMemoryItem(memoryId);
+    armUndo({
+      token: `memory:${memoryId}`,
+      message: `Deleted ${item.key}.`,
+      restore: () => addMemoryItem(item),
+      commit: () => {
+        void memoryDelete({ memoryId }).catch((e: unknown) => {
+          if (isNotFoundError(e)) return;
+          addMemoryItem(item);
+          setError(errorText(e));
+        });
+      },
+    });
   }
 
   // --- Suggestion generation ---
@@ -2228,18 +2588,175 @@ export function AppShell() {
     }
   }
 
+  const offerText = activeSessionId ? requestOffers[activeSessionId] : undefined;
+  const sessionResult = activeSessionId ? resultsBySession[activeSessionId] : undefined;
+  const shownResult = offerText
+    ? describeResult({ phase: "request", command: offerText })
+    : isRunning
+      ? describeResult({ phase: "running", command: sessionResult?.command })
+      : sessionResult?.view ?? null;
+
+  function onResultAction(action: ResultAction) {
+    if (!activeSessionId) return;
+    if (action === "stop") {
+      void handleInterrupt();
+      return;
+    }
+    if (action === "show-output") {
+      const sessionId = activeSessionId;
+      setResultsBySession((prev) => {
+        const current = prev[sessionId];
+        if (!current) return prev;
+        return { ...prev, [sessionId]: { ...current, outputOpen: !current.outputOpen } };
+      });
+      return;
+    }
+    if (action === "ask-instead") {
+      const text = requestOffers[activeSessionId];
+      if (!text) return;
+      const sessionId = activeSessionId;
+      setRequestOffers((prev) => {
+        if (!(sessionId in prev)) return prev;
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
+      });
+      setInputMode("ask");
+      composerRef.current?.setValue(text);
+      composerRef.current?.focus();
+      return;
+    }
+    const current = resultsBySession[activeSessionId];
+    if (!current) return;
+    if (action === "ask-fix") {
+      const prompt = askFixPrompt({
+        command: current.command,
+        exitCode: current.exitCode,
+        exitKnown: current.exitKnown,
+        outputText: current.output,
+        cause: current.view.cause,
+      });
+      setInputMode("ask");
+      composerRef.current?.setValue(prompt);
+      void handleSubmit(prompt, "ask").then((ok) => {
+        if (ok) composerRef.current?.setValue("");
+      });
+      return;
+    }
+    if (action === "run-again" && current.command) {
+      const command = current.command;
+      composerRef.current?.setValue(command);
+      void handleSubmit(command, "command").then((ok) => {
+        if (ok) composerRef.current?.setValue("");
+      });
+    }
+  }
+
+  async function refreshPlannerStatus() {
+    const session = sessions.find((item) => item.id === activeSessionId) ?? sessions[0];
+    try {
+      const res = await generatePlan({
+        sessionId: session?.id ?? "none",
+        userIntent: "",
+        probeOnly: true,
+        model: plannerModel,
+        endpoint: plannerEndpoint,
+        context: buildPlannerContext({
+          sessionId: session?.id ?? "none",
+          cwd: session?.cwd ?? ".",
+          shell: session?.shell ?? "unknown",
+          os: detectOS(),
+          memoryItems,
+          workflows,
+          lastRunByWorkflowId,
+          recentHistory: historyItems,
+        }),
+      });
+      setPlannerStatus(res.status);
+    } catch {
+      setPlannerStatus({
+        state: "unavailable",
+        model: plannerModel,
+        endpoint: plannerEndpoint,
+        headline: "CommandUI could not check the model.",
+        fix: "Choose Check again in a moment.",
+        link: "https://ollama.com/download",
+        linkLabel: "Download Ollama",
+      });
+    }
+  }
+
   const showPlanColumn =
-    productMode === "guided" || plan !== null;
+    productMode === "guided" || plan !== null || (plannerStatus !== null && plannerStatus.state !== "ready");
 
   const displayExplanation =
     plan && simplifiedSummaries
       ? simplifyText(plan.plan.explanation)
       : plan?.plan.explanation ?? "";
 
+  const planIntent = plan?.plan.userIntent ?? "";
+  const hasPlan = plan !== null;
+  const finishedText = shownResult && shownResult.announce ? resultText(shownResult) : "";
+  const resultToken = finishedText
+    ? `${activeSessionId ?? ""}:${finishedText}:${sessionResult?.exitKnown ?? ""}:${sessionResult?.exitCode ?? ""}`
+    : "";
+
+  useEffect(() => {
+    if (!hasPlan) return;
+    const text = `A plan is ready to review. ${planIntent}`;
+    const timer = window.setTimeout(() => {
+      setLiveMessage((prev) => (prev === text ? `${text}\u200b` : text));
+    }, 150);
+    document.querySelector<HTMLElement>(".plan-panel")?.focus();
+    return () => window.clearTimeout(timer);
+  }, [hasPlan, planNonce, planIntent]);
+
+  useEffect(() => {
+    if (!finishedText) return;
+    const text = finishedText;
+    const timer = window.setTimeout(() => {
+      setLiveMessage((prev) => (prev === text ? `${text}\u200b` : text));
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [resultToken, finishedText]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    void refreshPlannerStatus();
+    // Opening Settings is the check. Editing the model uses Check again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsOpen]);
+
+  const shellStyle = { "--ui-scale": String(fontScale(fontSize)) } as CSSProperties;
+  const shellClass = narrowLayout ? "app-shell layout-narrow" : "app-shell";
+
+  useLayoutEffect(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    const apply = () => {
+      setNarrowLayout(layoutIsNarrow(layoutWidth(el.clientWidth, el.getBoundingClientRect().width)));
+    };
+    apply();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(apply);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fontSize, bootPhase]);
+
   // --- Boot failure screen ---
   if (bootPhase === "failed") {
     return (
-      <div className="app-shell">
+      <div ref={shellRef} className={shellClass} style={shellStyle}>
+        <header className="topbar">
+          <div className="topbar-title">
+            <strong>CommandUI</strong>
+          </div>
+          <div className="topbar-actions">
+            <button type="button" onClick={() => toggleOverlay("help")}>
+              Keyboard help
+            </button>
+          </div>
+        </header>
         <div className="boot-failure">
           <h2>CommandUI could not start</h2>
           <p className="muted">{bootError}</p>
@@ -2257,44 +2774,65 @@ export function AppShell() {
             </button>
           </div>
           <p className="muted boot-failure-hint">
-            If this persists, check that your Tauri backend is running.
+            If this keeps happening, choose Retry. If CommandUI still does not start, choose Copy Error and include that text when you ask for help.
           </p>
         </div>
+        {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
       </div>
     );
   }
 
   // --- Render ---
   return (
-    <div className="app-shell">
+    <div ref={shellRef} className={shellClass} style={shellStyle}>
       <header className="topbar">
-        <div>
+        <h1 className="visually-hidden">CommandUI</h1>
+        <div className="visually-hidden" role="status" aria-atomic="true">
+          {liveMessage}
+        </div>
+        <div className="topbar-title">
           <strong>CommandUI</strong>
           <span className="muted"> v{APP_VERSION}</span>
           {session && (
-            <span className="muted"> — {session.cwd ?? session.label}</span>
+            <span className="muted" title={session.cwd ?? undefined}>
+              {" "}— {session.cwd ? displayPath(session.cwd) : session.label}
+            </span>
           )}
         </div>
         <div className="topbar-actions">
-          <button type="button" onClick={() => setHistoryOpen(true)}>
+          <button type="button" onClick={() => setOverlay("output")}>
+            Output
+          </button>
+          <button type="button" onClick={() => setOverlay("history")}>
             History
           </button>
-          <button type="button" onClick={() => setWorkflowOpen(true)}>
+          <button type="button" onClick={() => setOverlay("workflow")}>
             Workflows
           </button>
-          <button type="button" onClick={() => setMemoryOpen(true)}>
+          <button type="button" onClick={() => setOverlay("memory")}>
             Memory
           </button>
-          <button type="button" onClick={() => setSettingsOpen(true)}>
+          <button type="button" onClick={() => setOverlay("settings")}>
             Settings
+          </button>
+          <button type="button" onClick={() => toggleOverlay("help")}>
+            Keyboard help
           </button>
         </div>
       </header>
 
+      {undoMessage && (
+        <div className="undo-bar" role="status">
+          <span>{undoMessage}</span>
+          <button type="button" onClick={undoPending}>
+            Undo
+          </button>
+        </div>
+      )}
+
       {browserPreview && (
         <div className="preview-banner">
-          Browser preview mode — backend commands disabled. Run{" "}
-          <code>pnpm tauri:dev</code> for the full experience.
+          You are looking at CommandUI in a browser. Commands do not run here. Open the CommandUI application to use your terminal.
         </div>
       )}
 
@@ -2321,8 +2859,8 @@ export function AppShell() {
           )}
 
           {activeExecState === "desynced" && !activeExited && (
-            <div className="desync-banner">
-              <span>Terminal appears desynced.</span>
+            <div className="session-banner">
+              <span>The terminal lost track of this session. Choose Resync to connect it again.</span>
               <button type="button" onClick={handleResync}>
                 Resync
               </button>
@@ -2330,10 +2868,10 @@ export function AppShell() {
           )}
 
           {activeBootStalled && !activeExited && activeSessionId && (
-            <div className="desync-banner" role="status">
+            <div className="session-banner" role="status">
               <span>
-                The {session?.shell ?? "shell"} in this session has not reported ready.
-                A shell profile that errors or replaces the prompt can cause this.
+                This session has not finished starting. A startup script may have stopped the shell.
+                Choose Resync, or close the session and open a new one.
               </span>
               <button type="button" onClick={handleResync}>
                 Resync
@@ -2345,12 +2883,12 @@ export function AppShell() {
           )}
 
           {activeForegroundStuck && !activeExited && activeSessionId && (
-            <div className="desync-banner" role="status">
+            <div className="session-banner" role="status">
               <span>
                 {activeExecState === "interrupting"
-                  ? "The interrupt has not ended the command."
+                  ? "Stop has not ended the command."
                   : "A command you typed has held this session for a while."}{" "}
-                A nested shell, ssh session or REPL stays open until you type exit in the terminal.
+                A program you started, such as another shell or a remote login, stays open until you type exit in the terminal.
                 Resync is not offered here because it would type into that program.
               </span>
               <button type="button" onClick={() => requestCloseSession(activeSessionId)}>
@@ -2365,31 +2903,39 @@ export function AppShell() {
             <div className="boot-loading">Starting CommandUI...</div>
           )}
 
+          <ResultLine
+            result={shownResult}
+            outputOpen={sessionResult?.outputOpen ?? false}
+            outputText={sessionResult?.output ?? ""}
+            onAction={onResultAction}
+          />
+
           <TerminalPane
             ref={terminalPaneRef}
             sessionId={activeSessionId}
             executionStatus={visibleExecutionStatus}
-            statusLabel={activeExecState === "userRunning" ? "running (typed)" : undefined}
             onResize={handleTerminalResize}
             onData={handleTerminalData}
             autoFocus
           />
 
           {activeNotes.length > 0 && (
-            <div className="app-notes" role="log" aria-label="CommandUI activity">
-              {activeNotes.slice(-APP_NOTES_SHOWN).map((note, i) => (
-                <div key={activeNotes.length - APP_NOTES_SHOWN + i} className="app-note">
-                  {note}
-                </div>
-              ))}
-              <button type="button" className="link-btn" onClick={clearTerminalView}>
-                Clear
-              </button>
-            </div>
+            <FoldPanel hideLabel="Hide activity" showLabel="Show activity">
+              <div className="app-notes" role="log" aria-label="CommandUI activity" tabIndex={0}>
+                {activeNotes.slice(-APP_NOTES_SHOWN).map((note, i) => (
+                  <div key={activeNotes.length - APP_NOTES_SHOWN + i} className="app-note">
+                    {note}
+                  </div>
+                ))}
+                <button type="button" className="link-btn" onClick={clearTerminalView}>
+                  Clear
+                </button>
+              </div>
+            </FoldPanel>
           )}
 
           {error && (
-            <div className="error-box">
+            <div className="error-box" role="alert">
               <span>{error}</span>
               <button type="button" onClick={() => setError(null)}>
                 Dismiss
@@ -2397,15 +2943,13 @@ export function AppShell() {
             </div>
           )}
 
-          {!reducedClutter && (
-            <MemorySuggestions
-              suggestions={memorySuggestions.filter(
-                (s) => s.status === "pending",
-              )}
-              onAccept={handleAcceptSuggestion}
-              onDismiss={handleDismissSuggestion}
-            />
-          )}
+          <MemorySuggestions
+            suggestions={memorySuggestions.filter(
+              (s) => s.status === "pending",
+            )}
+            onAccept={handleAcceptSuggestion}
+            onDismiss={handleDismissSuggestion}
+          />
 
           <InputComposer
             ref={composerRef}
@@ -2418,15 +2962,15 @@ export function AppShell() {
             disabled={composerDisabled(activeExecState, activeExited)}
             disabledReason={
               activeExited
-                ? "Shell exited — open a new session."
+                ? "The shell exited. Open a new session to continue."
                 : activeExecState === "desynced"
-                  ? "Terminal out of sync — use Resync."
+                  ? "The terminal lost track of this session. Choose Resync."
                   : activeBootStalled
-                    ? "Terminal not ready — use Resync or close the session."
+                    ? "The terminal has not finished starting. Choose Resync, or close the session."
                     : activeExecState === "booting"
-                      ? "Terminal starting…"
+                      ? "The terminal is still starting."
                       : activeExecState === "userRunning"
-                        ? "A command you typed is running — wait for the prompt."
+                        ? "A command you typed is running. Wait for the prompt."
                         : undefined
             }
           />
@@ -2444,7 +2988,6 @@ export function AppShell() {
                 explanation={displayExplanation}
                 contextSources={plan.review.retrievedContext}
                 plannerSource={plan.plan.source}
-                requireMediumRiskConfirmation={confirmMediumRisk}
                 flags={plan.plan}
                 safetyFlags={plan.review.safetyFlags}
                 ambiguityFlags={plan.review.ambiguityFlags}
@@ -2468,14 +3011,33 @@ export function AppShell() {
                 onReject={handleRejectPlan}
                 onSaveWorkflow={handleSaveWorkflow}
               />
+            ) : plannerStatus && plannerStatus.state !== "ready" ? (
+              <div className="plan-panel" tabIndex={0} aria-label="Model status">
+                <PlannerStatusCard
+                  status={plannerStatus}
+                  onCheckAgain={() => void refreshPlannerStatus()}
+                />
+              </div>
             ) : (
               <div className="plan-panel">
-                <p className="muted">No semantic plan yet.</p>
+                <p className="muted">
+                  Switch to <strong>Ask</strong> and describe a task. Its plan shows up here
+                  for you to review before anything runs.
+                </p>
               </div>
             )}
           </aside>
         )}
       </main>
+
+      {welcomeOpen && (
+        <WelcomeScreen
+          onStart={closeWelcome}
+          showAtStartup={showWelcomeAtStartup}
+          onShowAtStartupChange={changeShowWelcome}
+          plannerModel={plannerModel}
+        />
+      )}
 
       <HistoryDrawer
         isOpen={historyOpen}
@@ -2486,11 +3048,11 @@ export function AppShell() {
         onClose={() => {
           setHistoryOpen(false);
           setHistoryInitialExpandedId(null);
-          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         onRerun={handleRerunHistoryItem}
         onReopenPlan={handleReopenPlan}
         onSaveWorkflow={handleSaveWorkflowFromHistory}
+        onSaveSelected={handleSaveSelectedWorkflows}
         onCopyCommand={(cmd) => { void navigator.clipboard.writeText(cmd); }}
         onViewWorkflowRun={handleViewWorkflowRun}
         initialExpandedId={historyInitialExpandedId}
@@ -2505,10 +3067,11 @@ export function AppShell() {
         onClose={() => {
           setWorkflowOpen(false);
           setExpandedRunWorkflowId(null);
-          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         onRun={handleRunWorkflow}
         onDelete={handleDeleteWorkflow}
+        onNew={handleNewWorkflow}
+        onEdit={handleEditWorkflow}
         onExpandRun={setExpandedRunWorkflowId}
         onRetryStep={handleRetryFailedStep}
         onCopyCommand={(cmd) => void navigator.clipboard.writeText(cmd)}
@@ -2521,7 +3084,6 @@ export function AppShell() {
         items={memoryItems}
         onClose={() => {
           setMemoryOpen(false);
-          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         onDelete={handleDeleteMemory}
         loading={bootPhase === "booting"}
@@ -2531,10 +3093,6 @@ export function AppShell() {
         isOpen={paletteOpen}
         onClose={() => {
           setPaletteOpen(false);
-          requestAnimationFrame(() => {
-            restorePreviousZone();
-            composerRef.current?.focus();
-          });
         }}
         actions={paletteActions}
       />
@@ -2543,27 +3101,49 @@ export function AppShell() {
         isOpen={settingsOpen}
         onClose={() => {
           setSettingsOpen(false);
-          requestAnimationFrame(() => { restorePreviousZone(); composerRef.current?.focus(); });
         }}
         productMode={productMode}
         onProductModeChange={setProductMode}
         defaultInputMode={defaultInputMode}
         onDefaultInputModeChange={setDefaultInputMode}
-        reducedClutter={reducedClutter}
-        onReducedClutterChange={setReducedClutter}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
         simplifiedSummaries={simplifiedSummaries}
         onSimplifiedSummariesChange={setSimplifiedSummaries}
-        confirmMediumRisk={confirmMediumRisk}
-        onConfirmMediumRiskChange={setConfirmMediumRisk}
+        plannerModel={plannerModel}
+        onPlannerModelChange={setPlannerModel}
+        plannerEndpoint={plannerEndpoint}
+        onPlannerEndpointChange={setPlannerEndpoint}
+        plannerStatus={plannerStatus}
+        onCheckPlanner={() => void refreshPlannerStatus()}
       />
+
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
+      {outputOpen && (
+        <OutputView
+          blocks={activeSessionId ? (outputBlocksBySession[activeSessionId] ?? []) : []}
+          onClose={() => setOutputOpen(false)}
+        />
+      )}
 
       {workflowEditorData && (
         <WorkflowEditor
           initialLabel={workflowEditorData.label}
           initialSteps={workflowEditorData.steps}
           projectRoot={workflowEditorData.projectRoot}
+          mode={workflowEditorData.mode}
           onConfirm={handleWorkflowEditorConfirm}
           onCancel={handleWorkflowEditorCancel}
+        />
+      )}
+
+      {pendingConfirm && (
+        <ConfirmDialog
+          title={pendingConfirm.title}
+          message={pendingConfirm.message}
+          confirmLabel={pendingConfirm.confirmLabel}
+          onConfirm={pendingConfirm.onConfirm}
+          onCancel={cancelConfirm}
         />
       )}
     </div>

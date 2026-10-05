@@ -47,6 +47,27 @@ const shown = () =>
   allItems.filter((i) => screen.queryByText(i.userInput, { exact: false })).map((i) => i.id);
 
 describe("HistoryDrawer session filter", () => {
+  it("says a failed command did not work, rather than the status word", () => {
+    const failed = { ...s1a, status: "failure" as const, userInput: "input-failed" };
+    render(
+      <HistoryDrawer
+        isOpen
+        items={[failed]}
+        allItems={[failed]}
+        sessions={sessions}
+        activeSessionId="s1"
+        onClose={vi.fn()}
+        onRerun={vi.fn()}
+        onReopenPlan={vi.fn()}
+        onSaveWorkflow={vi.fn()}
+        onCopyCommand={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Did not work")).toBeInTheDocument();
+    expect(screen.queryByText("failure")).not.toBeInTheDocument();
+    expect(screen.queryByText("FAILURE")).not.toBeInTheDocument();
+  });
+
   it("defaults to the current session items", () => {
     renderDrawer();
     expect(shown()).toEqual(["a1", "a2"]);
@@ -178,7 +199,7 @@ describe("HistoryDrawer rows", () => {
     fireEvent.change(screen.getByPlaceholderText("Search history…"), { target: { value: "" } });
     const row = screen.getByRole("button", { name: /list the files/ });
     expect(row).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getAllByText("semantic/mock").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("From Ask, practice plan").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("1.5s").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("12ms")).toBeInTheDocument();
 
@@ -196,11 +217,11 @@ describe("HistoryDrawer rows", () => {
     expect(onViewWorkflowRun).toHaveBeenCalledTimes(2);
 
     const rejectedRow = screen.getByRole("button", { name: /do not run/ });
-    fireEvent.keyDown(rejectedRow, { key: "Enter" });
+    fireEvent.click(rejectedRow); // a native button: Enter and Space arrive as a click
     expect(rejectedRow).toHaveAttribute("aria-expanded", "true");
     const reruns = screen.getAllByRole("button", { name: "Rerun" });
     expect(reruns[reruns.length - 1]).toBeDisabled();
-    fireEvent.keyDown(rejectedRow, { key: " " });
+    fireEvent.click(rejectedRow);
     expect(rejectedRow).toHaveAttribute("aria-expanded", "false");
 
     fireEvent.click(screen.getByText("History"));

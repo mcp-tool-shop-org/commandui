@@ -1,45 +1,38 @@
 ---
 title: What Is CommandUI
-description: Overview of CommandUI — an AI-native shell that translates intent into commands you control.
+description: A shell that explains every result and waits for you to approve a drafted command.
 sidebar:
   order: 1
 ---
 
-CommandUI is an AI-native shell environment. It gives you a real terminal with a second input path: describe what you want in natural language, and an AI planner translates your intent into a shell command. You review, edit, approve, or reject before anything executes.
+CommandUI makes the command line usable by people a bare terminal shuts out: screen-reader users, low-vision users, keyboard-only users, people with cognitive or learning disabilities, and beginners.
+
+It does that by explaining every result in plain words, by letting you ask for a command in plain words, and by never running a drafted command until you have seen it and approved it. Experts keep a real shell, and their own profile.
+
+A screen reader, Narrator, NVDA, Magnifier, Windows high contrast, and Voice Typing have not been signed off on this build. Do not treat this page as that test.
 
 ## What it is
 
-- A desktop app (Tauri v2 + React 19) with a real PTY shell
-- Two input paths: direct terminal typing and structured composer
-- Semantic mode: intent in, command plan out, you decide
-- Risk-tiered confirmation: low-risk commands flow, high-risk commands require acknowledgment
-- History with rerun, plan inspection, and workflow saving
-- Project-scoped memory that learns your preferences from repeated edits
-- Multi-session tabs with independent terminal streams
-- Local-first persistence via SQLite
+- A desktop app with a real shell
+- Command, which runs what you type, and Ask, which drafts a command for you to approve
+- A result sentence for every command from the command box, and Ask how to fix it when one fails
+- Text size from 100% to 200%
+- Workflows you can make, edit, run, and delete, with undo on a delete
+- History, and memory you can see and delete
+- Local storage on this computer. Ask uses a model on this computer
 
 ## What it is not
 
-- Not a chatbot. It does not converse. It translates intent to commands.
-- Not an autonomous agent. Nothing executes without your approval.
-- Not a terminal emulator replacement. It wraps a real shell, it does not simulate one.
-- Not a cloud service. Everything runs locally. Your data stays on disk.
+- Not a chatbot. It drafts one command. It does not hold a conversation.
+- Not something that runs a drafted command on its own.
+- Not a cloud service. Your history stays on this computer.
 
-## The core promise
+## The promise
 
-You always know three things:
+You can always tell three things:
 
-1. **What you asked** — your original intent is preserved
-2. **What the system plans to do** — the exact command, with explanation and risk assessment
-3. **How to stop it** — reject, edit, or close the plan before execution
+1. What you asked
+2. The exact command, in words, before it runs
+3. How to refuse it
 
-If any screen state hides one of those three, it is a bug.
-
-## The bidirectional moat
-
-CommandUI works in both directions:
-
-- **Beginners:** describe intent in natural language, see the real command, learn what it does
-- **Experts:** type commands directly, save proven sequences as workflows, accelerate repetitive work
-
-This is the product thesis. A shell that teaches and a shell that accelerates are the same shell.
+If a screen hides one of those, that is a bug.

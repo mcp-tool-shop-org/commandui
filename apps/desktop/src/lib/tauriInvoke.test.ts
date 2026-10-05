@@ -1,59 +1,64 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
-}));
-
-import { invoke } from "@tauri-apps/api/core";
+import { ERROR_CODES } from "./commandError";
 import { resetMockBridge } from "./mockBridge";
 import { isTauriRuntime, tauriInvoke } from "./tauriInvoke";
 
-const invokeMock = vi.mocked(invoke);
+const invoke = vi.hoisted(() => vi.fn());
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke,
+}));
 
 describe("tauriInvoke", () => {
   afterEach(() => {
     resetMockBridge();
-    delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    invoke.mockReset();
     vi.useRealTimers();
-    invokeMock.mockReset();
+    delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
   });
 
   it("uses the mock bridge when the window is not running inside Tauri", async () => {
     expect(isTauriRuntime()).toBe(false);
     const listed = await tauriInvoke<{ sessions: unknown[] }>("session_list");
     expect(listed.sessions).toEqual([]);
-    expect(invokeMock).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("wraps a backend failure with the command name", async () => {
-    vi.useFakeTimers();
-    (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__ = {};
-    invokeMock.mockRejectedValue(new Error("disk full"));
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    await expect(tauriInvoke("session_list", { request: {} })).rejects.toThrow(
-      "Command 'session_list' failed: disk full.",
+  function asTauri() {
+    (window as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__ = {};
+  }
+
+  it.each(ERROR_CODES)("rejects %s with the Rust message and that code", async (code) => {
+    asTauri();
+    invoke.mockRejectedValue({ code, message: `rust message for ${code}`, details: null });
+    const error = await tauriInvoke("terminal_execute", {}).then(
+      () => {
+        throw new Error("expected a rejection");
+      },
+      (rejected: unknown) => rejected,
     );
-    expect(error).toHaveBeenCalled();
-    error.mockRestore();
-    vi.clearAllTimers();
+    expect(error).toMatchObject({ code, message: `rust message for ${code}` });
+    expect((error as Error).message).not.toContain("[object Object]");
+    expect((error as Error).message).not.toContain("Command '");
   });
 
-  it("reports a command that never returns", async () => {
+  it("says what to do when a call does not answer", async () => {
+    asTauri();
     vi.useFakeTimers();
-    (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__ = {};
-    invokeMock.mockReturnValue(new Promise(() => {}));
-    const pending = tauriInvoke("session_list");
-    const failed = expect(pending).rejects.toThrow("Command 'session_list' timed out after 15000ms.");
+    invoke.mockReturnValue(new Promise(() => {}));
+    const pending = tauriInvoke("session_list", {});
+    const rejected = pending.then(
+      () => {
+        throw new Error("expected a rejection");
+      },
+      (error: unknown) => error,
+    );
     await vi.advanceTimersByTimeAsync(15_000);
-    await failed;
-  });
-
-  it("stringifies a rejection that is not an Error", async () => {
-    vi.useFakeTimers();
-    (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__ = {};
-    invokeMock.mockRejectedValue("nope");
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    await expect(tauriInvoke("session_list")).rejects.toThrow("Command 'session_list' failed: nope.");
-    vi.clearAllTimers();
+    const error = await rejected;
+    expect(error).toMatchObject({
+      code: "UNKNOWN_ERROR",
+      message: "CommandUI did not answer in time. Try again. If it keeps happening, restart CommandUI.",
+    });
+    expect((error as Error).message).not.toMatch(/backend/i);
   });
 });

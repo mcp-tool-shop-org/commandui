@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useModalDialog } from "../lib/useModalDialog";
 
 export type PaletteAction = {
   id: string;
@@ -17,6 +18,7 @@ export function CommandPalette({ isOpen, onClose, actions }: Props) {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useModalDialog(isOpen, onClose);
 
   const filtered = query
     ? actions.filter((a) =>
@@ -72,7 +74,11 @@ export function CommandPalette({ isOpen, onClose, actions }: Props) {
   return (
     <div className="palette-overlay" onClick={onClose}>
       <div
+        ref={dialogRef}
         className="palette-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
@@ -80,11 +86,13 @@ export function CommandPalette({ isOpen, onClose, actions }: Props) {
           ref={inputRef}
           className="palette-search"
           type="text"
+          aria-label="Search commands"
+          data-autofocus
           placeholder="Type a command…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <div className="palette-list" role="listbox">
+        <div className="palette-list" role="listbox" aria-label="Matching commands">
           {filtered.map((action, i) => (
             <div
               key={action.id}

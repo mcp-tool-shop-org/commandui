@@ -11,25 +11,24 @@ When you submit a request in Ask mode, the planner generates a `CommandPlan`. Th
 
 From top to bottom:
 
-1. **Mock planner notice** (if applicable) — "Mock planner — Ollama not connected"
+1. **Practice plan** (only a debug build or the browser preview) — "Practice plan — Ollama is not connected. This is not a real plan."
 2. **Intent** — your original words, unmodified
 3. **Command** — the generated shell command in an editable textarea
-4. **Risk** — badge showing `low`, `medium`, or `high`
-5. **Explanation** — why the planner chose this command
-6. **Confirmation checkbox** (medium/high risk only) — "I understand the risks"
+4. **What this does** — one sentence, then the parts of the command
+5. **Risk** — a sentence, such as "Low risk. Easy to undo."
+6. **Folder name** (high risk only) — "Type {folder} to run this"
 7. **Action buttons** — Run Plan, Reject, Save Workflow
-8. **Context sources** — what information the planner used (cwd, workflows, memory)
+8. **Context** — what information the planner used, when any is listed
 
 ## Actions
 
 ### Run Plan
 Executes the command shown in the command field. If you edited it, the edited version runs.
 
-- **Low risk:** click Run Plan directly
-- **Medium risk:** requires checking the confirmation box (if "Confirm medium-risk" is enabled in settings)
-- **High risk:** always requires checking the confirmation box
+- **Low risk and medium risk:** Run Plan is enough
+- **High risk:** type the folder name first. There is no medium-risk checkbox
 
-Shortcut: `A` (when plan panel is focused) or `Ctrl+Enter` (global)
+Shortcut: `A` (when plan panel is focused) or `Ctrl+Enter` (not while the terminal has focus)
 
 ### Reject
 Dismisses the plan. Nothing executes. The plan is recorded in history with status `rejected`. Rejection is useful data — it tells the system this translation was wrong.
@@ -37,7 +36,7 @@ Dismisses the plan. Nothing executes. The plan is recorded in history with statu
 Shortcut: `R` (when plan panel is focused)
 
 ### Save Workflow
-Saves the current command as a reusable workflow. Opens the workflow editor where you can name it and configure steps.
+Saves the current command as one workflow step. It does not open the editor. New workflow, Edit, and Save as workflow from several history rows do open the editor.
 
 ### Edit the command
 The command field is a textarea. Click it (or press `E` when the plan panel is focused) to edit. You can modify the command freely — add flags, change paths, pipe to other commands. When you click Run Plan, your edited version executes.

@@ -28,19 +28,23 @@ describe("persistInBackground", () => {
     });
   });
 
-  it("logs a non-Error rejection as-is", async () => {
+  it("turns a code-only rejection into a readable message", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const dispatchEventSpy = vi.spyOn(window, "dispatchEvent").mockImplementation(() => true);
-    persistInBackground("workflow add", Promise.reject({ code: "DATABASE_ERROR" }));
+    persistInBackground("workflow add", Promise.reject({ code: "DATABASE_ERROR", details: null }));
     await new Promise((r) => setTimeout(r, 0));
-    expect(warn).toHaveBeenCalledWith("[persist] workflow add failed:", { code: "DATABASE_ERROR" });
+    expect(warn).toHaveBeenCalledWith(
+      "[persist] workflow add failed:",
+      "The save did not work. Try again.",
+    );
     expect(dispatchEventSpy).toHaveBeenCalled();
     const event = dispatchEventSpy.mock.calls[0][0] as CustomEvent;
     expect(event.type).toBe("commandui:persist-failed");
     expect(event.detail).toMatchObject({
       what: "workflow add",
-      message: "[object Object]",
+      message: "The save did not work. Try again.",
     });
+    expect(event.detail.message).not.toContain("[object Object]");
   });
 
   it("stays silent when the write succeeds", async () => {

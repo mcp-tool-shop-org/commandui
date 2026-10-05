@@ -1,4 +1,5 @@
 import type { MemoryItem } from "@commandui/domain";
+import { useModalDialog } from "../lib/useModalDialog";
 
 type Props = {
   isOpen: boolean;
@@ -9,14 +10,22 @@ type Props = {
 };
 
 export function MemoryDrawer({ isOpen, items, onClose, onDelete, loading = false }: Props) {
+  const dialogRef = useModalDialog(isOpen, onClose);
   if (!isOpen) return null;
 
   return (
     <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-drawer" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="settings-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="memory-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="drawer-header">
-          <strong>Memory</strong>
-          <button type="button" onClick={onClose}>
+          <strong id="memory-title">Memory</strong>
+          <button type="button" data-autofocus onClick={onClose}>
             Close
           </button>
         </div>

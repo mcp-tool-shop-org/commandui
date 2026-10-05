@@ -1,57 +1,38 @@
 ---
 title: Settings and Preferences
-description: Configure CommandUI behavior including mode, input defaults, risk confirmation, and display options.
+description: Mode, the default input, text size, summaries, and the model Ask uses.
 sidebar:
   order: 9
 ---
 
-Open settings with `Ctrl+,`. Changes take effect immediately and persist across restarts.
+Open Settings with Ctrl+, outside the terminal, or from the command palette. Changes apply immediately and are kept.
 
-## Available settings
+## Mode
 
-### Mode
-**Options:** Classic, Guided
+Classic hides the plan until there is one. Guided keeps the plan column open, and it also opens when Ask is not ready.
 
-- **Classic:** plan panel is collapsed when empty. Terminal dominates. Minimal chrome. For users who mostly use command mode and only occasionally use semantic requests.
-- **Guided:** plan panel is always visible. Shows "No semantic plan yet." when idle. Better for users learning the semantic flow or who use Ask mode frequently.
+## Default input mode
 
-### Default input mode
-**Options:** Command, Ask
+Command runs what you type. Ask drafts a command for you to approve.
 
-Sets which mode the composer starts in when you open the app or create a new session.
+## Text size
 
-### Confirm medium-risk commands
-**Default:** enabled
+Scales the text and the terminal from 100% to 200%. The slider stores the percent. Older saved values of sm or md mean 100%. lg means 200%.
 
-When enabled, medium-risk plans require checking an "I understand the risks" checkbox before the Run Plan button becomes active. When disabled, only high-risk plans require confirmation.
+## Simplified summaries
 
-### Reduced clutter
-**Default:** disabled
+Uses only the first sentence of a drafted command's explanation.
 
-Hides debug-oriented markers from the terminal output:
-- `[exec:...]` execution boundary markers
-- `[active]` session activity markers
-- Memory suggestion panel
+## Model
 
-Enable this if you want a cleaner terminal view.
+The local model Ask uses to draft a command. The default is qwen2.5:14b.
 
-### Simplified summaries
-**Default:** disabled
+## Where the model runs
 
-Trims plan explanations to the first sentence. The full explanation is still available if you re-read the plan. Useful if you find the explanations verbose.
+The address of the model on this computer. The default is http://localhost:11434.
 
-## Settings not yet exposed
+When Ask has not been checked, one Check again button is shown. After a check, the same screen says whether the model is ready, not installed, not running, or not downloaded, and the next step.
 
-The domain types include additional settings for future expansion:
+## Removed
 
-- **Theme:** system / light / dark (currently dark-only)
-- **Font size:** sm / md / lg
-- **Density:** compact / comfortable
-- **Auto-open plan panel:** toggle
-- **Explanation verbosity:** brief / normal
-
-These exist in the type system but are not wired to UI controls yet.
-
-## Persistence
-
-Settings are stored in SQLite via the backend. On boot, the app loads settings and applies them to the Zustand stores. Changes are written back immediately.
+These are not settings, and an old settings file does not turn them back on: Reduced clutter, a theme picker, density, auto-open plan, explanation verbosity, and a medium-risk checkbox.

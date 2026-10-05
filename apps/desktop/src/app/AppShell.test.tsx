@@ -65,9 +65,7 @@ function resetStores() {
   useMemoryStore.setState({ items: [], suggestions: [] });
   useSettingsStore.setState({
     productMode: "classic",
-    reducedClutter: false,
     simplifiedSummaries: false,
-    confirmMediumRisk: true,
     defaultInputMode: "command",
   });
   useWorkflowStore.setState({ items: [] });
@@ -89,6 +87,8 @@ describe("AppShell on the mock bridge", () => {
   beforeEach(() => {
     xterm.writes = [];
     xterm.onData = null;
+    // The welcome dialog is modal and traps focus; these tests are about the shell behind it.
+    localStorage.setItem("commandui.welcome.showAtStartup", "false");
     resetStores();
     resetMockBridge();
     globalThis.ResizeObserver = class {
@@ -102,15 +102,16 @@ describe("AppShell on the mock bridge", () => {
   afterEach(() => {
     cleanup();
     resetMockBridge();
+    localStorage.clear();
     vi.restoreAllMocks();
   });
 
   it("boots a guided session in browser preview", async () => {
     await boot();
-    expect(screen.getByText(/Browser preview mode/)).toBeInTheDocument();
+    expect(screen.getByText(/You are looking at CommandUI in a browser/)).toBeInTheDocument();
     expect(screen.getByText(/v1\.0\.2/)).toBeInTheDocument();
-    expect(screen.getByText("No semantic plan yet.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Session 1" })).toBeInTheDocument();
+    expect(document.querySelector(".plan-column")).toHaveTextContent("Switch to Ask and describe a task.");
+    expect(screen.getByRole("tab", { name: "Session 1" })).toBeInTheDocument();
   });
 
   it("runs a typed command and keeps it in history", async () => {
@@ -144,19 +145,19 @@ describe("AppShell on the mock bridge", () => {
   it("asks for a plan, rejects it, then approves the next one", async () => {
     const user = await boot();
     await user.type(screen.getByPlaceholderText("Describe what you want to do…"), "list the files{Enter}");
-    expect(await screen.findByDisplayValue('echo "mock plan for: list the files"')).toBeInTheDocument();
-    expect(screen.getByText('[plan] echo "mock plan for: list the files"')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('echo "practice plan for: list the files"')).toBeInTheDocument();
+    expect(screen.getByText('Drafted: echo "practice plan for: list the files"')).toBeInTheDocument();
     expect(screen.getByText("? list the files")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Reject" }));
-    expect(screen.getByText("[rejected]")).toBeInTheDocument();
-    expect(screen.getByText("No semantic plan yet.")).toBeInTheDocument();
+    expect(screen.getByText("Rejected the draft.")).toBeInTheDocument();
+    expect(document.querySelector(".plan-column")).toHaveTextContent("Switch to Ask and describe a task.");
 
     await user.type(screen.getByPlaceholderText("Describe what you want to do…"), "say hello{Enter}");
-    expect(await screen.findByDisplayValue(/mock plan for: say hello/)).toBeInTheDocument();
+    expect(await screen.findByDisplayValue(/practice plan for: say hello/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Run Plan" }));
-    expect(await screen.findByText(/\[approved] echo "mock plan for: say hello"/)).toBeInTheDocument();
+    expect(await screen.findByText(/Approved: echo "practice plan for: say hello"/)).toBeInTheDocument();
     await waitFor(() => {
-      expect(xterm.writes.join("")).toContain("mock plan for: say hello");
+      expect(xterm.writes.join("")).toContain("practice plan for: say hello");
     });
   });
 
@@ -165,18 +166,21 @@ describe("AppShell on the mock bridge", () => {
     await user.type(screen.getByPlaceholderText("Describe what you want to do…"), "ship it{Enter}");
     await screen.findByRole("button", { name: "Save Workflow" });
     await user.click(screen.getByRole("button", { name: "Save Workflow" }));
-    expect(await screen.findByText("[workflow:saved] ship it")).toBeInTheDocument();
+    expect(await screen.findByText("Saved workflow ship it.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Workflows" }));
     const drawer = document.querySelector(".settings-drawer");
     expect(drawer).not.toBeNull();
     expect(within(drawer as HTMLElement).getAllByText("ship it").length).toBeGreaterThan(0);
     await user.click(within(drawer as HTMLElement).getByRole("button", { name: "Run" }));
-    expect(await screen.findByText(/\[workflow:done] ship it/, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByText(/Finished workflow ship it\./, {}, { timeout: 5000 })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "History" }));
     // The saved plan and the workflow step both say "ship it". The step row is the one badged WF.
-    await user.click(await screen.findByRole("button", { name: /ship it[\s\S]*WF/ }));
+    const wfBadge = await screen.findByText("WF");
+    await user.click(
+      within(wfBadge.closest(".history-item") as HTMLElement).getByRole("button", { name: /ship it/ }),
+    );
     await user.click(screen.getByRole("button", { name: "View workflow run" }));
     const workflows = document.querySelector(".settings-drawer") as HTMLElement;
     expect(workflows).not.toBeNull();
@@ -187,22 +191,24 @@ describe("AppShell on the mock bridge", () => {
   it("opens another session, switches back, and closes one", async () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "New session" }));
-    expect(await screen.findByText("[session] Session 2")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Session 1" }));
+    expect(await screen.findByText("Opened Session 2.")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Session 1" }));
     expect(screen.getByText(/Welcome to CommandUI — Session 1/)).toBeInTheDocument();
-    await user.click(screen.getAllByRole("button", { name: "Close session" })[0]);
+    await user.click(screen.getByRole("button", { name: "Close Session 1" }));
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Session 1" })).toBeNull();
+      expect(screen.queryByRole("tab", { name: "Session 1" })).toBeNull();
     });
   });
 
-  it("classic mode hides the empty plan, and a shortcut opens history", async () => {
+  it("classic mode hides the empty-plan hint, and a shortcut opens history", async () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Settings" }));
     const [mode] = screen.getAllByRole("combobox");
     await user.selectOptions(mode, "classic");
     await user.click(screen.getByRole("button", { name: "Close" }));
-    expect(screen.queryByText("No semantic plan yet.")).toBeNull();
+    // The empty-plan hint goes away; the column stays only to say the model is not running.
+    expect(document.querySelector(".plan-column")).not.toHaveTextContent("Switch to Ask");
+    expect(screen.getByText("Ollama is not running.")).toBeInTheDocument();
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "H", ctrlKey: true, shiftKey: true, bubbles: true }));
     expect(await screen.findByPlaceholderText("Search history…")).toBeInTheDocument();
@@ -219,7 +225,7 @@ describe("AppShell on the mock bridge", () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Command" }));
     await user.type(screen.getByPlaceholderText("Submit a command explicitly…"), "echo stay{Enter}");
-    const stop = await screen.findByRole("button", { name: "Stop" });
+    const stop = await screen.findByRole("button", { name: "Stop the command" });
     await user.click(stop);
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Run" })).toBeEnabled();
@@ -253,15 +259,15 @@ describe("AppShell on the mock bridge", () => {
       proposedKey: "git status",
       proposedValue: "git status",
     };
-    mockInvoke("memory_store_suggestion", { request: { suggestion: pattern } });
-    mockInvoke("memory_store_suggestion", { request: { suggestion: other } });
+    await mockInvoke("memory_store_suggestion", { request: { suggestion: pattern } });
+    await mockInvoke("memory_store_suggestion", { request: { suggestion: other } });
     useMemoryStore.getState().setMemorySuggestions([pattern, other]);
 
     expect(await screen.findByText("Workflow pattern")).toBeInTheDocument();
     await user.click(screen.getAllByRole("button", { name: "Accept" })[0]);
-    expect(screen.getByRole("heading", { name: "Edit Workflow" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Create Workflow" }));
-    expect(await screen.findByText("[workflow:promoted] status then diff")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "New workflow" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Create workflow" }));
+    expect(await screen.findByText("Saved workflow status then diff.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Dismiss" }));
     await waitFor(() => {
@@ -276,7 +282,7 @@ describe("AppShell on the mock bridge", () => {
         detail: { what: "history append", message: "disk full" },
       }),
     );
-    expect(await screen.findByText(/Background save failed \(history append\): disk full/)).toBeInTheDocument();
+    expect(await screen.findByText(/CommandUI could not save your latest change: disk full/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.queryByText(/Welcome to CommandUI/)).toBeNull();
   });
@@ -293,7 +299,7 @@ describe("AppShell on the mock bridge", () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Command" }));
     await user.type(screen.getByPlaceholderText("Submit a command explicitly…"), "echo hello{Enter}");
-    await screen.findByRole("button", { name: "Stop" });
+    await screen.findByRole("button", { name: "Stop the command" });
     await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
 
     await user.click(screen.getByRole("button", { name: "History" }));
@@ -310,12 +316,12 @@ describe("AppShell on the mock bridge", () => {
     const user = await boot();
     await user.type(screen.getByPlaceholderText("Describe what you want to do…"), "list the files{Enter}");
     await user.click(await screen.findByRole("button", { name: "Run Plan" }));
-    expect(await screen.findByText(/\[approved]/)).toBeInTheDocument();
+    expect(await screen.findByText(/Approved:/)).toBeInTheDocument();
     // Run is enabled in the few milliseconds before the mock marks the command
     // running, and a second Run Plan in that window is refused as busy.
     // The badge flips to success only after the command finishes.
     await waitFor(() => {
-      expect(document.querySelector(".exec-badge")).toHaveTextContent("success");
+      expect(screen.getByTestId("result-line")).toHaveTextContent(/Finished\./);
     });
 
     await user.click(screen.getByRole("button", { name: "History" }));
@@ -324,13 +330,13 @@ describe("AppShell on the mock bridge", () => {
     expect(await screen.findByText(/Reopened from history without a stored risk/)).toBeInTheDocument();
     const run = screen.getByRole("button", { name: "Run Plan" });
     expect(run).toBeDisabled();
-    await user.click(screen.getByRole("checkbox", { name: /I understand the risks of this high-risk command/ }));
+    await user.type(screen.getByLabelText("Type projects to run this"), "projects");
     expect(run).toBeEnabled();
     await user.click(run);
     // The first approve already left this note. The reopen has to add a second one.
     // findByText throws when both are already on screen.
     await waitFor(() => {
-      expect(screen.getAllByText(/\[approved] echo "mock plan for: list the files"/)).toHaveLength(2);
+      expect(screen.getAllByText(/Approved: echo "practice plan for: list the files"/)).toHaveLength(2);
     });
   });
 
@@ -338,18 +344,19 @@ describe("AppShell on the mock bridge", () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Command" }));
     await user.type(screen.getByPlaceholderText("Submit a command explicitly…"), "echo hello{Enter}");
-    await screen.findByRole("button", { name: "Stop" });
+    await screen.findByRole("button", { name: "Stop the command" });
     await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
 
     await user.click(screen.getByRole("button", { name: "History" }));
     await user.click(await screen.findByRole("button", { name: /echo hello/ }));
     await user.click(screen.getByRole("button", { name: "Save Workflow" }));
-    expect(await screen.findByText("[workflow:saved] echo hello")).toBeInTheDocument();
+    expect(await screen.findByText("Saved workflow echo hello.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Workflows" }));
     const drawer = document.querySelector(".settings-drawer") as HTMLElement;
     expect(within(drawer).getAllByText("echo hello").length).toBeGreaterThan(0);
     await user.click(within(drawer).getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Delete workflow" }));
     await waitFor(() => {
       expect(within(drawer).queryAllByText("echo hello")).toEqual([]);
     });
@@ -358,11 +365,11 @@ describe("AppShell on the mock bridge", () => {
   it("remembers an edited plan command as a substitution", async () => {
     const user = await boot();
     await user.type(screen.getByPlaceholderText("Describe what you want to do…"), "say hello{Enter}");
-    const draft = await screen.findByDisplayValue(/mock plan for: say hello/);
+    const draft = await screen.findByDisplayValue(/practice plan for: say hello/);
     await user.clear(draft);
     await user.type(draft, "echo edited");
     await user.click(screen.getByRole("button", { name: "Run Plan" }));
-    expect(await screen.findByText(/\[approved] echo edited/)).toBeInTheDocument();
+    expect(await screen.findByText(/Approved: echo edited/)).toBeInTheDocument();
     expect(await screen.findByText(/Use "echo edited" instead of/)).toBeInTheDocument();
   });
 
@@ -372,7 +379,7 @@ describe("AppShell on the mock bridge", () => {
     const box = screen.getByPlaceholderText("Submit a command explicitly…");
     for (let n = 0; n < 4; n += 1) {
       await user.type(box, "echo hello{Enter}");
-      await screen.findByRole("button", { name: "Stop" });
+      await screen.findByRole("button", { name: "Stop the command" });
       await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
     }
     expect(await screen.findByText(/You frequently run 'echo/)).toBeInTheDocument();
@@ -393,7 +400,7 @@ describe("AppShell on the mock bridge", () => {
       status: "pending",
       createdAt: "2026-10-04T00:00:00Z",
     };
-    mockInvoke("memory_store_suggestion", { request: { suggestion: pattern } });
+    await mockInvoke("memory_store_suggestion", { request: { suggestion: pattern } });
     useMemoryStore.getState().setMemorySuggestions([pattern]);
 
     await user.click(await screen.findByRole("button", { name: "Accept" }));
@@ -404,7 +411,7 @@ describe("AppShell on the mock bridge", () => {
 
   it("deletes one saved memory item", async () => {
     const user = await boot();
-    const added = mockInvoke<{ item: { id: string; key: string; value: string } }>("memory_add", {
+    const added = await mockInvoke<{ item: { id: string; key: string; value: string } }>("memory_add", {
       request: { key: "workspace", value: "/work/app", kind: "preferred_cwd", scope: "project" },
     });
     useMemoryStore.getState().addMemoryItem(added.item as never);
@@ -412,6 +419,7 @@ describe("AppShell on the mock bridge", () => {
     const drawer = document.querySelector(".settings-drawer") as HTMLElement;
     expect(drawer.textContent).toMatch(/workspace/);
     await user.click(within(drawer).getAllByRole("button", { name: "Delete" })[0]);
+    await user.click(screen.getByRole("button", { name: "Delete memory" }));
     await waitFor(() => expect(screen.getByText("No saved memory yet.")).toBeInTheDocument());
   });
 
@@ -432,8 +440,8 @@ describe("AppShell on the mock bridge", () => {
       expect(composer).toBeEnabled();
     });
     await user.click(screen.getByRole("button", { name: "Run Plan" }));
-    expect(await screen.findByText(/\[approved] echo "mock plan for: list the files"/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Session 2" }).closest(".session-tab")).toHaveClass("active");
+    expect(await screen.findByText(/Approved: echo "practice plan for: list the files"/)).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Session 2" }).closest(".session-tab")).toHaveClass("active");
     await user.click(screen.getByRole("button", { name: "History" }));
     const history = document.querySelector(".history-drawer") as HTMLElement;
     expect(within(history).getByRole("button", { name: /list the files/ })).toBeInTheDocument();
@@ -443,25 +451,26 @@ describe("AppShell on the mock bridge", () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Command" }));
     await user.type(screen.getByPlaceholderText("Submit a command explicitly…"), "echo hello{Enter}");
-    await screen.findByRole("button", { name: "Stop" });
-    await user.click(screen.getAllByRole("button", { name: "Close session" })[0]);
+    await screen.findByRole("button", { name: "Stop the command" });
+    await user.click(screen.getByRole("button", { name: "Close Session 1" }));
+    await user.click(screen.getByRole("button", { name: "Close session" }));
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Session 1" })).toBeNull();
+      expect(screen.queryByRole("tab", { name: "Session 1" })).toBeNull();
     });
     await user.click(screen.getByRole("button", { name: "History" }));
     const history = document.querySelector(".history-drawer") as HTMLElement;
-    expect(within(history).getByRole("button", { name: /echo hello/ })).toHaveTextContent("interrupted");
+    expect(within(history).getByRole("button", { name: /echo hello/ }).closest(".history-item")).toHaveTextContent("Stopped");
   });
 
   it("interrupts a workflow step and says where it stopped", async () => {
     const user = await boot();
     await user.type(screen.getByPlaceholderText("Describe what you want to do…"), "ship it{Enter}");
     await user.click(await screen.findByRole("button", { name: "Save Workflow" }));
-    expect(await screen.findByText("[workflow:saved] ship it")).toBeInTheDocument();
+    expect(await screen.findByText("Saved workflow ship it.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Workflows" }));
     const drawer = document.querySelector(".settings-drawer") as HTMLElement;
     await user.click(within(drawer).getByRole("button", { name: "Run" }));
-    await user.click(await screen.findByRole("button", { name: "Stop" }));
-    expect(await screen.findByText(/\[workflow:interrupted] ship it/)).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Stop the command" }));
+    expect(await screen.findByText(/Workflow ship it was stopped during step 1/)).toBeInTheDocument();
   });
 });

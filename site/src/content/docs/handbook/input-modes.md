@@ -1,59 +1,30 @@
 ---
 title: "Input Modes: Command vs Ask"
-description: "How CommandUI's two input paths work — Command mode for raw shell commands and Ask mode for natural language intent."
+description: "Command runs what you type. Ask drafts a command and waits for Run Plan."
 sidebar:
   order: 4
 ---
 
-CommandUI has two input paths. Both use the same composer at the bottom of the screen.
+Both use the command box at the bottom. Ctrl+Shift+A switches them. CommandUI does not guess which one you meant.
 
-## Command mode
+## Command
 
-Press `Ctrl+1` or click the **Command** button.
+Your text is sent to the shell. Use it when you know the command.
 
-Your text is sent directly to the shell as a raw command. No AI translation, no plan panel, no confirmation step. The command executes immediately in the active session's PTY.
+If the line looks like a request, CommandUI asks "This looks like a request. Ask CommandUI instead?" and does not run the sentence until you choose.
 
-**When to use:** you know the exact command. `git status`, `npm test`, `docker ps`. Command mode is the terminal you already know.
+## Ask
 
-**What happens:**
-1. You type a command and press Enter
-2. The command executes in the shell
-3. Output streams to the terminal
-4. A history item is created with status success/failure and exit code
+Your text is a request. Ask drafts one command and opens the plan. You can edit it, choose Reject, or choose Run Plan. Nothing from Ask runs until you choose Run Plan.
 
-## Ask mode
+If the model is not installed, not running, or not downloaded, Ask says which one and what to do next. It does not draft a command in a release build.
 
-Press `Ctrl+2` or click the **Ask** button.
+A debug build, and the browser preview used while developing, can show a practice plan. That plan says "Practice plan — Ollama is not connected. This is not a real plan."
 
-Your text is treated as natural language intent. The planner translates it into a shell command and presents a plan for review.
+## While a command runs
 
-**When to use:** you know what you want but not the exact syntax. "Find all TypeScript files modified today." "Show disk usage sorted by size." "Kill the process on port 3000."
+The button says Stop.
 
-**What happens:**
-1. You describe your intent and press Enter
-2. The planner generates a `CommandPlan` with: command, explanation, risk, assumptions
-3. The plan panel opens on the right side
-4. You review and choose: Run Plan, edit the command, Reject, or Save Workflow
-5. If approved, the command executes in the shell
-6. History records both the original intent and the executed command
+## Typing in the terminal
 
-## The explicit toggle
-
-CommandUI never auto-detects which mode you meant. The toggle is always visible and always manual. This is intentional:
-
-- You are never surprised by AI involvement
-- Raw commands are never intercepted for "interpretation"
-- The system boundary between human input and AI output is always clear
-
-## Composer behavior
-
-The composer textarea supports:
-- **Enter** to submit
-- **Escape** to clear pending state
-- Text persists when switching between modes (your draft is not lost)
-
-When a command is running, the composer shows an **Interrupt** button instead of **Run**.
-
-## Direct terminal typing
-
-You can also type directly into the terminal area (click or focus it). Keystrokes go straight to the PTY — this is classic terminal behavior. Direct typing is not tracked in the structured history (it bypasses the composer).
+Keystrokes in the terminal go straight to the shell. They are not listed in History. Use the command box for a command you want recorded.

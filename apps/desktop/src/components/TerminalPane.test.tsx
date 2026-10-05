@@ -13,6 +13,7 @@ const captured: {
   cleared: number;
   resetCount: number;
   focused: number;
+  options: Record<string, unknown> | null;
 } = {
   handler: null,
   onData: null,
@@ -21,6 +22,7 @@ const captured: {
   cleared: 0,
   resetCount: 0,
   focused: 0,
+  options: null,
 };
 
 vi.mock("@xterm/xterm", () => ({
@@ -29,6 +31,10 @@ vi.mock("@xterm/xterm", () => ({
     rows = 24;
     options: Record<string, unknown> = { convertEol: true };
     textarea = document.createElement("textarea");
+    constructor(options?: Record<string, unknown>) {
+      this.options = { convertEol: true, ...(options ?? {}) };
+      captured.options = this.options;
+    }
     buffer = {
       onBufferChange(handler: BufferHandler) {
         captured.onBuffer = handler;
@@ -87,6 +93,7 @@ describe("TerminalPane custom key handler", () => {
     captured.cleared = 0;
     captured.resetCount = 0;
     captured.focused = 0;
+    captured.options = null;
     globalThis.ResizeObserver ??= class {
       observe() {}
       unobserve() {}
@@ -98,6 +105,55 @@ describe("TerminalPane custom key handler", () => {
   it("registers a handler", () => {
     expect(captured.handler).toBeTypeOf("function");
   });
+
+  it("turns on screen reader mode so typing, dictation, and paste stay in the terminal", () => {
+    expect(captured.options?.screenReaderMode).toBe(true);
+    // The shell zoom is the text scale. A 28px cell under that zoom would draw the glyphs twice.
+    expect(captured.options?.fontSize).toBe(14);
+  });
+
+  it("follows the light theme", () => {
+    const previous = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes("light"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+      onchange: null,
+    })) as typeof window.matchMedia;
+    render(<TerminalPane />);
+    const theme = captured.options?.theme as { background?: string; foreground?: string };
+    expect(theme.background).toBe("#ffffff");
+    expect(theme.foreground).toBe("#111827");
+    window.matchMedia = previous;
+  });
+
+  it("stops the cursor blink when reduced motion is on, even while a command runs", () => {
+    const previous = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes("reduce"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+      onchange: null,
+    })) as typeof window.matchMedia;
+    render(<TerminalPane executionStatus="running" />);
+    expect(captured.options?.cursorBlink).toBe(false);
+    window.matchMedia = previous;
+  });
+
+  it("does not render the status word", () => {
+    const { unmount } = render(<TerminalPane executionStatus="failure" />);
+    expect(document.body.textContent?.toLowerCase() ?? "").not.toContain("failure");
+    unmount();
+  });
+
 
   it.each(["K", "X", "W", "k"])("returns the Ctrl+Shift+%s chord to the app", (letter) => {
     expect(captured.handler!(key(letter, { ctrlKey: true, shiftKey: true }))).toBe(false);
@@ -161,7 +217,6 @@ describe("TerminalPane replay and status", () => {
 
     expect(captured.focused).toBeGreaterThan(0);
     expect(onResize).toHaveBeenCalledWith(80, 24);
-    expect(screen.getByText("idle")).toBeInTheDocument();
 
     const original = captured.onData;
     captured.onData = (data) => {
@@ -182,11 +237,9 @@ describe("TerminalPane replay and status", () => {
         ref={ref}
         sessionId="s1"
         executionStatus="running"
-        statusLabel="running (typed)"
         onData={onData}
       />,
     );
-    expect(screen.getByText("running (typed)")).toBeInTheDocument();
 
     view.rerender(<TerminalPane ref={ref} sessionId="s2" onData={onData} />);
     expect(captured.resetCount).toBeGreaterThan(1);

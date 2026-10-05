@@ -1,6 +1,6 @@
 # Memory Detectors
 
-Memory detectors are algorithms that analyze your command history to surface patterns. They run on boot and after each command execution.
+Memory detectors are algorithms that analyze your command history to surface patterns. They run on boot and after each command finishes.
 
 ## Detector A: Preferred Working Directory
 
@@ -8,11 +8,11 @@ Memory detectors are algorithms that analyze your command history to surface pat
 
 Identifies directories where you spend significant time.
 
-**Trigger:** 5+ command executions across 2+ sessions in the same directory.
+**Trigger:** 5 or more commands run in the same folder, across 2 or more sessions. The app shows it as "You've worked in … across 5 commands in 2 sessions."
 
 **Output:** a suggestion with kind `preferred_cwd`, key = the directory path, confidence 0.70–0.95.
 
-**Confidence scaling:** base 0.70, increases with execution count. More executions in more sessions = higher confidence, capped at 0.95.
+**Confidence scaling:** base 0.70, rising with the number of commands. More commands in more sessions means higher confidence, capped at 0.95. The app shows it as "CommandUI is 70% sure" and "Seen in 5 commands you ran."
 
 **Why it matters:** the planner uses preferred CWDs to set context. If you always work in `~/projects/myapp`, the planner knows to interpret "run tests" in that context.
 
@@ -22,7 +22,7 @@ Identifies directories where you spend significant time.
 
 Identifies commands you run frequently.
 
-**Trigger:** 4+ executions of the same command family. Command families are normalized — `npm test`, `npm run test`, and `npm t` may be grouped if they share a prefix.
+**Trigger:** 4 or more runs of the same command family. Command families are normalized — `npm test`, `npm run test`, and `npm t` may be grouped if they share a prefix.
 
 **Output:** a suggestion with kind `recurring_command`, key = the command, confidence 0.60–0.90.
 
@@ -48,7 +48,7 @@ Identifies command sequences you repeat — pairs and triples of commands that a
 
 All three detectors run through `runDetectors()`, which:
 
-1. Filters history to successful executions only (failed commands are noise)
+1. Filters history to commands that worked (failed commands are noise)
 2. Runs each detector independently
 3. Deduplicates against existing memory items and suggestions
 4. Returns new suggestions only

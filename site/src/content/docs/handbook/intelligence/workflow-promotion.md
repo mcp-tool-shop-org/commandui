@@ -41,7 +41,7 @@ Three-step sequences are preferred over two-step. If `A → B → C` is detected
 | Property | Promoted | Manual |
 |----------|----------|--------|
 | Source | `"promoted"` | `"raw"` or `"semantic"` |
-| Badge | Shows "promoted" tag in drawer | No badge |
+| Badge | Shows "From a suggestion" | No badge |
 | Steps | Pre-filled from detected pattern | User-defined |
 | Creation | From accepted suggestion | From Save Workflow button |
 
@@ -58,10 +58,6 @@ Once a workflow exists, the planner knows about it:
 
 This means promoted workflows directly improve future plan quality. The observe → detect → promote → plan loop is complete.
 
-## Project scoping
+## The folder
 
-Promoted workflows can be project-scoped:
-
-- If the detected pattern only occurs in one directory, the workflow's `projectRoot` is set to that directory
-- Project-scoped workflows only appear in planner context when you're working in that directory
-- This prevents cross-project pollution (your React workflow doesn't interfere with your Python project)
+There is no project-scope control in the editor. Saving records the folder that was open. Running the workflow in a different folder asks before it starts.

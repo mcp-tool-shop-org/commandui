@@ -73,9 +73,7 @@ function resetStores() {
   useMemoryStore.setState({ items: [], suggestions: [] });
   useSettingsStore.setState({
     productMode: "classic",
-    reducedClutter: false,
     simplifiedSummaries: false,
-    confirmMediumRisk: true,
     defaultInputMode: "command",
   });
   useWorkflowStore.setState({ items: [] });
@@ -106,17 +104,17 @@ describe("AppShell against the Tauri bridge", () => {
 
   it("shows a recovered session as out of sync, then resync makes it ready", async () => {
     const user = userEvent.setup({ delay: null });
-    mockInvoke("session_create", { request: { label: "Recovered" } });
+    await mockInvoke("session_create", { request: { label: "Recovered" } });
     await new Promise((resolve) => setTimeout(resolve, 150));
 
     render(<AppShell />);
     expect(screen.queryByText(/Browser preview mode/)).toBeNull();
-    expect(await screen.findByText("Terminal appears desynced.")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Terminal out of sync — use Resync.")).toBeDisabled();
+    expect(await screen.findByText(/The terminal lost track of this session/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("The terminal lost track of this session. Choose Resync.")).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "Resync" }));
     await waitFor(() => {
-      expect(screen.queryByText("Terminal appears desynced.")).toBeNull();
+      expect(screen.queryByText(/The terminal lost track of this session/)).toBeNull();
     });
     await waitFor(() => {
       expect(screen.getByPlaceholderText("Describe what you want to do…")).toBeEnabled();

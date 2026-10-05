@@ -60,11 +60,11 @@ pub struct PlanStoreResponse {
 }
 
 fn get_conn(state: &State<'_, AppState>) -> Result<rusqlite::Connection, ApiError> {
-    let path_guard = state.db_path.lock().map_err(|e| ApiError::database(e.to_string()))?;
+    let path_guard = state.db_path.lock().map_err(|e| ApiError::from_persistence(e.to_string()))?;
     let path = path_guard
         .as_ref()
-        .ok_or_else(|| ApiError::database("Database not initialized"))?;
-    open_database(path).map_err(ApiError::database)
+        .ok_or_else(|| ApiError::from_persistence("Database not initialized"))?;
+    open_database(path).map_err(ApiError::from_persistence)
 }
 
 #[tauri::command]
@@ -73,7 +73,7 @@ pub fn history_append(
     state: State<'_, AppState>,
 ) -> Result<HistoryAppendResponse, ApiError> {
     let conn = get_conn(&state)?;
-    history::append(&conn, &request.item).map_err(ApiError::database)?;
+    history::append(&conn, &request.item).map_err(ApiError::from_persistence)?;
     Ok(HistoryAppendResponse { ok: true })
 }
 
@@ -85,7 +85,7 @@ pub fn history_list(
     let conn = get_conn(&state)?;
     let limit = request.limit.unwrap_or(100);
     let items = history::list(&conn, request.session_id.as_deref(), limit)
-        .map_err(ApiError::database)?;
+        .map_err(ApiError::from_persistence)?;
     Ok(HistoryListResponse { items })
 }
 
@@ -104,7 +104,7 @@ pub fn history_update(
         request.finished_at.as_deref(),
         request.duration_ms,
     )
-    .map_err(ApiError::database)?;
+    .map_err(ApiError::from_persistence)?;
     Ok(HistoryUpdateResponse { ok: true })
 }
 
@@ -114,6 +114,6 @@ pub fn plan_store(
     state: State<'_, AppState>,
 ) -> Result<PlanStoreResponse, ApiError> {
     let conn = get_conn(&state)?;
-    history::store_plan(&conn, &request.plan).map_err(ApiError::database)?;
+    history::store_plan(&conn, &request.plan).map_err(ApiError::from_persistence)?;
     Ok(PlanStoreResponse { ok: true })
 }

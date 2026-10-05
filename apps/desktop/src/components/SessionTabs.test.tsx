@@ -26,11 +26,11 @@ describe("SessionTabs", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Session 2 (exited)" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Session 2 (exited)" }));
+    expect(screen.getByRole("tab", { name: "Session 2 (exited)" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Session 2 (exited)" }));
     expect(onSelect).toHaveBeenCalledWith("s2");
 
-    await user.click(screen.getAllByRole("button", { name: "Close session" })[0]);
+    await user.click(screen.getByRole("button", { name: "Close Session 1" }));
     expect(onClose).toHaveBeenCalledWith("s1");
 
     await user.click(screen.getByRole("button", { name: "New session" }));

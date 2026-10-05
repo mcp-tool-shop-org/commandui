@@ -42,7 +42,8 @@ describe("feature clients on the mock bridge", () => {
         projectFacts: [],
       },
     });
-    expect(plan.plan.userIntent).toBe("say hi");
+    expect(plan.plan).not.toBeNull();
+    expect(plan.plan!.userIntent).toBe("say hi");
 
     await historyAppend({
       item: {
@@ -56,7 +57,7 @@ describe("feature clients on the mock bridge", () => {
     });
     expect((await historyList({ sessionId: created.session.id })).items).toHaveLength(1);
     expect(await historyUpdate({ historyId: "h1", status: "success" })).toEqual({ ok: true });
-    expect(await planStore({ plan: plan.plan })).toEqual({ ok: true });
+    expect(await planStore({ plan: plan.plan! })).toEqual({ ok: true });
 
     await workflowAdd({
       workflow: {

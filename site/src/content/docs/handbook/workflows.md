@@ -1,80 +1,25 @@
 ---
 title: "Workflows"
-description: "How to create, run, and manage reusable command workflows in CommandUI."
+description: "Make a workflow, edit it, run it, and delete it with undo."
 sidebar:
   order: 7
 ---
 
-A workflow is a saved command or multi-step sequence that you can rerun with one click. Workflows are how CommandUI turns one-time commands into reusable tools.
+A workflow is a saved list of commands you can run again.
 
-## Creating workflows
+An empty list says: "Workflows are saved lists of commands you can run again with one click. Make one here, or save commands from History." The button is New workflow.
 
-There are three paths to create a workflow:
+## Make one
 
-### From the plan panel
-After the planner generates a command, click **Save Workflow**. That stores the one reviewed command. It does not open the step editor.
+- New workflow opens an editor with a name, Add step, and a way to edit, move, and remove a step.
+- Save Workflow on a plan stores that one command. It does not open the editor.
+- Save Workflow on one history row stores that command. Select rows, or the last few, then Save as workflow. The editor opens with those commands in the order they ran.
+- Accepting a suggestion opens the editor with the steps filled in. The list shows From a suggestion.
 
-### From history
-Expand a history item and click **Save Workflow**. That stores the command that ran, or the generated command if it never ran.
+There is no control for project scope. The workflow remembers the folder that was open when you saved it. Running it in another folder asks first.
 
-### From promotion
-The memory system detects command sequences you repeat (for example `git add`, then `git commit`, then `git push`). When a pattern reaches sufficient confidence, it appears as a suggestion. Accepting it opens the workflow editor with one step per command. Those steps are stored, and after a restart they still run one at a time.
+## Run and edit
 
-## The workflow editor
+Open the list with Ctrl+Shift+W. Run starts the steps in order. Each step has a word, not only a dot: Waiting, Running, Finished, Did not work, Stopped, or Skipped. If a step does not work, the later steps are skipped.
 
-The editor is the promotion path. It lets you:
-
-- **Name** the workflow (label)
-- **Define steps** — break a composite command into individual steps, each with its own command
-- **Set project scope** — optionally restrict the workflow to a specific project directory
-
-## Running workflows
-
-Open the workflow drawer (`Ctrl+Shift+W`) to see all saved workflows. Each shows:
-
-- Workflow name and source badge (`promoted` if created from pattern detection)
-- Steps listed with step numbers and commands
-- Original intent (if created from a semantic request)
-- Creation date
-
-Click **Run** to execute. Multi-step workflows execute sequentially: each step runs, waits for completion, then the next step starts.
-
-## Workflow runs
-
-When a workflow executes, a `WorkflowRun` tracks the execution:
-
-- **Status dots** in the header show real-time progress (one dot per step)
-- **Per-step tracking:** each step records status, duration, exit code
-- **Stop on failure:** if a step fails, remaining steps are skipped
-
-### Inspecting a run
-
-Click the last-run summary line in the workflow drawer to expand run details:
-
-- Header with overall status, start time, and total duration
-- Each step as a row with: step number, status dot, command, duration
-- Per-step actions: **Copy** (always), **Retry** (failed steps), **History** (view linked history item)
-
-### Cross-drawer navigation
-
-- From a workflow step, click **History** to jump to the history drawer with that step's history item expanded
-- From a history item with a **WF** badge, click it to jump to the workflow drawer with the parent run expanded
-
-This bidirectional link means you can always trace from a workflow run to what actually happened in the shell.
-
-## Retry from inspection
-
-When a workflow step fails, you have two retry options:
-
-- **Retry Failed Step** — loads the failed command into the composer so you can edit and re-execute
-- **Rerun Workflow** — re-executes the entire workflow from step 1
-
-Both close the workflow drawer and return you to the main view.
-
-## Project-scoped workflows
-
-Workflows can be scoped to a project directory. A project-scoped workflow only appears in the planner's context when you're working in that directory. This prevents irrelevant workflows from polluting suggestions.
-
-## Workflow-aware planning
-
-The planner knows about your workflows. When you submit a semantic request that matches a known workflow's name, the planner prefers that workflow's commands over generating new ones. The context footer in the plan panel shows `workflow:<name>` when a workflow influenced the plan.
+Edit opens the same editor. Delete asks, and you can undo it.

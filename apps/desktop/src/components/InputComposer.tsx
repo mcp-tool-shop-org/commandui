@@ -3,6 +3,8 @@ import { useFocusStore } from "@commandui/state";
 
 export type InputComposerHandle = {
   focus: () => void;
+  /** Replace the draft. A result action uses this to move text into Ask. */
+  setValue: (value: string) => void;
 };
 
 type Props = {
@@ -42,6 +44,9 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
     useImperativeHandle(ref, () => ({
       focus() {
         textareaRef.current?.focus();
+      },
+      setValue(next: string) {
+        setValue(next);
       },
     }));
 
@@ -91,11 +96,12 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
 
     return (
       <div className="composer">
-        <div className="mode-toggle">
+        <div className="mode-toggle" role="group" aria-label="How to send this">
           <button
             className={mode === "command" ? "active" : ""}
             onClick={() => onModeChange("command")}
             type="button"
+            aria-pressed={mode === "command"}
           >
             Command
           </button>
@@ -104,12 +110,17 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
             className={mode === "ask" ? "active" : ""}
             onClick={() => onModeChange("ask")}
             type="button"
+            aria-pressed={mode === "ask"}
           >
             Ask
           </button>
         </div>
 
+        <label className="visually-hidden" htmlFor="command-box">
+          Command
+        </label>
         <textarea
+          id="command-box"
           ref={textareaRef}
           className="composer-input"
           rows={1}
@@ -126,20 +137,22 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
                 ? "Submit a command explicitly…"
                 : "Describe what you want to do…"
           }
-          disabled={isRunning || disabled}
+          readOnly={isRunning}
+          disabled={disabled && !isRunning}
         />
 
         {isRunning ? (
           <button
             type="button"
             className="btn-stop"
+            aria-label="Stop the command"
             onClick={() => onInterrupt?.()}
           >
             Stop
           </button>
         ) : (
           <button type="button" onClick={handleSubmit} disabled={cantSubmit}>
-            {busy ? "Working…" : "Run"}
+            {busy ? "Working…" : mode === "ask" ? "Draft plan" : "Run"}
           </button>
         )}
       </div>

@@ -57,7 +57,7 @@ describe("WorkflowDrawer", () => {
 
   it("says when nothing is saved", () => {
     renderDrawer([]);
-    expect(screen.getByText("No saved workflows yet.")).toBeInTheDocument();
+    expect(screen.getByText(/Workflows are saved lists of commands/)).toBeInTheDocument();
   });
 
   it("runs and deletes a workflow, and lists its steps or its single command", async () => {
@@ -74,7 +74,7 @@ describe("WorkflowDrawer", () => {
       workflow({ id: "w2", label: "Echo", command: "echo hi" }),
     ]);
 
-    expect(screen.getByText("promoted")).toBeInTheDocument();
+    expect(screen.getByText("From a suggestion")).toBeInTheDocument();
     expect(screen.getByText("git status")).toBeInTheDocument();
     expect(screen.getByText("echo hi")).toBeInTheDocument();
     expect(screen.getByText("ship the branch")).toBeInTheDocument();
@@ -117,7 +117,7 @@ describe("WorkflowDrawer", () => {
     const summary = screen.getByRole("button", { name: /Last run:/ });
     expect(summary).toHaveAttribute("aria-expanded", "false");
     expect(summary.textContent).toMatch(/1\/3 succeeded, failed on step 2/);
-    expect(summary.textContent).toMatch(/h ago|m ago|just now/);
+    expect(summary.textContent).toMatch(/hour ago|minutes ago|just now/);
 
     await user.click(summary);
     expect(props.onExpandRun).toHaveBeenCalledWith("w");
@@ -216,7 +216,7 @@ describe("WorkflowDrawer", () => {
       />,
     );
     expect(screen.getByRole("button", { name: /Last run:/ }).textContent).toMatch(/Interrupted during step 1; 1 skipped/);
-    expect(screen.getByRole("button", { name: /Last run:/ }).textContent).toMatch(/d ago/);
+    expect(screen.getByRole("button", { name: /Last run:/ }).textContent).toMatch(/days ago/);
     expect(screen.queryByRole("button", { name: "Retry Failed Step" })).toBeNull();
   });
 });

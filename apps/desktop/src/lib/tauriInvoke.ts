@@ -1,4 +1,5 @@
 import { mockInvoke } from "./mockBridge";
+import { CommandError, commandErrorFrom } from "./commandError";
 
 const TAURI_INVOKE_TIMEOUT_MS = 15000;
 
@@ -14,11 +15,13 @@ export async function tauriInvoke<T>(
     return mockInvoke<T>(command, args);
   }
 
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    setTimeout(() => {
+    timer = setTimeout(() => {
       reject(
-        new Error(
-          `Command '${command}' timed out after ${TAURI_INVOKE_TIMEOUT_MS}ms. The backend may be unresponsive.`,
+        new CommandError(
+          "UNKNOWN_ERROR",
+          "CommandUI did not answer in time. Try again. If it keeps happening, restart CommandUI.",
         ),
       );
     }, TAURI_INVOKE_TIMEOUT_MS);
@@ -30,16 +33,17 @@ export async function tauriInvoke<T>(
     );
     return await Promise.race([invokePromise, timeout]);
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e);
-    console.error(`[tauriInvoke] Command '${command}' failed:`, {
+    const error = commandErrorFrom(e);
+    console.error("[tauriInvoke] rejected", {
       command,
       args,
-      error: message,
+      code: error.code,
+      message: error.message,
       timestamp: new Date().toISOString(),
     });
-    throw new Error(
-      `Command '${command}' failed: ${message}. Please try again or reload the app if the problem persists.`,
-    );
+    throw error;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 

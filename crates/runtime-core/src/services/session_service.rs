@@ -12,7 +12,8 @@ use crate::events::{
 };
 use crate::pty::{
     bootstrap_prompt, clone_reader, cmd_probe_line, default_shell, new_marker_nonce, shell_family,
-    spawn_reader_with_exit, spawn_shell, strip_cmd_echo, write_raw, CmdTail, Marker, MarkerKind,
+    spawn_reader_with_exit, spawn_shell_with_args, strip_cmd_echo, write_raw, launch_args,
+    resolve_default_session_cwd, CmdTail, Marker, MarkerKind,
     PtyHandle, ReaderEvent, ShellFamily,
 };
 use crate::session::{SessionExecState, SessionRecord, SessionRegistry, SessionTracking};
@@ -66,12 +67,13 @@ impl SessionService {
         let id = uuid::Uuid::new_v4().to_string();
         let label = request.label.unwrap_or_else(|| "Session".to_string());
         let shell = request.shell.unwrap_or_else(default_shell);
-        // Resolve the default cwd before anything is spawned. current_dir()
-        // fails if the process directory was removed.
+        // Resolve the default cwd before anything is spawned: the process
+        // folder, or the user's home folder when that is the Windows folder
+        // (a packaged app starts in System32) or cannot be read.
         let cwd = match request.cwd {
             Some(cwd) => cwd,
-            None => std::env::current_dir()
-                .map_err(|e| format!("Failed to resolve working directory: {e}"))?
+            None => resolve_default_session_cwd()
+                .ok_or_else(|| "Failed to resolve working directory".to_string())?
                 .to_string_lossy()
                 .to_string(),
         };
@@ -82,7 +84,11 @@ impl SessionService {
             return Err(format!("unsupported shell: {shell}"));
         };
 
-        let (pair, writer, child) = spawn_shell(&shell, Some(&cwd))?;
+        // PowerShell is set up by its launch arguments; the others are typed
+        // the bootstrap once the reader is running.
+        let args = launch_args(&shell, &nonce);
+        let typed_bootstrap = args.is_empty();
+        let (pair, writer, child) = spawn_shell_with_args(&shell, Some(&cwd), &args)?;
         let reader = clone_reader(&pair)?;
         let bootstrap_writer = writer.clone();
 
@@ -148,13 +154,15 @@ impl SessionService {
         // exits, so EOF alone is not enough: also watch the child itself.
         Self::spawn_child_watcher(self.event_sink.clone(), self.sessions.clone(), id.clone());
 
-        persist_bootstrap(
-            &self.sessions,
-            &id,
-            &bootstrap_writer,
-            &prompt_cmd,
-            &shell,
-        )?;
+        if typed_bootstrap {
+            persist_bootstrap(
+                &self.sessions,
+                &id,
+                &bootstrap_writer,
+                &prompt_cmd,
+                &shell,
+            )?;
+        }
 
         Ok(summary)
     }
@@ -251,7 +259,7 @@ impl SessionService {
             // A runtime notice, not shell output: Raw Play must not write it
             // into a full-screen app's screen (apps/console skips "notice").
             kind: "notice".to_string(),
-            text: "\n[commandui: the shell exited. Open a new session to continue.]\n".to_string(),
+            text: "\nThe shell exited. Open a new session to continue.\n".to_string(),
             timestamp: now.clone(),
         }));
         if let Some(exec_id) = pending {
@@ -261,6 +269,9 @@ impl SessionService {
                 exit_code: 1,
                 finished_at: now.clone(),
                 status: "failure".to_string(),
+                // The number is not a shell exit code. The UI uses the reason.
+                exit_known: false,
+                reason: Some("shell_exited".to_string()),
             }));
         }
         sink.emit(RuntimeEvent::SessionExecStateChanged(
@@ -434,6 +445,8 @@ impl SessionService {
             pending: Option<String>,
             was_int: bool,
             exit_code: i32,
+            exit_known: bool,
+            reason: Option<String>,
             cwd: String,
             becomes_ready: bool,
         }
@@ -471,6 +484,7 @@ impl SessionService {
             let was_boot = !record.boot_prompt_received;
             let was_int = record.exec_state == SessionExecState::Interrupting;
             let mut exit = marker.exit.or(record.track.pending_exit);
+            let mut invented = false;
             let mut decision = None;
             if record.pending_execution_id.is_some() && exit.is_none() && !was_int {
                 let is_cmd = shell_family(&record.shell) == ShellFamily::Cmd;
@@ -481,7 +495,10 @@ impl SessionService {
                         cmd_probe_line(record.track.clear_chord),
                     ));
                 } else {
+                    // The shell drew a prompt and never reported a code. Keep the
+                    // numeric placeholder internally; tell the UI the code is unknown.
                     exit = Some(UNKNOWN_EXIT_CODE);
+                    invented = true;
                 }
             }
             match decision {
@@ -506,12 +523,19 @@ impl SessionService {
                         record.exec_state = SessionExecState::Ready;
                     }
                     record.command_sent_at = None;
-                    let exit_code = exit.unwrap_or(if was_int { INTERRUPTED_EXIT_CODE } else { UNKNOWN_EXIT_CODE });
+                    let (exit_code, exit_known, reason) = match exit {
+                        Some(code) if invented => (code, false, Some("exit_unknown".to_string())),
+                        Some(code) => (code, true, None),
+                        None if was_int => (INTERRUPTED_EXIT_CODE, true, None),
+                        None => (UNKNOWN_EXIT_CODE, false, Some("exit_unknown".to_string())),
+                    };
                     Decision::Applied(Applied {
                         was_boot,
                         pending,
                         was_int,
                         exit_code,
+                        exit_known,
+                        reason,
                         cwd,
                         becomes_ready: !still_typed_into,
                     })
@@ -546,6 +570,8 @@ impl SessionService {
         if let Some(exec_id) = applied.pending {
             let status = if applied.was_int {
                 "interrupted"
+            } else if !applied.exit_known {
+                "unknown"
             } else if applied.exit_code == 0 {
                 "success"
             } else {
@@ -557,6 +583,8 @@ impl SessionService {
                 exit_code: applied.exit_code,
                 finished_at: chrono::Utc::now().to_rfc3339(),
                 status: status.to_string(),
+                exit_known: applied.exit_known,
+                reason: applied.reason,
             }));
         }
 
@@ -950,8 +978,14 @@ mod tests {
         SessionService::process_reader_chunk(&sink_dyn, &sessions, "s1", &prompt(None, "C:\\w"));
         assert_eq!(
             finished(&sink),
-            vec![("e1".to_string(), UNKNOWN_EXIT_CODE, "failure".to_string())]
+            vec![("e1".to_string(), UNKNOWN_EXIT_CODE, "unknown".to_string())]
         );
+        let unknown = sink.events().into_iter().find_map(|event| match event {
+            RuntimeEvent::ExecutionFinished(finished) => Some(finished),
+            _ => None,
+        }).expect("finished");
+        assert!(!unknown.exit_known);
+        assert_eq!(unknown.reason.as_deref(), Some("exit_unknown"));
         assert_eq!(state_of(&sessions), SessionExecState::Ready);
     }
 
@@ -982,7 +1016,13 @@ mod tests {
         sessions2.lock().unwrap().get_mut("s1").unwrap().track.pending_tail = CmdTail::None;
         SessionService::process_reader_chunk(&sink2_dyn, &sessions2, "s1", &prompt(None, "C:\\w"));
         SessionService::process_reader_chunk(&sink2_dyn, &sessions2, "s1", &prompt(None, "C:\\w"));
-        assert_eq!(finished(&sink2), vec![("e2".to_string(), UNKNOWN_EXIT_CODE, "failure".to_string())]);
+        assert_eq!(finished(&sink2), vec![("e2".to_string(), UNKNOWN_EXIT_CODE, "unknown".to_string())]);
+        let unknown = sink2.events().into_iter().find_map(|e| match e {
+            RuntimeEvent::ExecutionFinished(f) => Some(f),
+            _ => None,
+        }).expect("finished");
+        assert!(!unknown.exit_known);
+        assert_eq!(unknown.reason.as_deref(), Some("exit_unknown"));
     }
 
     #[test]
@@ -1112,6 +1152,12 @@ mod tests {
         insert_session(&sessions, "s1", SessionExecState::Running, true, Some("exec-1".to_string()));
         SessionService::handle_session_exit(&sink_dyn, &sessions, "s1");
         assert_eq!(finished(&sink), vec![("exec-1".to_string(), 1, "failure".to_string())]);
+        let ended = sink.events().into_iter().find_map(|event| match event {
+            RuntimeEvent::ExecutionFinished(finished) => Some(finished),
+            _ => None,
+        }).expect("finished");
+        assert!(!ended.exit_known);
+        assert_eq!(ended.reason.as_deref(), Some("shell_exited"));
         {
             let reg = sessions.lock().unwrap();
             let record = reg.get("s1").unwrap();
@@ -1130,7 +1176,7 @@ mod tests {
             .collect();
         assert_eq!(lines.len(), 1, "{lines:?}");
         assert_eq!(lines[0].0, "notice");
-        assert!(lines[0].1.contains("the shell exited"), "{lines:?}");
+        assert!(lines[0].1.to_ascii_lowercase().contains("the shell exited"), "{lines:?}");
         assert!(lines.iter().all(|(kind, _)| kind != "stdout"));
         // Idempotent: a second call emits nothing more.
         let n = sink.len();

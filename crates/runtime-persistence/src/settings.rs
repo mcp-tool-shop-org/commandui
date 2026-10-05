@@ -7,21 +7,13 @@ pub struct SettingsSnapshot {
     #[serde(default)]
     pub product_mode: Option<String>,
     #[serde(default)]
-    pub theme: Option<String>,
-    #[serde(default)]
     pub font_size: Option<String>,
-    #[serde(default)]
-    pub density: Option<String>,
     #[serde(default)]
     pub default_input_mode: Option<String>,
     #[serde(default)]
-    pub auto_open_plan_panel: Option<bool>,
+    pub planner_model: Option<String>,
     #[serde(default)]
-    pub confirm_medium_risk: Option<bool>,
-    #[serde(default)]
-    pub explanation_verbosity: Option<String>,
-    #[serde(default)]
-    pub reduced_clutter: Option<bool>,
+    pub planner_endpoint: Option<String>,
     #[serde(default)]
     pub simplified_summaries: Option<bool>,
 }
@@ -29,14 +21,10 @@ pub struct SettingsSnapshot {
 pub fn default_settings() -> SettingsSnapshot {
     SettingsSnapshot {
         product_mode: Some("classic".to_string()),
-        theme: Some("dark".to_string()),
         font_size: Some("md".to_string()),
-        density: Some("comfortable".to_string()),
         default_input_mode: Some("command".to_string()),
-        auto_open_plan_panel: Some(true),
-        confirm_medium_risk: Some(true),
-        explanation_verbosity: Some("normal".to_string()),
-        reduced_clutter: Some(false),
+        planner_model: Some("qwen2.5:14b".to_string()),
+        planner_endpoint: Some("http://localhost:11434".to_string()),
         simplified_summaries: Some(false),
     }
 }
@@ -45,16 +33,10 @@ fn fill_defaults(settings: SettingsSnapshot) -> SettingsSnapshot {
     let defaults = default_settings();
     SettingsSnapshot {
         product_mode: settings.product_mode.or(defaults.product_mode),
-        theme: settings.theme.or(defaults.theme),
         font_size: settings.font_size.or(defaults.font_size),
-        density: settings.density.or(defaults.density),
         default_input_mode: settings.default_input_mode.or(defaults.default_input_mode),
-        auto_open_plan_panel: settings.auto_open_plan_panel.or(defaults.auto_open_plan_panel),
-        confirm_medium_risk: settings.confirm_medium_risk.or(defaults.confirm_medium_risk),
-        explanation_verbosity: settings
-            .explanation_verbosity
-            .or(defaults.explanation_verbosity),
-        reduced_clutter: settings.reduced_clutter.or(defaults.reduced_clutter),
+        planner_model: settings.planner_model.or(defaults.planner_model),
+        planner_endpoint: settings.planner_endpoint.or(defaults.planner_endpoint),
         simplified_summaries: settings.simplified_summaries.or(defaults.simplified_summaries),
     }
 }
@@ -143,52 +125,66 @@ mod tests {
     }
 
     #[test]
-    fn missing_row_loads_confirm_medium_risk_true() {
+    fn missing_row_loads_the_planner_defaults() {
         let conn = open();
         let settings = get(&conn).unwrap();
-        assert_eq!(settings.confirm_medium_risk, Some(true));
-        assert_eq!(settings.theme.as_deref(), Some("dark"));
+        assert_eq!(settings.planner_model.as_deref(), Some("qwen2.5:14b"));
+        assert_eq!(settings.planner_endpoint.as_deref(), Some("http://localhost:11434"));
+        assert_eq!(settings.font_size.as_deref(), Some("md"));
     }
 
     #[test]
-    fn older_object_missing_confirm_medium_risk_stays_true() {
+    fn older_object_drops_settings_that_do_nothing() {
         let conn = open();
         conn.execute(
             "INSERT INTO settings (key, value_json) VALUES ('app', ?1)",
-            [r#"{"theme":"light"}"#],
+            [r#"{"theme":"light","density":"compact","autoOpenPlanPanel":false,"explanationVerbosity":"brief","reducedClutter":true,"confirmMediumRisk":true,"fontSize":"lg"}"#],
         )
         .unwrap();
         let settings = get(&conn).unwrap();
-        assert_eq!(settings.theme.as_deref(), Some("light"));
-        assert_eq!(settings.confirm_medium_risk, Some(true));
+        assert_eq!(settings.font_size.as_deref(), Some("lg"));
+        assert_eq!(settings.planner_model.as_deref(), Some("qwen2.5:14b"));
         let json = serde_json::to_string(&settings).unwrap();
-        assert!(json.contains("\"confirmMediumRisk\":true"), "{json}");
+        assert!(json.contains("\"plannerModel\":\"qwen2.5:14b\""), "{json}");
+        assert!(json.contains("\"fontSize\":\"lg\""), "{json}");
+        for key in [
+            "theme",
+            "density",
+            "autoOpenPlanPanel",
+            "explanationVerbosity",
+            "reducedClutter",
+            "confirmMediumRisk",
+        ] {
+            assert!(!json.contains(key), "{key} still in {json}");
+        }
         assert!(!json.contains("null"), "{json}");
     }
 
     #[test]
-    fn null_confirm_medium_risk_is_filled_true() {
+    fn null_planner_model_is_filled() {
         let conn = open();
         conn.execute(
             "INSERT INTO settings (key, value_json) VALUES ('app', ?1)",
-            [r#"{"theme":"light","confirmMediumRisk":null}"#],
+            [r#"{"theme":"light","plannerModel":null}"#],
         )
         .unwrap();
         let settings = get(&conn).unwrap();
-        assert_eq!(settings.confirm_medium_risk, Some(true));
-        assert_eq!(settings.theme.as_deref(), Some("light"));
+        assert_eq!(settings.planner_model.as_deref(), Some("qwen2.5:14b"));
+        let json = serde_json::to_string(&settings).unwrap();
+        assert!(!json.contains("theme"), "{json}");
     }
 
     #[test]
-    fn explicit_false_confirm_medium_risk_is_kept() {
+    fn an_explicit_planner_model_is_kept() {
         let conn = open();
         conn.execute(
             "INSERT INTO settings (key, value_json) VALUES ('app', ?1)",
-            [r#"{"confirmMediumRisk":false}"#],
+            [r#"{"plannerModel":"qwen2.5:7b"}"#],
         )
         .unwrap();
         let settings = get(&conn).unwrap();
-        assert_eq!(settings.confirm_medium_risk, Some(false));
+        assert_eq!(settings.planner_model.as_deref(), Some("qwen2.5:7b"));
+        assert_eq!(settings.planner_endpoint.as_deref(), Some("http://localhost:11434"));
     }
 
     #[test]
@@ -200,8 +196,8 @@ mod tests {
         )
         .unwrap();
         let settings = get(&conn).unwrap();
-        assert_eq!(settings.confirm_medium_risk, Some(true));
-        assert_eq!(settings.theme.as_deref(), Some("dark"));
+        assert_eq!(settings.planner_model.as_deref(), Some("qwen2.5:14b"));
+        assert_eq!(settings.font_size.as_deref(), Some("md"));
     }
 
     #[test]
@@ -214,55 +210,42 @@ mod tests {
         .unwrap();
         let patch = SettingsSnapshot {
             font_size: Some("lg".to_string()),
-            ..SettingsSnapshot {
-                product_mode: None,
-                theme: None,
-                font_size: None,
-                density: None,
-                default_input_mode: None,
-                auto_open_plan_panel: None,
-                confirm_medium_risk: None,
-                explanation_verbosity: None,
-                reduced_clutter: None,
-                simplified_summaries: None,
-            }
+            product_mode: None,
+            default_input_mode: None,
+            planner_model: None,
+            planner_endpoint: None,
+            simplified_summaries: None,
         };
         update(&conn, &patch).unwrap();
         let stored = raw_json(&conn);
         assert!(!stored.contains("null"), "{stored}");
-        assert!(stored.contains("\"confirmMediumRisk\":true"), "{stored}");
-        assert!(stored.contains("\"theme\":\"light\""), "{stored}");
+        assert!(stored.contains("\"plannerModel\":\"qwen2.5:14b\""), "{stored}");
+        assert!(stored.contains("\"plannerEndpoint\":\"http://localhost:11434\""), "{stored}");
+        assert!(!stored.contains("theme"), "{stored}");
         assert!(stored.contains("\"fontSize\":\"lg\""), "{stored}");
-        assert_eq!(get(&conn).unwrap().confirm_medium_risk, Some(true));
+        assert_eq!(get(&conn).unwrap().planner_model.as_deref(), Some("qwen2.5:14b"));
     }
 
     #[test]
     fn update_keeps_an_explicit_false_and_fails_without_the_table() {
         let conn = open();
-        let patch = SettingsSnapshot {
-            confirm_medium_risk: Some(false),
-            theme: Some("light".into()),
-            ..default_settings()
-        };
-        // Fill every other field so the patch is a complete object, then
-        // clear the ones the merge must leave to the stored defaults.
+        // A partial patch must not wipe the fields it leaves out.
         let patch = SettingsSnapshot {
             product_mode: None,
-            theme: patch.theme,
             font_size: None,
-            density: None,
             default_input_mode: None,
-            auto_open_plan_panel: None,
-            confirm_medium_risk: Some(false),
-            explanation_verbosity: None,
-            reduced_clutter: None,
-            simplified_summaries: None,
+            planner_model: Some("qwen2.5:7b".into()),
+            planner_endpoint: None,
+            simplified_summaries: Some(false),
         };
         update(&conn, &patch).unwrap();
         let stored = get(&conn).unwrap();
-        assert_eq!(stored.confirm_medium_risk, Some(false));
-        assert_eq!(stored.theme.as_deref(), Some("light"));
+        assert_eq!(stored.planner_model.as_deref(), Some("qwen2.5:7b"));
+        assert_eq!(stored.planner_endpoint.as_deref(), Some("http://localhost:11434"));
+        assert_eq!(stored.simplified_summaries, Some(false));
         assert_eq!(stored.font_size.as_deref(), Some("md"));
+        let json = serde_json::to_string(&stored).unwrap();
+        assert!(!json.contains("theme"), "{json}");
 
         let bare = Connection::open_in_memory().unwrap();
         let err = get(&bare).err().unwrap();

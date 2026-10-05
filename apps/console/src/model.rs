@@ -1774,6 +1774,8 @@ mod tests {
             exit_code: 0,
             finished_at: "t".into(),
             status: "success".into(),
+            exit_known: true,
+            reason: None,
         }));
         assert_eq!(model.sessions[0].exec_state, "ready");
 
@@ -1783,6 +1785,8 @@ mod tests {
             exit_code: 1,
             finished_at: "t".into(),
             status: "failure".into(),
+            exit_known: true,
+            reason: None,
         }));
         assert_eq!(model.sessions[0].exec_state, "ready");
     }
@@ -1912,6 +1916,8 @@ mod tests {
             exit_code: 1,
             finished_at: "t".into(),
             status: "failure".into(),
+            exit_known: true,
+            reason: None,
         }));
         assert_eq!(model.sessions[0].session_state, SessionState::Closed);
     }

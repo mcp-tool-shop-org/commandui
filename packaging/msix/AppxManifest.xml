@@ -14,7 +14,7 @@
   <Properties>
     <DisplayName>CommandUI</DisplayName>
     <PublisherDisplayName>mcp-tool-shop</PublisherDisplayName>
-    <Logo>Assets\StoreLogo.scale-200.png</Logo>
+    <Logo>Assets\StoreLogo.png</Logo>
     <Description>AI-native shell environment with semantic command review.</Description>
   </Properties>
 
@@ -37,13 +37,13 @@
       <uap:VisualElements
         DisplayName="CommandUI"
         Description="AI-native shell — describe what you want, review the command, then run it."
-        BackgroundColor="#4AA59D"
-        Square150x150Logo="Assets\Square150x150Logo.scale-200.png"
-        Square44x44Logo="Assets\Square44x44Logo.scale-200.png">
+        BackgroundColor="#318C8B"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile
-          Wide310x150Logo="Assets\Wide310x150Logo.scale-200.png"
-          Square310x310Logo="Assets\Square310x310Logo.scale-200.png"
-          Square71x71Logo="Assets\Square71x71Logo.scale-200.png"
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png"
+          Square71x71Logo="Assets\Square71x71Logo.png"
           ShortName="CommandUI">
           <uap:ShowNameOnTiles>
             <uap:ShowOn Tile="square150x150Logo" />
@@ -51,7 +51,7 @@
             <uap:ShowOn Tile="square310x310Logo" />
           </uap:ShowNameOnTiles>
         </uap:DefaultTile>
-        <uap:SplashScreen Image="Assets\SplashScreen.scale-200.png" BackgroundColor="#4AA59D" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#318C8B" />
       </uap:VisualElements>
     </Application>
   </Applications>

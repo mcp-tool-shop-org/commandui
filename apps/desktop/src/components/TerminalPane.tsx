@@ -1,8 +1,26 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { useFocusStore } from "@commandui/state";
 import "@xterm/xterm/css/xterm.css";
+import { terminalTheme } from "../lib/terminalTheme";
+
+function mediaMatches(query: string): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia(query).matches;
+}
+
+function useMedia(query: string): boolean {
+  const [matches, setMatches] = useState(() => mediaMatches(query));
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const list = window.matchMedia(query);
+    const onChange = () => setMatches(list.matches);
+    onChange();
+    list.addEventListener?.("change", onChange);
+    return () => list.removeEventListener?.("change", onChange);
+  }, [query]);
+  return matches;
+}
 
 /**
  * xterm answers the queries inside a replayed stream (cursor position, device attributes,
@@ -32,9 +50,8 @@ export type TerminalPaneHandle = {
 
 type Props = {
   sessionId?: string | null;
+  /** Drives the cursor blink while a command runs. The result line lives outside this pane. */
   executionStatus?: "idle" | "running" | "success" | "failure" | "interrupted";
-  /** Text for the status badge when it should differ from the status itself. */
-  statusLabel?: string;
   onResize?: (cols: number, rows: number) => void;
   onData?: (data: string) => void;
   autoFocus?: boolean;
@@ -45,7 +62,6 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
     {
       sessionId,
       executionStatus = "idle",
-      statusLabel,
       onResize,
       onData,
       autoFocus = false,
@@ -64,6 +80,12 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
     const pendingLiveRef = useRef<string[]>([]);
 
     const setFocusZone = useFocusStore((s) => s.setFocusZone);
+    const reduceMotion = useMedia("(prefers-reduced-motion: reduce)");
+    const lightTheme = useMedia("(prefers-color-scheme: light)");
+    const reduceMotionRef = useRef(reduceMotion);
+    const lightThemeRef = useRef(lightTheme);
+    reduceMotionRef.current = reduceMotion;
+    lightThemeRef.current = lightTheme;
 
     // The handlers change identity with the active session. Reading them through refs
     // keeps one xterm instance alive across tab switches instead of disposing and
@@ -135,14 +157,13 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
       if (!containerRef.current || terminalRef.current) return;
 
       const term = new Terminal({
-        cursorBlink: true,
+        cursorBlink: !reduceMotionRef.current,
+        screenReaderMode: true,
+        // The shell's zoom is the text scale. Multiplying this cell size would draw the glyphs twice.
         fontSize: 14,
         fontFamily:
           "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-        theme: {
-          background: "#171c22",
-          foreground: "#e8ebf0",
-        },
+        theme: terminalTheme(lightThemeRef.current),
         scrollback: 5000,
         convertEol: true,
       });
@@ -223,12 +244,18 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
       term.reset();
     }, [sessionId]);
 
-    // Cursor blink when running
+    // Cursor blink only while a command runs, and never when the person asked for less motion.
+    // The theme follows the light or dark setting. The cell size stays 14; zoom scales it.
     useEffect(() => {
       const term = terminalRef.current;
       if (!term) return;
-      term.options.cursorBlink = executionStatus === "running";
-    }, [executionStatus]);
+      term.options.cursorBlink = !reduceMotion && executionStatus === "running";
+      term.options.fontSize = 14;
+      term.options.theme = {
+        ...term.options.theme,
+        ...terminalTheme(lightTheme),
+      };
+    }, [executionStatus, reduceMotion, lightTheme]);
 
     // Re-fit on session change
     useEffect(() => {
@@ -248,11 +275,6 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
 
     return (
       <div className="terminal-shell">
-        <div className="terminal-meta">
-          <span className={`exec-badge exec-${executionStatus}`}>
-            {statusLabel ?? executionStatus}
-          </span>
-        </div>
         <div ref={containerRef} className="terminal-xterm-host" />
       </div>
     );

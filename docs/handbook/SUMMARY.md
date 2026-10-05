@@ -3,6 +3,7 @@
 ## Orientation
 
 - [What Is CommandUI](src/orientation/what-is-commandui.md)
+- [Accessibility](src/orientation/accessibility.md)
 - [First Ten Minutes](src/orientation/first-ten-minutes.md)
 - [Core Concepts](src/orientation/core-concepts.md)
 

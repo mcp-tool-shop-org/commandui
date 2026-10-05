@@ -17,7 +17,7 @@
 
 ## Planner
 - Calls a local Ollama model first. The prompt includes the working directory, recent commands, known preferences, and known workflows.
-- If Ollama is not running, the planner falls back to a mock. The mock recognizes a few intents and otherwise echoes the intent. The plan panel says when the source is the mock.
+- If the model is not installed, not running, or not downloaded, Ask says so and does not draft a command in a release build. A debug build can show a labeled practice plan.
 - Context is the current session, not a long transcript.
 
 ## Semantic Review
@@ -27,10 +27,10 @@
 
 ## UX
 - No tab reordering or renaming
-- No workflow editing (only save and run)
+- A saved workflow can be edited. Save Workflow on one command does not open the editor
 - No memory editing (only delete + re-accept)
-- Keyboard shortcuts are Ctrl-based (no customization)
-- Terminal theme hardcoded (not connected to settings theme)
+- Keyboard shortcuts are Ctrl-based (no customization). Ask is Ctrl+Shift+A, not Ctrl+2
+- The window and the terminal follow the system light or dark scheme. There is no theme setting
 
 ## Platform
 - Windows: pwsh 7 preferred, fallback to powershell.exe

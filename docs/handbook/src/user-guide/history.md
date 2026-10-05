@@ -9,14 +9,14 @@ Each entry records:
 | Field | Description |
 |-------|-------------|
 | **User input** | What you typed (command or intent) |
-| **Source** | `raw` (command mode) or `semantic` (ask mode) |
-| **Generated command** | The AI-generated command, if semantic |
+| **Source, on screen** | Typed command, From Ask, or From Ask, practice plan |
+| **Generated command** | The drafted command, when Ask made one |
 | **Executed command** | What actually ran (may differ if you edited) |
 | **Status** | `success`, `failure`, `rejected`, `planned`, `interrupted` |
 | **Exit code** | Shell exit code (0 = success) |
 | **Duration** | How long execution took |
 | **CWD** | Working directory at execution time |
-| **Planner source** | `ollama` or `mock` (semantic items only) |
+| **Planner source, stored** | The model, or a practice plan |
 | **Workflow run ID** | Links to parent workflow run, if applicable |
 
 ## Browsing history

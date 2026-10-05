@@ -145,6 +145,14 @@ jobs:
           retention-days: 3
           overwrite: true
 
+      # jsdom has no layout, so the unit suite cannot see a zoomed shell.
+      # This is Chromium on the built frontend, separate from pnpm test.
+      - name: Large-text layout in Chromium
+        working-directory: apps/desktop
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:layout
+
       - name: pnpm audit
         run: pnpm audit --audit-level=high
 

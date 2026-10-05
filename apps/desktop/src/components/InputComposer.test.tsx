@@ -106,6 +106,23 @@ describe("InputComposer", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it("reads Draft plan in Ask, and stays focusable while a command runs", () => {
+    const { rerender } = render(
+      <InputComposer mode="ask" onModeChange={() => {}} onSubmit={() => {}} />,
+    );
+    expect(screen.getByRole("group", { name: "How to send this" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Draft plan" })).toBeInTheDocument();
+
+    rerender(
+      <InputComposer mode="command" onModeChange={() => {}} onSubmit={() => {}} isRunning />,
+    );
+    const box = screen.getByRole("textbox", { name: "Command" });
+    expect(box).not.toBeDisabled();
+    expect(box).toHaveAttribute("readonly");
+    expect(screen.getByRole("button", { name: "Stop the command" })).toBeInTheDocument();
+  });
+
   it("shows Stop instead of Run while running and Stop calls onInterrupt", async () => {
     const onInterrupt = vi.fn();
     const onSubmit = vi.fn();

@@ -488,14 +488,14 @@ describe("stores the shell writes while a person is working", () => {
 
   it("stores every settings switch", () => {
     const settings = useSettingsStore.getState();
-    settings.setReducedClutter(true);
+    settings.setFontSize("lg");
     settings.setSimplifiedSummaries(true);
-    settings.setConfirmMediumRisk(false);
+    settings.setPlannerModel("qwen2.5:14b");
     settings.setDefaultInputMode("ask");
     expect(useSettingsStore.getState()).toMatchObject({
-      reducedClutter: true,
+      fontSize: "lg",
       simplifiedSummaries: true,
-      confirmMediumRisk: false,
+      plannerModel: "qwen2.5:14b",
       defaultInputMode: "ask",
     });
   });

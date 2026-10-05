@@ -1,4 +1,5 @@
 import { useWorkflowRunStore } from "@commandui/state";
+import { runStatusLabel } from "../lib/runStatusLabel";
 
 export function WorkflowRunBanner() {
   const activeRun = useWorkflowRunStore((s) => s.activeRun);
@@ -19,11 +20,12 @@ export function WorkflowRunBanner() {
       </div>
       <div className="workflow-run-step-dots">
         {activeRun.steps.map((step) => (
-          <div
-            key={step.index}
-            className={`wf-dot wf-dot--${step.status}`}
-            title={`Step ${step.index + 1}: ${step.command} (${step.status})`}
-          />
+          <span key={step.index} className="wf-step-mark">
+            <span className={`wf-dot wf-dot--${step.status}`} aria-hidden="true" />
+            <span>
+              Step {step.index + 1}: {runStatusLabel(step.status)}
+            </span>
+          </span>
         ))}
       </div>
     </div>

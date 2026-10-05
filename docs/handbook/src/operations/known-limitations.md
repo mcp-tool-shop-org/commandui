@@ -8,16 +8,16 @@ Command completion relies on a prompt hook CommandUI installs in the shell, whic
 ### Exit code fidelity
 Exit codes come from the shell itself: `$?` in bash and zsh, `$?` and `$LASTEXITCODE` in PowerShell, and `%ERRORLEVEL%` captured after each approved command in cmd. A command you type yourself in cmd reports no exit code, only that it finished.
 
-### PTY session restore
-Sessions are ephemeral. The PTY process is respawned on app restart. Terminal output and shell state (environment variables, aliases) do not persist across restarts. History, workflows, and memory do persist.
+### Sessions do not survive a restart
+The shell starts again when you reopen CommandUI. Terminal output, environment variables, and aliases do not. History, workflows, and memory do.
 
 ### Direct terminal typing
 Keystrokes typed directly into the terminal (bypassing the composer) are not tracked in structured history. Only commands submitted through the composer are recorded.
 
 ## Planner
 
-### Mock fallback
-When Ollama is unavailable, the planner returns stub responses. The mock planner recognizes a few common intents (git status, destructive commands) but otherwise echoes the intent text. The "Mock planner — Ollama not connected" notice appears in the plan panel.
+### When the model is not ready
+Ask says whether the model is not installed, not running, or not downloaded, and what to do next. A release build does not draft a command in that case. A debug build and the browser preview can show a practice plan, labeled "Practice plan — Ollama is not connected. This is not a real plan."
 
 ### Context window
 The planner context includes up to 5 recent commands, 5 relevant workflows, and all effective memory items. Very large memory sets or workflow libraries may need pruning.
@@ -30,8 +30,8 @@ The planner generates a single command plan per request. It does not support fol
 ### No tab reordering
 Session tabs cannot be reordered by dragging. They appear in creation order.
 
-### No workflow editing
-Saved workflows cannot be edited after creation (except through the promotion editor during initial save). To modify a workflow, delete it and recreate it.
+### Workflow editing
+Edit on a saved workflow opens the editor. Save Workflow on a plan, or on a single history row, stores that one command and does not open the editor.
 
 ### No memory editing
 Memory items can be viewed and deleted, but not edited. To change a memory item, delete it and let the detectors regenerate a new suggestion (or accept a manual one).
@@ -40,7 +40,7 @@ Memory items can be viewed and deleted, but not edited. To change a memory item,
 All shortcuts are hardcoded. They use Ctrl-based combos. Custom keybindings are not supported.
 
 ### Terminal theme
-The app chrome follows the system light or dark scheme. The terminal itself stays on a dark theme. Custom themes are not available.
+The window and the terminal follow the system light or dark scheme. There is no separate theme setting. Text size is 100% to 200%.
 
 ### No terminal search
 Scrollback search (Ctrl+F in the terminal) is not implemented.

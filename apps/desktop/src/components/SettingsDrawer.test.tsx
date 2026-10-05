@@ -11,12 +11,16 @@ function renderDrawer(overrides: Partial<Parameters<typeof SettingsDrawer>[0]> =
     onProductModeChange: vi.fn(),
     defaultInputMode: "ask" as const,
     onDefaultInputModeChange: vi.fn(),
-    reducedClutter: false,
-    onReducedClutterChange: vi.fn(),
+    fontSize: "md",
+    onFontSizeChange: vi.fn(),
     simplifiedSummaries: false,
     onSimplifiedSummariesChange: vi.fn(),
-    confirmMediumRisk: true,
-    onConfirmMediumRiskChange: vi.fn(),
+    plannerModel: "qwen2.5:14b",
+    onPlannerModelChange: vi.fn(),
+    plannerEndpoint: "http://localhost:11434",
+    onPlannerEndpointChange: vi.fn(),
+    plannerStatus: null,
+    onCheckPlanner: vi.fn(),
     ...overrides,
   };
   render(<SettingsDrawer {...props} />);
@@ -40,12 +44,8 @@ describe("SettingsDrawer", () => {
     await user.selectOptions(inputMode, "command");
     expect(props.onDefaultInputModeChange).toHaveBeenCalledWith("command");
 
-    await user.click(screen.getByLabelText("Reduced clutter"));
-    expect(props.onReducedClutterChange).toHaveBeenCalledWith(true);
     await user.click(screen.getByLabelText("Simplified summaries"));
     expect(props.onSimplifiedSummariesChange).toHaveBeenCalledWith(true);
-    await user.click(screen.getByLabelText("Confirm medium-risk commands"));
-    expect(props.onConfirmMediumRiskChange).toHaveBeenCalledWith(false);
 
     await user.click(screen.getByRole("button", { name: "Close" }));
     expect(props.onClose).toHaveBeenCalledOnce();

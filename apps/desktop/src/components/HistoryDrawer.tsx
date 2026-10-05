@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import type { HistoryItem } from "@commandui/domain";
 import type { SessionSummary } from "@commandui/domain";
+import { historyStatusLabel } from "../lib/commandResult";
+import { useModalDialog } from "../lib/useModalDialog";
+import { RelativeTime } from "./RelativeTime";
 
 type Props = {
   isOpen: boolean;
@@ -12,6 +15,8 @@ type Props = {
   onRerun: (item: HistoryItem) => void;
   onReopenPlan: (item: HistoryItem) => void;
   onSaveWorkflow: (item: HistoryItem) => void;
+  /** Selected rows, oldest first, so the saved list runs in the order they happened. */
+  onSaveSelected?: (items: HistoryItem[]) => void;
   onCopyCommand: (command: string) => void;
   onViewWorkflowRun?: (workflowRunId: string) => void;
   initialExpandedId?: string | null;
@@ -27,12 +32,8 @@ function formatDuration(ms: number | undefined): string {
   return `${mins}m ${secs}s`;
 }
 
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 60_000) return "just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return `${Math.floor(diff / 86_400_000)}d ago`;
+function commandOf(item: HistoryItem): string | undefined {
+  return item.executedCommand ?? item.generatedCommand;
 }
 
 export function HistoryDrawer({
@@ -45,6 +46,7 @@ export function HistoryDrawer({
   onRerun,
   onReopenPlan,
   onSaveWorkflow,
+  onSaveSelected,
   onCopyCommand,
   onViewWorkflowRun,
   initialExpandedId,
@@ -53,6 +55,8 @@ export function HistoryDrawer({
   const [search, setSearch] = useState("");
   const [sessionFilter, setSessionFilter] = useState<string>("current");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [lastCount, setLastCount] = useState("3");
 
   // Allow AppShell to programmatically expand a specific history item
   useEffect(() => {
@@ -60,6 +64,8 @@ export function HistoryDrawer({
       setExpandedId(initialExpandedId);
     }
   }, [initialExpandedId]);
+
+  const dialogRef = useModalDialog(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -83,11 +89,47 @@ export function HistoryDrawer({
       })
     : baseItems;
 
+  // The list is newest first. The first N are the most recent commands.
+  function selectLast() {
+    const count = Math.max(1, Math.floor(Number(lastCount)) || 1);
+    const ids = filtered
+      .filter((item) => Boolean(commandOf(item)))
+      .slice(0, count)
+      .map((item) => item.id);
+    setSelected(new Set(ids));
+  }
+
+  function saveSelected() {
+    if (!onSaveSelected) return;
+    const chosen = filtered
+      .filter((item) => selected.has(item.id) && Boolean(commandOf(item)))
+      .slice()
+      .reverse();
+    if (chosen.length === 0) return;
+    onSaveSelected(chosen);
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <div className="history-overlay" onClick={onClose}>
-      <div className="history-drawer" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="history-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="history-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="drawer-header">
-          <strong>History</strong>
+          <strong id="history-title">History</strong>
           <button type="button" onClick={onClose}>
             Close
           </button>
@@ -97,12 +139,15 @@ export function HistoryDrawer({
           <input
             className="history-search"
             type="text"
+            aria-label="Search history"
+            data-autofocus
             placeholder="Search history…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <select
             className="history-filter"
+            aria-label="Which session"
             value={sessionFilter}
             onChange={(e) => setSessionFilter(e.target.value)}
           >
@@ -128,36 +173,60 @@ export function HistoryDrawer({
         ) : filtered.length === 0 ? (
           <p className="muted">No history yet.</p>
         ) : (
-          filtered.map((item) => {
+          <>
+            <div className="history-save-bar">
+              <label htmlFor="history-last-n">Last commands</label>
+              <input
+                id="history-last-n"
+                className="history-last-n"
+                type="number"
+                min={1}
+                value={lastCount}
+                onChange={(e) => setLastCount(e.target.value)}
+              />
+              <button type="button" onClick={selectLast}>
+                Select last
+              </button>
+              <button type="button" onClick={saveSelected} disabled={selected.size === 0 || !onSaveSelected}>
+                Save as workflow
+              </button>
+            </div>
+            {filtered.map((item) => {
             const isExpanded = expandedId === item.id;
             const command = item.executedCommand ?? item.generatedCommand;
             const duration = formatDuration(item.durationMs);
             const sourceLabel =
               item.source === "semantic"
-                ? `semantic${item.plannerSource ? `/${item.plannerSource}` : ""}`
-                : "raw";
+                ? item.plannerSource === "mock"
+                  ? "From Ask, practice plan"
+                  : "From Ask"
+                : "Typed command";
 
             return (
               <div
                 key={item.id}
                 className={`history-item${isExpanded ? " history-item-expanded" : ""}`}
-                onClick={() => setExpandedId(isExpanded ? null : item.id)}
-                tabIndex={0}
-                role="button"
-                aria-expanded={isExpanded}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setExpandedId(isExpanded ? null : item.id);
-                  }
-                }}
               >
                 <div className="history-row">
-                  <span className="history-main">
-                    <span aria-hidden="true">{isExpanded ? "▼" : "▶"}</span> {item.userInput}
-                  </span>
+                  <input
+                    className="history-select"
+                    type="checkbox"
+                    aria-label={`Select ${item.userInput}`}
+                    checked={selected.has(item.id)}
+                    disabled={!command}
+                    onChange={() => toggleSelected(item.id)}
+                  />
+                  <button
+                    type="button"
+                    className="history-expand"
+                    aria-expanded={isExpanded}
+                    onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                  >
+                    <span aria-hidden="true">{isExpanded ? "▼" : "▶"}</span>{" "}
+                    <span className="history-main">{item.userInput}</span>
+                  </button>
                   <span className={`history-status history-status--${item.status}`}>
-                    {item.status}
+                    {historyStatusLabel(item.status)}
                   </span>
                 </div>
 
@@ -180,11 +249,8 @@ export function HistoryDrawer({
                   {item.cwd && (
                     <span className="history-cwd">{item.cwd}</span>
                   )}
-                  <span
-                    className="history-time"
-                    title={item.createdAt}
-                  >
-                    {relativeTime(item.createdAt)}
+                  <span className="history-time">
+                    <RelativeTime value={item.createdAt} />
                   </span>
                 </div>
 
@@ -290,7 +356,8 @@ export function HistoryDrawer({
                 )}
               </div>
             );
-          })
+          })}
+          </>
         )}
       </div>
     </div>

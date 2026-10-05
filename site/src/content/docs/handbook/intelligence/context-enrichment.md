@@ -58,22 +58,19 @@ The `build_planner_prompt()` function in Rust formats the context into the LLM p
 - **Recent commands:** listed for recency awareness
 - **Rules:** 10 rules including "prefer known workflow commands over inventing new ones"
 
-### Mock planner
+### Practice plan
 
-The mock fallback uses context for:
-- Setting `cwd` on the response
-- Populating `retrievedContext` in the plan review
-- Workflow matching: fuzzy-matching intent against workflow labels to return the workflow's commands instead of a generic stub
+A release build does not draft a command when the model is not ready. A debug build and the browser preview can. That stand-in still receives the working directory and may match a workflow label. The screen labels it as a practice plan.
 
 ### Plan review
 
-`retrievedContext` in the `PlanReviewPayload` lists what context was assembled:
+`retrievedContext` in the `PlanReviewPayload` lists what context was assembled, using the field names the planner receives:
 - `cwd: ~/projects`
 - `projectRoot: ~/projects`
 - `workflow:deploy`
 - `workflow:test-suite`
 
-This is displayed in the PlanPanel footer so you can see what influenced the plan.
+The plan panel footer shows this in plain words, so you can see what influenced the plan: "Looked at: Working folder ~/projects", plus "Project folder …" when the project folder is a different one. The field names stay in the request to the model.
 
 ## The enrichment loop
 

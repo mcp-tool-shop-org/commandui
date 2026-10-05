@@ -27,7 +27,7 @@ describe("WorkflowEditor", () => {
     const name = screen.getByDisplayValue("Ship");
     await user.clear(name);
     await user.type(name, "  Ship it  ");
-    const confirm = screen.getByRole("button", { name: "Create Workflow" });
+    const confirm = screen.getByRole("button", { name: "Create workflow" });
     await user.click(confirm);
     await user.click(confirm);
     expect(onConfirm).toHaveBeenCalledOnce();
@@ -37,7 +37,7 @@ describe("WorkflowEditor", () => {
   it("refuses a blank name or a blank step", async () => {
     const user = userEvent.setup();
     const { onConfirm } = renderEditor(["git status"], "Ship");
-    const confirm = screen.getByRole("button", { name: "Create Workflow" });
+    const confirm = screen.getByRole("button", { name: "Create workflow" });
     await user.clear(screen.getByDisplayValue("Ship"));
     expect(confirm).toBeDisabled();
 
@@ -50,22 +50,22 @@ describe("WorkflowEditor", () => {
   it("reorders steps and will not remove the last one", async () => {
     const user = userEvent.setup();
     const { onConfirm } = renderEditor(["first", "second"]);
-    expect(screen.getAllByRole("button", { name: "Move up" })[0]).toBeDisabled();
-    expect(screen.getAllByRole("button", { name: "Move down" })[1]).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move step 1 up" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move step 2 down" })).toBeDisabled();
 
-    await user.click(screen.getAllByRole("button", { name: "Move down" })[0]);
-    await user.click(screen.getAllByRole("button", { name: "Remove step" })[0]);
-    expect(screen.getByRole("button", { name: "Remove step" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "Create Workflow" }));
+    await user.click(screen.getByRole("button", { name: "Move step 1 down" }));
+    await user.click(screen.getByRole("button", { name: "Remove step 1" }));
+    expect(screen.getByRole("button", { name: "Remove step 1" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Create workflow" }));
     expect(onConfirm).toHaveBeenCalledWith("Ship", ["first"]);
   });
 
   it("cancels from the button, Escape, and the backdrop, not from the panel", async () => {
     const user = userEvent.setup();
     const { onCancel } = renderEditor(["only"]);
-    expect(screen.getByRole("button", { name: "Remove step" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove step 1" })).toBeDisabled();
 
-    await user.click(screen.getByRole("heading", { name: "Edit Workflow" }));
+    await user.click(screen.getByRole("heading", { name: "New workflow" }));
     expect(onCancel).not.toHaveBeenCalled();
 
     await user.click(screen.getByDisplayValue("only"));

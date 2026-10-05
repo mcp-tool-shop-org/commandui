@@ -32,6 +32,12 @@ pub struct ExecutionFinishedEvent {
     pub exit_code: i32,
     pub finished_at: String,
     pub status: String,
+    /// False when `exit_code` was invented, or does not describe what happened
+    /// (the shell exited, or the terminal refused the input). The UI must not
+    /// quote the number in those cases.
+    pub exit_known: bool,
+    /// `exit_unknown`, `shell_exited`, or `input_not_accepted` when set.
+    pub reason: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -177,6 +183,8 @@ mod tests {
             exit_code: 0,
             finished_at: "2026-01-01T00:00:01Z".to_string(),
             status: "success".to_string(),
+            exit_known: true,
+            reason: None,
         }));
 
         assert_eq!(sink.len(), 3);

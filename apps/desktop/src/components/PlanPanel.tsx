@@ -1,4 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { displayPath } from "../lib/displayPath";
+import {
+  confirmationMatches,
+  confirmationPhrase,
+  explainCommand,
+  flagInWords,
+  riskInWords,
+} from "../lib/planLanguage";
 import { useFocusStore } from "@commandui/state";
 import {
   describeHiddenChars,
@@ -9,7 +17,48 @@ import {
 
 export type PlanRisk = "low" | "medium" | "high";
 
-/** Latest edited command and checkbox, reported so shortcuts share canRun. */
+/**
+ * Plain words for the plan footer. The planner's context lines use field
+ * names a person should not have to read.
+ */
+export function contextInWords(sources: string[] | undefined): string {
+  if (!sources || sources.length === 0) return "";
+  let working: string | null = null;
+  let project: string | null = null;
+  const extra: string[] = [];
+  for (const source of sources) {
+    const trimmed = source.trim();
+    const cwd = /^cwd:\s*(.*)$/i.exec(trimmed);
+    if (cwd) {
+      const folder = displayPath(cwd[1].trim());
+      if (folder) working = folder;
+      continue;
+    }
+    const root = /^projectRoot:\s*(.*)$/i.exec(trimmed);
+    if (root) {
+      const folder = displayPath(root[1].trim());
+      if (folder) project = folder;
+      continue;
+    }
+    const fact = /^([A-Za-z][\w-]*):(.*)$/.exec(trimmed);
+    if (fact) {
+      const label = fact[2].trim();
+      if (!label) continue;
+      extra.push(fact[1].toLowerCase() === "workflow" ? `Workflow ${label}` : label);
+      continue;
+    }
+    if (trimmed && !/\bcwd\b|\bprojectRoot\b/i.test(trimmed)) extra.push(trimmed);
+  }
+  const parts: string[] = [];
+  if (working) parts.push(`Working folder ${working}`);
+  if (project && project !== working) parts.push(`Project folder ${project}`);
+  for (const item of extra) {
+    if (!parts.includes(item)) parts.push(item);
+  }
+  return parts.join(", ");
+}
+
+/** Latest edited command and whether the high-risk phrase was typed. */
 export type PlanRunGate = {
   command: string;
   confirmed: boolean;
@@ -22,41 +71,41 @@ export type PlanSafetyFlags = {
   escalatesPrivileges?: boolean;
 };
 
+/** Friction is only for a high-risk plan, or one that deletes or raises permissions. */
 export function planNeedsConfirmation(
   risk: PlanRisk,
-  requireMediumRiskConfirmation: boolean,
   flags?: PlanSafetyFlags,
 ): boolean {
-  return (
-    risk === "high" ||
-    (risk === "medium" && requireMediumRiskConfirmation) ||
-    flags?.requiresConfirmation === true ||
-    flags?.destructive === true ||
-    flags?.escalatesPrivileges === true
-  );
+  return risk === "high" || flags?.destructive === true || flags?.escalatesPrivileges === true;
 }
 
 /**
  * Same rule as the Run Plan button: non-empty command with no hidden or
- * direction-changing characters, and the checkbox when required.
+ * direction-changing characters, and the typed folder name when required.
  */
 export function planCanRun(input: {
   command: string;
   risk: PlanRisk;
-  requireMediumRiskConfirmation: boolean;
   confirmed: boolean;
   flags?: PlanSafetyFlags;
 }): boolean {
-  const needsConfirmation = planNeedsConfirmation(
-    input.risk,
-    input.requireMediumRiskConfirmation,
-    input.flags,
-  );
+  const needsConfirmation = planNeedsConfirmation(input.risk, input.flags);
   return (
     input.command.trim().length > 0 &&
     !hasHiddenChars(input.command) &&
     (!needsConfirmation || input.confirmed)
   );
+}
+
+function uniqueWords(words: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const word of words) {
+    if (!word || seen.has(word)) continue;
+    seen.add(word);
+    out.push(word);
+  }
+  return out;
 }
 
 type Props = {
@@ -67,8 +116,7 @@ type Props = {
   explanation: string;
   contextSources?: string[];
   plannerSource?: string;
-  requireMediumRiskConfirmation?: boolean;
-  /** Planner flags beyond `risk`; shown as badges and used to gate the run. */
+  /** Planner flags beyond `risk`; written out in words, and used to gate a high-risk run. */
   flags?: PlanSafetyFlags & { touchesFiles?: boolean; touchesNetwork?: boolean };
   safetyFlags?: string[];
   ambiguityFlags?: string[];
@@ -95,7 +143,6 @@ export function PlanPanel({
   explanation,
   contextSources,
   plannerSource,
-  requireMediumRiskConfirmation = true,
   flags,
   safetyFlags,
   ambiguityFlags,
@@ -111,24 +158,24 @@ export function PlanPanel({
   onSaveWorkflow,
 }: Props) {
   const [editedCommand, setEditedCommand] = useState(command);
-  const [confirmRisk, setConfirmRisk] = useState(false);
+  const [typedConfirm, setTypedConfirm] = useState("");
   const [commandSync, setCommandSync] = useState(command);
   const [targetSync, setTargetSync] = useState(sessionId);
   const panelRef = useRef<HTMLDivElement>(null);
   const commandTextareaRef = useRef<HTMLTextAreaElement>(null);
   const setFocusZone = useFocusStore((s) => s.setFocusZone);
 
-  // Reset the draft and the checkbox when a different command is shown,
+  // Reset the draft and the typed confirmation when a different command is shown,
   // before paint, so a previous confirmation cannot approve the new plan.
   if (command !== commandSync) {
     setCommandSync(command);
     setEditedCommand(command);
-    setConfirmRisk(false);
+    setTypedConfirm("");
   }
   // A plan moved to another session (different cwd) needs a fresh confirmation too.
   if (sessionId !== targetSync) {
     setTargetSync(sessionId);
-    setConfirmRisk(false);
+    setTypedConfirm("");
   }
 
   /** Focus the command edit textarea (for keyboard shortcut "E") */
@@ -146,45 +193,53 @@ export function PlanPanel({
     onRunGate?.({
       // A command with hidden characters reports as empty so no shortcut can run it.
       command: command && !hasHiddenChars(editedCommand) ? editedCommand.trim() : "",
-      confirmed: command ? confirmRisk : false,
+      confirmed: command ? confirmationMatches(typedConfirm, confirmationPhrase(target?.cwd)) : false,
     });
-  }, [command, editedCommand, confirmRisk, onRunGate]);
+  }, [command, editedCommand, typedConfirm, target?.cwd, onRunGate]);
 
   if (!command) {
     return (
       <div className="plan-panel">
-        <p className="muted">No semantic plan yet.</p>
+        <p className="muted">No plan yet.</p>
       </div>
     );
   }
 
-  const needsConfirmation = planNeedsConfirmation(risk, requireMediumRiskConfirmation, flags);
+  const phrase = confirmationPhrase(target?.cwd);
+  const needsConfirmation = planNeedsConfirmation(risk, flags);
+  const confirmed = needsConfirmation && confirmationMatches(typedConfirm, phrase);
   const hiddenWarning = describeHiddenChars(editedCommand);
   const canRun =
     !blockedReason &&
     planCanRun({
       command: editedCommand,
       risk,
-      requireMediumRiskConfirmation,
-      confirmed: confirmRisk,
+      confirmed,
       flags,
     });
-  const flagBadges: string[] = [];
-  if (flags?.destructive) flagBadges.push("destructive");
-  if (flags?.escalatesPrivileges) flagBadges.push("escalates privileges");
-  if (flags?.touchesFiles) flagBadges.push("touches files");
-  if (flags?.touchesNetwork) flagBadges.push("uses the network");
+  const explained = explainCommand(editedCommand);
+  const lookedAt = contextInWords(contextSources);
+  const riskWords = riskInWords(risk, flags?.destructive === true, flags?.escalatesPrivileges === true);
+  const flagWords = uniqueWords([
+    ...(safetyFlags ?? []).map((code) => flagInWords(code)),
+    flags?.destructive ? flagInWords("DESTRUCTIVE_OPERATION") : "",
+    flags?.escalatesPrivileges ? flagInWords("PRIVILEGE_ESCALATION") : "",
+    flags?.touchesNetwork ? flagInWords("NETWORK_ACCESS") : "",
+    // touchesFiles is set when a command reads or writes. It is not a change,
+    // so a listing must not be described as changing files.
+  ]).filter((words) => words !== riskWords);
 
   return (
     <div
       ref={panelRef}
       className="plan-panel"
       tabIndex={0}
+      aria-label="Command plan"
       onFocus={() => setFocusZone("plan")}
     >
       {plannerSource === "mock" && (
-        <div className="plan-mock-notice muted">
-          Mock planner — Ollama not connected
+        <div className="plan-practice-notice muted">
+          Practice plan — Ollama is not connected. This is not a real plan.
         </div>
       )}
 
@@ -193,7 +248,9 @@ export function PlanPanel({
           <span className="plan-label">Runs in</span>
           <p>
             <strong>{target.label}</strong>
-            {target.cwd ? <span className="muted"> — {target.cwd}</span> : null}
+            {target.cwd ? (
+              <span className="muted" title={target.cwd}> — {displayPath(target.cwd)}</span>
+            ) : null}
           </p>
         </div>
       )}
@@ -222,8 +279,11 @@ export function PlanPanel({
       </div>
 
       <div className="plan-edit-block">
-        <span className="plan-label">Command</span>
+        <label className="plan-label" htmlFor="plan-command">
+          Command
+        </label>
         <textarea
+          id="plan-command"
           ref={commandTextareaRef}
           className="plan-command-input"
           value={editedCommand}
@@ -246,46 +306,55 @@ export function PlanPanel({
       </div>
 
       <div className="plan-section">
+        <span className="plan-label">What this does</span>
+        <p>{explained.sentence}</p>
+        {explained.parts.length > 0 && (
+          <ul className="plan-parts">
+            {explained.parts.map((part, index) => (
+              <li key={`${index}-${part.piece}`}>
+                <code>{part.piece}</code> {part.meaning}
+              </li>
+            ))}
+          </ul>
+        )}
+        {explained.touches.length > 0 && (
+          <p>This will delete: {explained.touches.join(", ")}</p>
+        )}
+      </div>
+
+      <div className="plan-section">
         <span className="plan-label">Risk</span>
-        <span className={`risk-badge risk-${risk}`}>{risk}</span>
-        {flagBadges.map((b) => (
-          <span key={b} className="risk-badge risk-flag">
-            {b}
-          </span>
+        <p>{riskWords}</p>
+        {flagWords.map((words) => (
+          <p key={words}>{words}</p>
         ))}
       </div>
 
-      {((safetyFlags && safetyFlags.length > 0) ||
-        (ambiguityFlags && ambiguityFlags.length > 0)) && (
+      {ambiguityFlags && ambiguityFlags.length > 0 && (
         <div className="plan-section plan-flags">
-          {safetyFlags && safetyFlags.length > 0 && (
-            <p>
-              <span className="plan-label">Safety</span> {safetyFlags.join("; ")}
-            </p>
-          )}
-          {ambiguityFlags && ambiguityFlags.length > 0 && (
-            <p>
-              <span className="plan-label">Unclear</span> {ambiguityFlags.join("; ")}
-            </p>
-          )}
+          <p>
+            <span className="plan-label">Unclear</span> {ambiguityFlags.join("; ")}
+          </p>
         </div>
       )}
 
-      <div className="plan-section">
-        <span className="plan-label">Explanation</span>
-        <p className="muted">{explanation}</p>
-      </div>
+      {explanation && explanation !== explained.sentence && (
+        <div className="plan-section">
+          <span className="plan-label">More detail</span>
+          <p className="muted">{explanation}</p>
+        </div>
+      )}
 
       {needsConfirmation && (
-        <label className="confirm-row">
+        <label className="confirm-row" htmlFor="plan-confirm">
+          Type {phrase} to run this
           <input
-            type="checkbox"
-            checked={confirmRisk}
-            onChange={(e) => setConfirmRisk(e.target.checked)}
+            id="plan-confirm"
+            className="plan-confirm"
+            value={typedConfirm}
+            autoComplete="off"
+            onChange={(e) => setTypedConfirm(e.target.value)}
           />
-          {risk === "high" || risk === "medium"
-            ? `I understand the risks of this ${risk}-risk command`
-            : "I understand the planner flagged this command (see above) and want to run it"}
         </label>
       )}
 
@@ -309,9 +378,9 @@ export function PlanPanel({
         </button>
       </div>
 
-      {contextSources && contextSources.length > 0 && (
+      {lookedAt && (
         <div className="plan-context-sources">
-          Context: {contextSources.join(", ")}
+          Looked at: {lookedAt}
         </div>
       )}
     </div>

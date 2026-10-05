@@ -50,7 +50,7 @@ function mockCommandOutput(command: string): string[] {
       "def5678 feat: initial v0 scaffold (3 hours ago)",
     ];
   }
-  return [`[mock] ${command}`, "(browser preview — command not executed)"];
+  return [`(preview) ${command}`, "This command did not run. Open the CommandUI application to use your terminal."];
 }
 
 function uuid(): string {
@@ -95,7 +95,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       id: uuid(),
       label: (req.label as string) || `Session ${sessionCounter}`,
       cwd: (req.cwd as string) || "~/projects",
-      shell: "mock-shell",
+      shell: "shell",
       status: "active" as const,
       createdAt: now,
       lastActiveAt: now,
@@ -250,14 +250,31 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   planner_generate_plan(args) {
     const req = (args.request ?? {}) as Record<string, unknown>;
     const context = (req.context ?? {}) as Record<string, unknown>;
+    const model = (req.model as string) || "qwen2.5:14b";
+    const endpoint = (req.endpoint as string) || "http://localhost:11434";
+    if (req.probeOnly) {
+      return {
+        plan: null,
+        review: null,
+        status: {
+          state: "notRunning",
+          model,
+          endpoint,
+          headline: "Ollama is not running.",
+          fix: "Start Ollama, then choose Check again.",
+          link: "https://ollama.com/download",
+          linkLabel: "Download Ollama",
+        },
+      };
+    }
     const intent = (req.userIntent as string) || "do something";
     const planId = uuid();
     const projectFacts = (context.projectFacts ?? []) as Array<Record<string, string>>;
     const memoryItems = (context.memoryItems ?? []) as Array<Record<string, string>>;
 
     // Check if any workflow matches the intent
-    let command = `echo "mock plan for: ${intent}"`;
-    let explanation = `[Browser Preview] This would execute a plan for "${intent}". In Tauri mode, the AI planner generates real commands.`;
+    let command = `echo "practice plan for: ${intent}"`;
+    let explanation = `This is a stand-in plan for "${intent}". Open the CommandUI application for a plan from your own model.`;
 
     const wfFact = projectFacts.find(
       (f) => f.kind === "workflow" && intent.toLowerCase().includes(f.label.toLowerCase()),
@@ -277,7 +294,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     return {
       plan: {
         id: planId,
-        sessionId: req.sessionId ?? "mock",
+        sessionId: req.sessionId ?? "preview",
         source: "mock",
         userIntent: intent,
         command,
@@ -298,6 +315,15 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
         safetyFlags: [],
         memoryUsed: memoryItems.map((m) => `${m.kind}:${m.key}`),
         retrievedContext,
+      },
+      status: {
+        state: "ready",
+        model,
+        endpoint,
+        headline: "Ready.",
+        fix: `Ask can draft a command with ${model}.`,
+        link: "https://ollama.com/library",
+        linkLabel: "Model library",
       },
     };
   },
@@ -371,9 +397,10 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       settings: {
         productMode: "guided",
         defaultInputMode: "ask",
-        reducedClutter: false,
+        fontSize: "md",
         simplifiedSummaries: false,
-        confirmMediumRisk: true,
+        plannerModel: "qwen2.5:14b",
+        plannerEndpoint: "http://localhost:11434",
       },
     };
   },
@@ -473,11 +500,11 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   },
 };
 
-export function mockInvoke<T>(command: string, args?: Record<string, unknown>): T {
+export function mockInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const handler = handlers[command];
   if (handler) {
-    return handler(args ?? {}) as T;
+    return Promise.resolve(handler(args ?? {}) as T);
   }
   console.warn(`[mock-bridge] Unknown command: ${command}`);
-  return { ok: true } as T;
+  return Promise.resolve({ ok: true } as T);
 }
