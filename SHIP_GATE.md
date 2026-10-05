@@ -58,7 +58,7 @@
 ## E. Identity (soft gate — does not block ship)
 
 - [x] `[all]` Logo in README header (2026-10-04, brand URL returns a 1024x1024 PNG)
-- [ ] `[all]` Translations (polyglot-mcp, 8 languages)
+- [x] `[all]` Translations (polyglot-mcp, 8 languages)
 - [x] `[org]` Landing page (@mcptoolshop/site-theme) (2026-10-04, site build wrote dist/index.html, dist/handbook/index.html, and dist/pagefind/)
 - [x] `[all]` GitHub repo metadata: description, homepage, topics (2026-10-04, homepage has the trailing slash)
 
