@@ -29,7 +29,8 @@ You still get a real shell, with your own profile and more than one session. Typ
 ## Install
 
 - **Microsoft Store:** [CommandUI on the Microsoft Store](https://apps.microsoft.com/detail/9NTN1GFQJ91M). The Store has an earlier version until this update is published there.
-- **winget:** `winget install mcp-tool-shop.CommandUI` installs v1.0.0 from [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest).
+- **Direct download:** the `.msi` or the setup `.exe` from [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest). They are not code-signed, so Windows may ask you to confirm before it installs them.
+- **winget:** `winget install mcp-tool-shop.CommandUI` installs v1.0.0 until the winget catalog takes v1.0.2.
 
 Windows 10 or 11, x64. Ask needs [Ollama](https://ollama.com) on the same computer with the `qwen2.5:14b` model. Everything else works without it.
 
@@ -102,6 +103,6 @@ More: [Handbook](https://mcp-tool-shop-org.github.io/commandui/handbook/) · [De
 
 ## Status
 
-v1.0.2, not yet released. The Microsoft Store has an earlier version, and the public GitHub release is v1.0.0.
+v1.0.2 is on GitHub Releases. The Microsoft Store update is in certification. Testing with Narrator, NVDA and Windows contrast themes comes in a later update.
 
 Built by [MCP Tool Shop](https://mcp-tool-shop.github.io/).

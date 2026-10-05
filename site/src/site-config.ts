@@ -34,7 +34,7 @@ export const config: SiteConfig = {
         },
         {
           title: 'winget',
-          code: 'winget install mcp-tool-shop.CommandUI\n\n# Installs v1.0.0 from GitHub Releases.',
+          code: 'winget install mcp-tool-shop.CommandUI\n\n# Installs v1.0.0 until the winget catalog\n# takes v1.0.2. The .msi and .exe for v1.0.2\n# are on GitHub Releases.',
         },
         {
           title: 'For Ask',

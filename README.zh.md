@@ -28,8 +28,9 @@
 
 ## 安装
 
-- **Microsoft Store：**[CommandUI on the Microsoft Store](https://apps.microsoft.com/detail/9NTN1GFQJ91M)。商店中有一个较早的版本，直到此更新发布到那里。
-- **winget：**`winget install mcp-tool-shop.CommandUI` 从 [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest) 安装 v1.0.0。
+- **Microsoft Store：**[CommandUI 在 Microsoft Store 上的版本](https://apps.microsoft.com/detail/9NTN1GFQJ91M)。在本次更新发布到 Store 之前，Store 上会提供一个较早的版本。
+- **直接下载：**从 [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest) 下载 `.msi` 或安装程序 `.exe`。这些文件未进行代码签名，因此 Windows 可能会在安装之前要求您确认。
+- **winget：**使用 `winget install mcp-tool-shop.CommandUI` 安装 v1.0.0，直到 winget 目录更新到 v1.0.2。
 
 Windows 10 或 11，x64。Ask 功能需要同一台计算机上安装 `qwen2.5:14b` 模型。其他所有功能无需安装即可工作。
 
@@ -102,6 +103,6 @@ commandui/
 
 ## 状态
 
-v1.0.2，尚未发布。Microsoft Store 中有一个较早的版本，公共 GitHub 发布版本为 v1.0.0。
+v1.0.2 已经在 GitHub Releases 上。Microsoft Store 上的更新正在进行认证。与 Narrator、NVDA 和 Windows 对比主题的测试将在后续更新中进行。
 
 由 [MCP Tool Shop](https://mcp-tool-shop.github.io/) 构建。

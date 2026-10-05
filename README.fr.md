@@ -28,8 +28,9 @@ Vous disposez toujours d’une interface en ligne de commande réelle, avec votr
 
 ## Installation
 
-- **Microsoft Store :** [CommandUI sur le Microsoft Store](https://apps.microsoft.com/detail/9NTN1GFQJ91M). Le Store propose une version antérieure jusqu’à la publication de cette mise à jour.
-- **winget :** `winget install mcp-tool-shop.CommandUI` installe la version 1.0.0 à partir de [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest).
+- **Microsoft Store :** [CommandUI sur le Microsoft Store](https://apps.microsoft.com/detail/9NTN1GFQJ91M). La version précédente est disponible sur le Store jusqu’à la publication de cette mise à jour.
+- **Téléchargement direct :** le fichier `.msi` ou le programme d’installation `.exe` disponible sur [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest). Ces fichiers ne sont pas signés numériquement, Windows pourrait donc vous demander de confirmer l’installation.
+- **winget :** `winget install mcp-tool-shop.CommandUI` installe la version 1.0.0 jusqu’à ce que le catalogue winget propose la version 1.0.2.
 
 Windows 10 ou 11, x64. La fonction Ask nécessite [Ollama](https://ollama.com) sur le même ordinateur avec le modèle `qwen2.5:14b`. Tout le reste fonctionne sans.
 
@@ -102,6 +103,6 @@ Plus d’informations : [Handbook](https://mcp-tool-shop-org.github.io/commandu
 
 ## État
 
-v1.0.2, pas encore publié. Le Microsoft Store propose une version antérieure, et la version publique sur GitHub est la v1.0.0.
+La version 1.0.2 est disponible sur GitHub Releases. La mise à jour du Microsoft Store est en cours de certification. Les tests avec Narrator, NVDA et les thèmes de contraste de Windows seront effectués dans une mise à jour ultérieure.
 
 Créé par [MCP Tool Shop](https://mcp-tool-shop.github.io/).
