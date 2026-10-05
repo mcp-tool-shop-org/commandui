@@ -16,6 +16,7 @@ There is no Ctrl+2. Ctrl+1 switches to the first session. It does not select Com
 | F1 | Keyboard help |
 | Ctrl+Shift+A | Switch between Command and Ask |
 | Ctrl+Shift+O | Output |
+| Ctrl+Shift+R | Jump to the last result, with Show output, Ask how to fix it, and Run again |
 | Ctrl+Shift+W | Workflows |
 | Ctrl+Shift+J | Command box |
 | Ctrl+Shift+K | Command palette |

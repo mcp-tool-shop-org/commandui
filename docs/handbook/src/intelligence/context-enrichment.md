@@ -59,13 +59,13 @@ A release build does not draft a command when the model is not ready. A debug bu
 
 ### Plan review
 
-`retrievedContext` in the `PlanReviewPayload` lists what context was assembled:
+`retrievedContext` in the `PlanReviewPayload` lists what context was assembled, using the field names the planner receives:
 - `cwd: ~/projects`
 - `projectRoot: ~/projects`
 - `workflow:deploy`
 - `workflow:test-suite`
 
-This is displayed in the PlanPanel footer so you can see what influenced the plan.
+The plan panel footer shows this in plain words, so you can see what influenced the plan: "Looked at: Working folder ~/projects", plus "Project folder …" when the project folder is a different one. The field names stay in the request to the model.
 
 ## The enrichment loop
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="README.ja.md">日本語</a> | <a href="README.zh.md">中文</a> | <a href="README.es.md">Español</a> | <a href="README.fr.md">Français</a> | <a href="README.hi.md">हिन्दी</a> | <a href="README.it.md">Italiano</a> | <a href="README.pt-BR.md">Português (BR)</a>
+  <a href="README.md">English</a> | <a href="README.ja.md">日本語</a> | <a href="README.zh.md">中文</a> | <a href="README.es.md">Español</a> | <a href="README.fr.md">Français</a> | <a href="README.hi.md">हिन्दी</a> | <a href="README.it.md">Italiano</a> | <a href="README.pt-BR.md">Português (BR)</a>
 </p>
 
 <p align="center">
@@ -11,100 +11,96 @@
   <a href="https://github.com/mcp-tool-shop-org/commandui/releases/latest"><img src="https://img.shields.io/github/v/release/mcp-tool-shop-org/commandui?label=Release" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT License" /></a>
   <a href="https://mcp-tool-shop-org.github.io/commandui/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page" /></a>
-  <a href="https://mcp-tool-shop-org.github.io/commandui/handbook/"><img src="https://img.shields.io/badge/Handbook-26_chapters-blue" alt="Handbook" /></a>
+  <a href="https://mcp-tool-shop-org.github.io/commandui/handbook/"><img src="https://img.shields.io/badge/Handbook-read-blue" alt="Handbook" /></a>
 </p>
 
-# CommandUI
+A shell for people the terminal shuts out. CommandUI explains every result in plain words, lets you ask for a command in plain words, and never runs a drafted command until you have seen it and approved it.
 
-A shell that explains every result in plain words, lets you ask for a command in plain words, and never runs a drafted command until you have seen it and approved it.
+## Who it is for
 
-The English page is the current description. The other languages are from the previous text and will be updated before the next release tag.
+- People who use a screen reader, or who don't use a mouse
+- People with low vision, who need larger text or a high-contrast theme
+- People who find the terminal hard to follow, including beginners and people with cognitive or learning disabilities
+- Anyone who wants to read a command before it runs
+
+You still get a real shell, with your own profile and more than one session. Typing a command works the way it always has.
 
 ## Install
 
-The Microsoft Store product is an MSIX. The package name is `mcp-tool-shop.CommandUI`, x64 only. Partner Center signs the upload. The file this repo packs is unsigned, so it is the upload, not a double-click installer.
+- **Microsoft Store:** [CommandUI on the Microsoft Store](https://apps.microsoft.com/detail/9NTN1GFQJ91M). The Store currently has an earlier version. The update described here is waiting on accessibility testing before it is submitted.
+- **winget:** `winget install mcp-tool-shop.CommandUI` installs v1.0.0 from [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest).
 
-Until that upload is published, the installable build is still the MSI on [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest).
+Windows 10 or 11, x64. Ask needs [Ollama](https://ollama.com) on the same computer with the `qwen2.5:14b` model. Everything else works without it.
 
-```powershell
-# Scoop
-scoop bucket add mcp-tool-shop https://github.com/mcp-tool-shop-org/scoop-bucket
-scoop install commandui
+## What it does
 
-# winget
-winget install mcp-tool-shop.CommandUI
+- **Every result in a sentence.** "Finished. 3 lines of output." or "Did not work (exit code 1). A file or folder in that command is not there." A failure offers **Ask how to fix it** and **Run again**.
+- **Ask in plain words.** Describe the task, and CommandUI drafts a command, explains it, and waits. **Run Plan** is the approval, and **Reject** runs nothing. When it cannot explain a command, it says so.
+- **A careful yes.** A command that deletes files or needs higher permissions waits until you type the folder name.
+- **Command still runs what you type.** If a line reads like a request, CommandUI offers to Ask instead of running the sentence.
+- **Workflows you can make.** Make a list of commands, edit it, run it, and delete it. A delete can be undone. History can save the commands you pick.
+- **History and memory you control.** Search what ran, and read or delete what CommandUI has noticed.
+
+## Built for the keyboard and for screen readers
+
+- Results and errors are announced once, without moving your focus.
+- **Output** (Ctrl+Shift+O) lists each command's output as plain text, one region per command, with no terminal codes.
+- **F1** opens keyboard help. **Ctrl+Shift+R** jumps to the last result. **Ctrl+Shift+A** switches between Command and Ask.
+- Every dialog keeps focus inside it, and Escape closes it and returns focus to where you were.
+- Text size goes from 100% to 200% in Settings. The panels below the terminal can be hidden.
+- Windows contrast themes and reduced-motion settings are respected.
+
+**What has not been tested yet:** Narrator, NVDA, and Windows contrast themes have not been tested by people on this build. Those runs come before the Store update. Until then, treat the list above as what the app is built to do, not a tested claim.
+
+## Security
+
+CommandUI runs on your machine. It keeps history, plans, workflows, memory, and settings locally, and runs only the shell commands you approve. It sends no telemetry. Ask talks to a model on this computer. If that model is not installed, not running, or not downloaded, Ask says so and does not draft a command.
+
+See [SECURITY.md](SECURITY.md) for the threat model and how to report a vulnerability.
+
+## What it is not
+
+- Not a chatbot, and not something that runs a drafted command on its own
+- Not a claim that screen readers or contrast themes have been tested on this build (see above)
+- Not the console. `apps/console` is a second front end in this repo and is not part of the app you install
+
+## For developers
+
+```bash
+pnpm install
+pnpm dev          # browser preview; does not run your shell
+pnpm test         # all tests
+pnpm typecheck
+
+# Rust
+cd apps/desktop/src-tauri
+cargo test
 ```
 
-Pack the Store upload from a release build of the desktop app:
+Pack the Store upload from a release build:
 
 ```powershell
 ./packaging/build-store-exe.ps1
 ./packaging/pack-msix.ps1
 ```
 
-`packaging/pack-msix.ps1` writes `release/CommandUI_<version>_x64.msix`. It keeps the package name, publisher, and executable already on the Store product, and it refuses a version that is not above `1.0.1.0`.
-
-## What it does
-
-- A real shell, with your own profile, and more than one session
-- Command runs what you type. If the line looks like a request, CommandUI offers to Ask instead of running the sentence
-- Ask drafts a command, explains it, and waits. Run Plan is the approval. Reject runs nothing
-- A result sentence says whether the command worked. A failure offers Ask how to fix it
-- Text from 100% to 200%, in Settings
-- Workflows you can make, edit, run, and delete. A delete can be undone
-- History you can search, and memory you can delete
-- Classic hides the plan until there is one. Guided keeps the plan column open
-
-## What it is NOT
-
-- Not a chatbot, and not something that runs a drafted command on its own
-- Not a claim that a screen reader, Narrator, or a high-contrast theme has already been tested on this build. Those checks are still open
-- Not the console. `apps/console` is a second front end in this repo. The Store package is the desktop executable only.
-
-## Security
-
-CommandUI runs on your machine. It keeps history, plans, workflows, memory, and settings locally, and it runs the shell commands you approve. It does not send telemetry. Ask talks to a model on this computer. If that model is not installed, not running, or not downloaded, Ask says so and does not draft a command. A command that deletes files, or that needs higher permissions, waits until you type the folder name.
-
-See [SECURITY.md](SECURITY.md) for the threat model and how to report a vulnerability.
-
-## Workspace layout
+`pack-msix.ps1` writes `release/CommandUI_<version>_x64.msix`. It keeps the package name, publisher, and executable of the existing Store product, and refuses a version that is not above the last one submitted. The file is unsigned; Partner Center signs it.
 
 ```
 commandui/
-  apps/desktop/                 — the desktop app. This is the Store executable.
-  apps/console/                 — Rust terminal front end on the same runtime. Not in the Store package.
+  apps/desktop/                 — the desktop app you install
+  apps/console/                 — Rust terminal front end on the same runtime
   crates/runtime-core/          — shell sessions and events
   crates/runtime-persistence/   — local storage
   crates/runtime-planner/       — the local model Ask uses
-  packages/domain/              — Domain types
-  packages/api-contract/        — Request and response contracts
-  packages/state/               — Zustand stores
-  packages/ui/                  — Shared UI primitives
+  packages/                     — shared types, contracts, state, UI
   packaging/msix/               — Store manifest and logos
 ```
 
-## Quick start
+More: [Handbook](https://mcp-tool-shop-org.github.io/commandui/handbook/) · [Developer Setup](docs/product/developer-setup.md) · [Known Limitations](docs/product/known-limitations.md) · [Release Checklist](docs/product/release-checklist.md)
 
-```bash
-pnpm install
-pnpm dev          # Vite dev server
-pnpm test         # Run all tests
-pnpm typecheck    # TypeScript check
+## Status
 
-# Rust backend
-cd apps/desktop/src-tauri
-cargo test
-```
-
-## Docs
-
-- [Developer Setup](docs/product/developer-setup.md)
-- [Known Limitations](docs/product/known-limitations.md)
-- [Smoke Test Checklist](docs/specs/smoke-test-checklist.md)
-- [Release Checklist](docs/product/release-checklist.md)
-
-## Current status
-
-v1.0.2 — the desktop app. Ask uses a model on this computer and says when that model is not ready. The Store upload is the unsigned x64 MSIX of `commandui-desktop.exe`, and the Store submission is still a draft. The public GitHub release is still the v1.0.0 MSI.
+v1.0.2, not yet released. The Microsoft Store has an earlier version, and the public GitHub release is v1.0.0.
 
 Built by [MCP Tool Shop](https://mcp-tool-shop.github.io/).

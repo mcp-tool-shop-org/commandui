@@ -6,60 +6,101 @@
   <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/brand/main/logos/commandui/readme.png" width="400" alt="CommandUI" />
 </p>
 
-# CommandUI
+<p align="center">
+  <a href="https://github.com/mcp-tool-shop-org/commandui/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/commandui/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/mcp-tool-shop-org/commandui/releases/latest"><img src="https://img.shields.io/github/v/release/mcp-tool-shop-org/commandui?label=Release" alt="Release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT License" /></a>
+  <a href="https://mcp-tool-shop-org.github.io/commandui/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page" /></a>
+  <a href="https://mcp-tool-shop-org.github.io/commandui/handbook/"><img src="https://img.shields.io/badge/Handbook-read-blue" alt="Handbook" /></a>
+</p>
 
-Entorno de shell nativo de IA con revisión semántica de comandos.
+Una interfaz para aquellos a quienes la terminal no da acceso. CommandUI explica cada resultado en lenguaje sencillo, permite solicitar un comando en lenguaje sencillo y nunca ejecuta un comando redactado hasta que lo haya visto y aprobado.
 
-## ¿Qué hace?
+## Para quién es
 
-- Sesiones de shell PTY reales (no es un envoltorio, ni un chatbot).
-- Dos vías de entrada: escritura directa en la terminal (libre) + editor (estructurado/registrado).
-- Modo semántico: describe la intención → la IA genera el comando → usted lo revisa/edita/aprueba.
-- Confirmación por niveles de riesgo: bajo (automático), medio (configurable), alto (requerido).
-- Historial con opciones de reejecución, reapertura del plan y guardar en flujo de trabajo.
-- Flujos de trabajo guardados: convierta cualquier comando en un flujo de trabajo reutilizable.
-- Memoria específica del proyecto: aprende preferencias a partir de ediciones repetidas.
-- Pestañas para múltiples sesiones con flujos de terminal por sesión.
-- Persistencia SQLite local (historial, planes, flujos de trabajo, memoria, configuraciones).
-- Modos clásico y guiado con diferencias reales en el comportamiento.
+- Personas que utilizan un lector de pantalla o que no utilizan un ratón
+- Personas con baja visión, que necesitan texto más grande o un tema de alto contraste
+- Personas a las que les resulta difícil seguir lo que ocurre en la terminal, incluidos principiantes y personas con discapacidades cognitivas o de aprendizaje
+- Cualquiera que quiera leer un comando antes de que se ejecute
 
-## Lo que NO es
+Aún así, obtienes una interfaz real, con tu propio perfil y más de una sesión. Escribir un comando funciona como siempre lo ha hecho.
 
-- No es un chatbot ni un agente autónomo.
-- No es un reemplazo de emulador de terminal.
-- No está optimizado para producción (versión temprana v0).
+## Instalación
 
-## Distribución del espacio de trabajo
+- **Microsoft Store:** [CommandUI en Microsoft Store](https://apps.microsoft.com/detail/9NTN1GFQJ91M). Actualmente, la tienda tiene una versión anterior. La actualización descrita aquí está a la espera de pruebas de accesibilidad antes de que se envíe.
+- **winget:** `winget install mcp-tool-shop.CommandUI` instala v1.0.0 desde [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest).
 
-```
-commandui/
-  apps/desktop/         — Tauri v2 + React 19 desktop app
-  packages/domain/      — Pure domain types
-  packages/api-contract/ — Request/response contracts
-  packages/state/       — Zustand stores
-  packages/ui/          — Shared UI primitives (future)
-```
+Windows 10 o 11, x64. Ask necesita [Ollama](https://ollama.com) en el mismo ordenador con el modelo `qwen2.5:14b`. Todo lo demás funciona sin él.
 
-## Inicio rápido
+## Qué hace
+
+- **Cada resultado en una frase.** "Finalizado. 3 líneas de salida" o "No funcionó (código de salida 1). Un archivo o carpeta en ese comando no existe". Un fallo ofrece **Preguntar cómo solucionarlo** y **Volver a ejecutar**.
+- **Preguntar en lenguaje sencillo.** Describe la tarea, y CommandUI redacta un comando, lo explica y espera. **Ejecutar plan** es la aprobación, y **Rechazar** no ejecuta nada. Cuando no puede explicar un comando, lo indica.
+- **Un sí cuidadoso.** Un comando que elimina archivos o necesita permisos más altos espera hasta que escribas el nombre de la carpeta.
+- **El comando sigue ejecutando lo que escribes.** Si una línea parece una solicitud, CommandUI ofrece preguntar en lugar de ejecutar la frase.
+- **Flujos de trabajo que puedes crear.** Crea una lista de comandos, edítala, ejecútala y elimínala. Se puede deshacer una eliminación. El historial puede guardar los comandos que elijas.
+- **Historial y memoria que controlas.** Busca lo que se ejecutó y lee o elimina lo que CommandUI ha notado.
+
+## Diseñado para el teclado y para los lectores de pantalla
+
+- Los resultados y los errores se anuncian una vez, sin mover el foco.
+- **Salida** (Ctrl+Shift+O) muestra la salida de cada comando como texto sin formato, una región por comando, sin códigos de terminal.
+- **F1** abre la ayuda del teclado. **Ctrl+Shift+R** salta al último resultado. **Ctrl+Shift+A** cambia entre Comando y Preguntar.
+- Cada cuadro de diálogo mantiene el foco dentro de él, y Escape lo cierra y devuelve el foco a donde estabas.
+- El tamaño del texto va del 100% al 200% en la configuración. Los paneles debajo de la terminal se pueden ocultar.
+- Se respetan los temas de contraste de Windows y la configuración de movimiento reducido.
+
+**Qué no se ha probado todavía:** Narrator, NVDA y los temas de contraste de Windows no han sido probados por personas en esta versión. Estas pruebas se realizarán antes de la actualización en la tienda. Hasta entonces, considera la lista anterior como lo que la aplicación está diseñada para hacer, no como una afirmación probada.
+
+## Seguridad
+
+CommandUI se ejecuta en tu máquina. Mantiene el historial, los planes, los flujos de trabajo, la memoria y la configuración localmente, y solo ejecuta los comandos de la terminal que apruebas. No envía ninguna telemetría. Ask se comunica con un modelo en este ordenador. Si ese modelo no está instalado, no se está ejecutando o no se ha descargado, Ask lo indica y no redacta un comando.
+
+Consulta [SECURITY.md](SECURITY.md) para conocer el modelo de amenazas y cómo informar de una vulnerabilidad.
+
+## Qué no es
+
+- No es un chatbot, ni algo que ejecute un comando redactado por sí solo
+- No es una afirmación de que los lectores de pantalla o los temas de contraste se hayan probado en esta versión (véase arriba)
+- No es la consola. `apps/console` es una segunda interfaz en este repositorio y no forma parte de la aplicación que instalas
+
+## Para desarrolladores
 
 ```bash
 pnpm install
-pnpm dev          # Vite dev server
-pnpm test         # Run all tests
-pnpm typecheck    # TypeScript check
+pnpm dev          # browser preview; does not run your shell
+pnpm test         # all tests
+pnpm typecheck
 
-# Rust backend
+# Rust
 cd apps/desktop/src-tauri
 cargo test
 ```
 
-## Documentación
+Prepara el paquete para la carga en la tienda a partir de una versión de lanzamiento:
 
-- [Configuración para desarrolladores](docs/product/developer-setup.md)
-- [Limitaciones conocidas](docs/product/known-limitations.md)
-- [Lista de verificación de pruebas básicas](docs/specs/smoke-test-checklist.md)
-- [Lista de verificación de lanzamiento](docs/product/release-checklist.md)
+```powershell
+./packaging/build-store-exe.ps1
+./packaging/pack-msix.ps1
+```
 
-## Estado actual
+`pack-msix.ps1` escribe `release/CommandUI_<version>_x64.msix`. Mantiene el nombre del paquete, el editor y el ejecutable del producto existente de la tienda, y rechaza una versión que no sea superior a la última enviada. El archivo no está firmado; Partner Center lo firma.
 
-Versión temprana v0 con un núcleo de shell real. Un conjunto de 21 componentes que incluyen: sesiones PTY, bucle de revisión semántica, persistencia, memoria, flujos de trabajo, configuraciones de accesibilidad, pestañas para múltiples sesiones, terminal xterm.js, detección de finalización de comandos.
+```
+commandui/
+  apps/desktop/                 — the desktop app you install
+  apps/console/                 — Rust terminal front end on the same runtime
+  crates/runtime-core/          — shell sessions and events
+  crates/runtime-persistence/   — local storage
+  crates/runtime-planner/       — the local model Ask uses
+  packages/                     — shared types, contracts, state, UI
+  packaging/msix/               — Store manifest and logos
+```
+
+Más: [Handbook](https://mcp-tool-shop-org.github.io/commandui/handbook/) · [Developer Setup](docs/product/developer-setup.md) · [Known Limitations](docs/product/known-limitations.md) · [Release Checklist](docs/product/release-checklist.md)
+
+## Estado
+
+v1.0.2, aún no lanzado. La Microsoft Store tiene una versión anterior, y la versión pública de GitHub es v1.0.0.
+
+Creado por [MCP Tool Shop](https://mcp-tool-shop.github.io/).

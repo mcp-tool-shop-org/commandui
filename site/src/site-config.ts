@@ -2,17 +2,17 @@ import type { SiteConfig } from '@mcptoolshop/site-theme';
 
 export const config: SiteConfig = {
   title: 'CommandUI',
-  description: 'A shell that explains every result, and waits for you to approve a drafted command.',
+  description: 'A shell for people the terminal shuts out. It explains every result in plain words and never runs a drafted command until you approve it.',
   logoBadge: 'C',
   brandName: 'CommandUI',
   repoUrl: 'https://github.com/mcp-tool-shop-org/commandui',
   footerText: 'MIT Licensed — built by <a href="https://mcp-tool-shop.github.io/" style="color:var(--color-muted);text-decoration:underline">MCP Tool Shop</a>',
 
   hero: {
-    badge: 'Desktop app',
+    badge: 'Windows desktop app',
     headline: 'CommandUI',
     headlineAccent: 'A shell you can follow.',
-    description: 'Ask in plain words. Read the command. Nothing runs until you approve it.',
+    description: 'Every result in a plain sentence. Ask in plain words, read the command, and nothing runs until you approve it. Built for the keyboard and for screen readers.',
     primaryCta: { href: '#install', label: 'Download' },
     secondaryCta: { href: 'handbook/', label: 'Read the Handbook' },
     previews: [
@@ -29,16 +29,16 @@ export const config: SiteConfig = {
       title: 'Install',
       cards: [
         {
-          title: 'Store package',
-          code: 'mcp-tool-shop.CommandUI\nx64 MSIX. Partner Center signs the upload.\nThe unsigned file is not a double-click installer.',
+          title: 'Microsoft Store',
+          code: 'apps.microsoft.com/detail/9NTN1GFQJ91M\n\n# The Store has an earlier version. The update\n# waits on accessibility testing first.',
         },
         {
-          title: 'Install today',
-          code: 'winget install mcp-tool-shop.CommandUI\n\n# The public release is still the MSI.',
+          title: 'winget',
+          code: 'winget install mcp-tool-shop.CommandUI\n\n# Installs v1.0.0 from GitHub Releases.',
         },
         {
-          title: 'Scoop',
-          code: 'scoop bucket add mcp-tool-shop https://github.com/mcp-tool-shop-org/scoop-bucket\nscoop install commandui',
+          title: 'For Ask',
+          code: '# Ask uses a model on your computer:\nollama pull qwen2.5:14b\n\n# Everything else works without it.',
         },
       ],
     },
@@ -46,11 +46,11 @@ export const config: SiteConfig = {
       kind: 'features',
       id: 'features',
       title: 'Features',
-      subtitle: 'Terminal power without terminal hostility.',
+      subtitle: 'A real shell that tells you what happened.',
       features: [
         {
-          title: 'Real shell',
-          desc: 'Your own shell, more than one session, and a result sentence for every command you run from the command box.',
+          title: 'Every result in a sentence',
+          desc: '"Finished. 3 lines of output." or "Did not work. A file or folder in that command is not there." A failure offers Ask how to fix it and Run again.',
         },
         {
           title: 'Ask',
@@ -75,6 +75,26 @@ export const config: SiteConfig = {
       ],
     },
     {
+      kind: 'features',
+      id: 'accessibility',
+      title: 'Built for the keyboard and screen readers',
+      subtitle: 'Narrator, NVDA, and contrast-theme testing by people is still to come on this build.',
+      features: [
+        {
+          title: 'Announced, not just shown',
+          desc: 'Results and errors are announced once, without moving your focus. Output (Ctrl+Shift+O) lists each command as plain text, with no terminal codes.',
+        },
+        {
+          title: 'Every action by keyboard',
+          desc: 'F1 opens keyboard help. Ctrl+Shift+R jumps to the last result. Ctrl+Shift+A switches between Command and Ask. Dialogs keep focus, and Escape returns it.',
+        },
+        {
+          title: 'Larger text, your contrast',
+          desc: 'Text from 100% to 200%, panels you can hide, and Windows contrast themes and reduced motion respected.',
+        },
+      ],
+    },
+    {
       kind: 'code-cards',
       id: 'usage',
       title: 'Build it',
@@ -85,7 +105,7 @@ export const config: SiteConfig = {
         },
         {
           title: 'Browser preview',
-          code: 'pnpm dev\n# Opens at http://localhost:5176\n# Does not run your shell. A practice plan is labeled as practice.',
+          code: 'pnpm dev\n# Opens the local address Vite prints.\n# Does not run your shell. A practice plan is labeled as practice.',
         },
         {
           title: 'Desktop app, while developing',
