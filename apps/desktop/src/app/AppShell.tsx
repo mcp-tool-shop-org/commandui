@@ -95,6 +95,7 @@ import type { PaletteAction } from "../components/CommandPalette";
 import { HistoryDrawer } from "../components/HistoryDrawer";
 import { SessionTabs } from "../components/SessionTabs";
 import { SettingsDrawer } from "../components/SettingsDrawer";
+import { FoldPanel } from "../components/FoldPanel";
 import { MemorySuggestions } from "../components/MemorySuggestions";
 import { MemoryDrawer } from "../components/MemoryDrawer";
 import { WorkflowDrawer } from "../components/WorkflowDrawer";
@@ -3035,16 +3036,18 @@ export function AppShell() {
           />
 
           {activeNotes.length > 0 && (
-            <div className="app-notes" role="log" aria-label="CommandUI activity" tabIndex={0}>
-              {activeNotes.slice(-APP_NOTES_SHOWN).map((note, i) => (
-                <div key={activeNotes.length - APP_NOTES_SHOWN + i} className="app-note">
-                  {note}
-                </div>
-              ))}
-              <button type="button" className="link-btn" onClick={clearTerminalView}>
-                Clear
-              </button>
-            </div>
+            <FoldPanel hideLabel="Hide activity" showLabel="Show activity">
+              <div className="app-notes" role="log" aria-label="CommandUI activity" tabIndex={0}>
+                {activeNotes.slice(-APP_NOTES_SHOWN).map((note, i) => (
+                  <div key={activeNotes.length - APP_NOTES_SHOWN + i} className="app-note">
+                    {note}
+                  </div>
+                ))}
+                <button type="button" className="link-btn" onClick={clearTerminalView}>
+                  Clear
+                </button>
+              </div>
+            </FoldPanel>
           )}
 
           {error && (

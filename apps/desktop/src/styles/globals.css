@@ -1568,6 +1568,22 @@ select {
   font-size: 13px;
 }
 
+.fold {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.fold-toggle {
+  align-self: flex-start;
+}
+
+.fold-body[hidden] {
+  display: none;
+}
+
 .app-notes {
   display: flex;
   flex-direction: column;

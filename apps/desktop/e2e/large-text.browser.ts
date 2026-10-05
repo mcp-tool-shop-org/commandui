@@ -61,4 +61,11 @@ test("at 200% the shell fills a 1600 by 1000 window and the terminal and command
   expectFillsViewport("shell", await boxOf(shell));
   expectInsideViewport("terminal", await boxOf(terminal));
   expectInsideViewport("command box", await boxOf(command));
+
+  const openHeight = (await boxOf(terminal)).height;
+  await page.getByRole("button", { name: "Hide activity" }).click();
+  await expect(page.getByRole("log", { name: "CommandUI activity" })).toBeHidden();
+  await expect.poll(async () => (await terminal.boundingBox())?.height ?? 0).toBeGreaterThan(openHeight);
+  expectInsideViewport("terminal after hide", await boxOf(terminal));
+  expectInsideViewport("command box after hide", await boxOf(command));
 });

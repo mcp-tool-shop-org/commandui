@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { MemorySuggestion } from "@commandui/domain";
 import { MemorySuggestions } from "./MemorySuggestions";
 
@@ -45,5 +46,22 @@ describe("MemorySuggestions", () => {
     expect(screen.queryByText(/^60%$/)).toBeNull();
     const panel = screen.getByRole("region", { name: "Memory suggestions" });
     expect(panel).toHaveAttribute("tabindex", "0");
+  });
+
+  it("hides the suggestions and shows them again", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemorySuggestions
+        suggestions={[suggestion()]}
+        onAccept={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Hide memory suggestions" }));
+    expect(screen.queryByRole("region", { name: "Memory suggestions" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show memory suggestions" }));
+    expect(screen.getByRole("region", { name: "Memory suggestions" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Accept" })).toBeVisible();
   });
 });
