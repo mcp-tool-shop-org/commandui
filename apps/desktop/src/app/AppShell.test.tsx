@@ -117,7 +117,7 @@ describe("AppShell on the mock bridge", () => {
   it("runs a typed command and keeps it in history", async () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Command" }));
-    await user.type(screen.getByPlaceholderText("Submit a command explicitly…"), "echo hello{Enter}");
+    await user.type(screen.getByPlaceholderText("Type a command…"), "echo hello{Enter}");
     await waitFor(() => {
       expect(xterm.writes.join("")).toContain("$ echo hello");
       expect(xterm.writes.join("")).toContain("hello");
@@ -134,7 +134,7 @@ describe("AppShell on the mock bridge", () => {
   it("refuses a command that is more than one line", async () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Command" }));
-    const box = screen.getByPlaceholderText("Submit a command explicitly…");
+    const box = screen.getByPlaceholderText("Type a command…");
     await user.type(box, "echo one{Shift>}{Enter}{/Shift}echo two{Enter}");
     expect(await screen.findByText(/more than one line/)).toBeInTheDocument();
     expect(box).toHaveValue("echo one\necho two");
@@ -176,8 +176,8 @@ describe("AppShell on the mock bridge", () => {
     expect(await screen.findByText(/Finished workflow ship it\./, {}, { timeout: 5000 })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "History" }));
-    // The saved plan and the workflow step both say "ship it". The step row is the one badged WF.
-    const wfBadge = await screen.findByText("WF");
+    // The saved plan and the workflow step both say "ship it". The step row has View workflow.
+    const wfBadge = await screen.findByRole("button", { name: "View workflow" });
     await user.click(
       within(wfBadge.closest(".history-item") as HTMLElement).getByRole("button", { name: /ship it/ }),
     );
@@ -224,7 +224,7 @@ describe("AppShell on the mock bridge", () => {
   it("stops a running command and forwards a keystroke to the shell", async () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Command" }));
-    await user.type(screen.getByPlaceholderText("Submit a command explicitly…"), "echo stay{Enter}");
+    await user.type(screen.getByPlaceholderText("Type a command…"), "echo stay{Enter}");
     const stop = await screen.findByRole("button", { name: "Stop the command" });
     await user.click(stop);
     await waitFor(() => {
@@ -298,7 +298,7 @@ describe("AppShell on the mock bridge", () => {
   it("reruns a typed command from history", async () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Command" }));
-    await user.type(screen.getByPlaceholderText("Submit a command explicitly…"), "echo hello{Enter}");
+    await user.type(screen.getByPlaceholderText("Type a command…"), "echo hello{Enter}");
     await screen.findByRole("button", { name: "Stop the command" });
     await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
 
@@ -343,7 +343,7 @@ describe("AppShell on the mock bridge", () => {
   it("saves a history row as a workflow and then deletes that workflow", async () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Command" }));
-    await user.type(screen.getByPlaceholderText("Submit a command explicitly…"), "echo hello{Enter}");
+    await user.type(screen.getByPlaceholderText("Type a command…"), "echo hello{Enter}");
     await screen.findByRole("button", { name: "Stop the command" });
     await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
 
@@ -376,7 +376,7 @@ describe("AppShell on the mock bridge", () => {
   it("offers a suggestion after the same command succeeds four times", async () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Command" }));
-    const box = screen.getByPlaceholderText("Submit a command explicitly…");
+    const box = screen.getByPlaceholderText("Type a command…");
     for (let n = 0; n < 4; n += 1) {
       await user.type(box, "echo hello{Enter}");
       await screen.findByRole("button", { name: "Stop the command" });
@@ -450,7 +450,7 @@ describe("AppShell on the mock bridge", () => {
   it("closes a session that still has a command running", async () => {
     const user = await boot();
     await user.click(screen.getByRole("button", { name: "Command" }));
-    await user.type(screen.getByPlaceholderText("Submit a command explicitly…"), "echo hello{Enter}");
+    await user.type(screen.getByPlaceholderText("Type a command…"), "echo hello{Enter}");
     await screen.findByRole("button", { name: "Stop the command" });
     await user.click(screen.getByRole("button", { name: "Close Session 1" }));
     await user.click(screen.getByRole("button", { name: "Close session" }));

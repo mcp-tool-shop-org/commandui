@@ -1266,7 +1266,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "665ce9fbf62dc97c138a60acf327a8c06f6918b73cd3309954b4bab443ae9f94",
+          "hash": "3a631e473d1e2c48b4d20394d380e12200e07abf8b703f82c6ac30b4a1700de7",
           "importOrder": [
             "packages/state/src/index.ts",
             "apps/desktop/src/lib/mockBridge.ts",
@@ -1296,7 +1296,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "4539e3174719e804f8f3267975f3e17cd77d0f05d991778c78a57fb0bedf8996",
+          "hash": "0ef8ecf9b97b9dded4fcb70c96bdb381f1cf123f24f343c318201c283a305fd5",
           "importOrder": [
             "packages/domain/src/index.ts",
             "packages/state/src/index.ts",
@@ -1828,7 +1828,7 @@
           "path": "apps/desktop/src/components/HelpDialog.tsx"
         },
         {
-          "hash": "8cf929ef13363903e0ed8314ea2dd3efd5270d1cc107fafbd710ca8b7a80355c",
+          "hash": "fda843330380d8cac65f3bfca459b8a0c6e882b865e327e9def23b4ac4da15ea",
           "importOrder": [
             "packages/domain/src/index.ts",
             "apps/desktop/src/components/HistoryDrawer.tsx"
@@ -1844,23 +1844,25 @@
           "exports": [
             "HistoryDrawer"
           ],
-          "hash": "b04229d1811a141a8aed044579cfa77e4fb1cf8b75b416878889c0035685cf75",
+          "hash": "ea3923df8b0da3f5197252c62aa840578b558c7c9a7c684bdcc39931c0a36be5",
           "importOrder": [
             "packages/domain/src/index.ts",
             "apps/desktop/src/lib/commandResult.ts",
+            "apps/desktop/src/lib/displayPath.ts",
             "apps/desktop/src/lib/useModalDialog.ts",
             "apps/desktop/src/components/RelativeTime.tsx"
           ],
           "importsFiles": [
             "apps/desktop/src/components/RelativeTime.tsx",
             "apps/desktop/src/lib/commandResult.ts",
+            "apps/desktop/src/lib/displayPath.ts",
             "apps/desktop/src/lib/useModalDialog.ts",
             "packages/domain/src/index.ts"
           ],
           "path": "apps/desktop/src/components/HistoryDrawer.tsx"
         },
         {
-          "hash": "2e73547a9c867b6cd1945f2f24a3f4a16a16c7acde3f8caead2f41bdc954d29b",
+          "hash": "1dfce9182ac46d36f3c38e886916bf72506064c1b59ed08c26455910e2edae97",
           "importsFiles": [
             "apps/desktop/src/components/InputComposer.tsx"
           ],
@@ -1868,14 +1870,14 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "9254f906bfdbbaa76f0cfc2a14a69622d61c405a4ac76d2537b2103841bae7cd",
+          "hash": "74e9a0c6e53aba56bcb48676032188122546d651aa25eec3c5d1ce4759428397",
           "importsFiles": [
             "packages/state/src/index.ts"
           ],
           "path": "apps/desktop/src/components/InputComposer.tsx"
         },
         {
-          "hash": "61db9e50072d187fb6e4917eeb9752191bbafdda52e88114a84397c9fae0f87d",
+          "hash": "7c229df6c46f161a91e6cf65c742070ec0969324fb00784a869249942efc341a",
           "importOrder": [
             "packages/domain/src/index.ts",
             "apps/desktop/src/components/MemoryDrawer.tsx"
@@ -1891,14 +1893,12 @@
           "exports": [
             "MemoryDrawer"
           ],
-          "hash": "e63f95cb0c5fd9e7ec04484455107b1ff71830ab85c9812b8769595ffab2ffd5",
+          "hash": "525114ec37a699bc17a18c8fc98666538ac32fbd195bb6dd02a70774224e26ef",
           "importOrder": [
             "packages/domain/src/index.ts",
-            "apps/desktop/src/lib/memoryLabels.ts",
             "apps/desktop/src/lib/useModalDialog.ts"
           ],
           "importsFiles": [
-            "apps/desktop/src/lib/memoryLabels.ts",
             "apps/desktop/src/lib/useModalDialog.ts",
             "packages/domain/src/index.ts"
           ],
@@ -1921,15 +1921,13 @@
           "exports": [
             "MemorySuggestions"
           ],
-          "hash": "dc00d8862a2df7e8e2480a17cf96bb282973cb8fd7ee98bbc1859a3fbb44ce94",
+          "hash": "cdb953a68b71767800958d2d101ed12e901125da86367d794526c884178c362c",
           "importOrder": [
             "packages/domain/src/index.ts",
-            "apps/desktop/src/lib/memoryLabels.ts",
             "apps/desktop/src/components/FoldPanel.tsx"
           ],
           "importsFiles": [
             "apps/desktop/src/components/FoldPanel.tsx",
-            "apps/desktop/src/lib/memoryLabels.ts",
             "packages/domain/src/index.ts"
           ],
           "path": "apps/desktop/src/components/MemorySuggestions.tsx"
@@ -2439,7 +2437,7 @@
           "path": "apps/desktop/src/lib/commandError.ts"
         },
         {
-          "hash": "dc5f594a2d94b9780fe8975f56c27de612faea9bbb3b181e96df691d15eb4d53",
+          "hash": "555323b83576c2ff13d5749143e7ddb4789a0c3e7c7727ff34407d8bd11b4781",
           "importsFiles": [
             "apps/desktop/src/lib/commandResult.ts"
           ],
@@ -2456,7 +2454,7 @@
             "looksLikeRequest",
             "resultText"
           ],
-          "hash": "0764672a187292bfff9684739bcd717fc008c017fdef40d9d623131d13b1e36d",
+          "hash": "2d12608a0a850dcbecd7a72918a04db92ba847f6415e1ed635f02aedfc95faee",
           "path": "apps/desktop/src/lib/commandResult.ts"
         },
         {
@@ -2472,7 +2470,7 @@
             "displayPath",
             "tildeHome"
           ],
-          "hash": "2680a638bab0164e2a2f0c15d4ab8e547d467ba51288667502b1f61df9e650a3",
+          "hash": "885372dc1ecbb0fa944b5d7787debc178358ea73278f58fe0b44d78ed0313c7f",
           "path": "apps/desktop/src/lib/displayPath.ts"
         },
         {
@@ -2529,27 +2527,6 @@
           ],
           "hash": "b57e26544b500d385757103d92c7e08d3cf13a930692e20f21490501c9bcc954",
           "path": "apps/desktop/src/lib/layoutWidth.ts"
-        },
-        {
-          "hash": "6670d5b9f39bd6c0a467dfb003872fda3c1aae2d5e5820b5360b0fe1ff558221",
-          "importsFiles": [
-            "apps/desktop/src/lib/memoryLabels.ts"
-          ],
-          "path": "apps/desktop/src/lib/memoryLabels.test.ts",
-          "testFramework": "vitest"
-        },
-        {
-          "exports": [
-            "memoryKindLabel",
-            "memoryScopeLabel",
-            "memoryValueLabel",
-            "suggestionLabel"
-          ],
-          "hash": "744e9185a4490cbaa51964d4b37e182099edf95996afbe876461adaefad6a5a2",
-          "importsFiles": [
-            "apps/desktop/src/lib/displayPath.ts"
-          ],
-          "path": "apps/desktop/src/lib/memoryLabels.ts"
         },
         {
           "hash": "ee8fb44407700e322ed2a1a4e5b23a6563e708e7ad51e08d486687a10a588be7",
@@ -2788,7 +2765,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "4eb57b5873fe79bcd4c11292e9f5c8d8b8a19cc86cbf749acb20ec6086a29f7e",
+          "hash": "d594215e1803ed28b3e517aea44682d44937469ef1e3b9b8c42b6f5f6668d183",
           "path": "apps/desktop/src/styles/globals.css"
         },
         {
@@ -2796,7 +2773,7 @@
           "path": "apps/desktop/src/styles/nodeBuiltins.d.ts"
         },
         {
-          "hash": "b97be9309c29820b30acdc233f79274a4dc161d10087edbbbebac72021b51d3e",
+          "hash": "14811906614d19e15c05a846413d70917e3c1be8f4187019066d7ece0098f04b",
           "path": "apps/desktop/src/styles/reflow.test.ts",
           "testFramework": "vitest"
         },
@@ -2845,7 +2822,7 @@
         "cargo test",
         "vitest"
       ],
-      "testedBy": 57,
+      "testedBy": 56,
       "unresolvedNamed": [
         {
           "path": "apps/desktop/src/app/AppShell.honesty.test.tsx",
@@ -2908,7 +2885,7 @@
           "path": "docs/handbook/src/developer-guide/testing.md"
         },
         {
-          "hash": "cbc084d086dede9d8c648aaf5fe28a26f022077747cd55f05a097551c7074a6a",
+          "hash": "b5f6869f4c0dbc2d203745c732cfb48eb72cee058598fd82dc6033161a14fea4",
           "path": "docs/handbook/src/intelligence/context-enrichment.md"
         },
         {
@@ -2932,7 +2909,7 @@
           "path": "docs/handbook/src/orientation/accessibility.md"
         },
         {
-          "hash": "764a96b4c191330538897d888821c6ec5ad50744c47f709d318beffc7cc378cf",
+          "hash": "8ed8edbd91a16e405a704b194fecd505e6ffc1b3cf9f2303991cc76d3b0b2977",
           "path": "docs/handbook/src/orientation/core-concepts.md"
         },
         {
@@ -2960,7 +2937,7 @@
           "path": "docs/handbook/src/product-behavior/settings.md"
         },
         {
-          "hash": "3fa37a68ce958073118e2b6d6db39b71a24a78194ae1fe325285c0a3ae133458",
+          "hash": "0932f18a1001f3ce14dcdf5115a698d01f61c30e76be00b49ca7898cdd230083",
           "path": "docs/handbook/src/user-guide/history.md"
         },
         {
@@ -2968,7 +2945,7 @@
           "path": "docs/handbook/src/user-guide/input-modes.md"
         },
         {
-          "hash": "ffdebd4f930657e0c502b54b5f9b26769757f999a0bcc7abe2f0bc5b127338dc",
+          "hash": "42e15d5699ff31ae3a4ed118ffe479a67a076003faa833f9565853325f83b41b",
           "path": "docs/handbook/src/user-guide/memory.md"
         },
         {
@@ -4279,7 +4256,7 @@
           "path": "site/src/content/docs/handbook/beginners.md"
         },
         {
-          "hash": "acc13176145444e120010d6b5dbae28f5af7c5542fce1a97f8f103b6a573f2da",
+          "hash": "d2ddbe2f6be515b9c352b9f684c1f50dcdb07c3789263ebec7d9df84b42c66f6",
           "path": "site/src/content/docs/handbook/core-concepts.md"
         },
         {
@@ -4303,7 +4280,7 @@
           "path": "site/src/content/docs/handbook/first-ten-minutes.md"
         },
         {
-          "hash": "5e5fed545912bd4a453b61b61eaad03306ba37a6e3b18a95f5d797acd93b9e97",
+          "hash": "3d6a3ce33f3daffd0ec8cb368b6a92d215eabbfa9f7e67e63c62062353ffa572",
           "path": "site/src/content/docs/handbook/history.md"
         },
         {
@@ -4315,7 +4292,7 @@
           "path": "site/src/content/docs/handbook/input-modes.md"
         },
         {
-          "hash": "86aad3a366c33ce5d44edfc2ab1c0ae20d1d1e9b296fb460231e91843888e6b8",
+          "hash": "dbd61cdd5798a4ac9d04336e67cc66da2748d928f60366ff863e4f5665880826",
           "path": "site/src/content/docs/handbook/intelligence/context-enrichment.md"
         },
         {
@@ -4335,7 +4312,7 @@
           "path": "site/src/content/docs/handbook/layers.md"
         },
         {
-          "hash": "0f805c9d22faeaa50835f27e1f8b03348436df2c1cbd283bee5c19eeab52d2bf",
+          "hash": "8426039d403cbb2733039b4a4b984d9b1b79a3b590c89de51ee2ed8098eebf5d",
           "path": "site/src/content/docs/handbook/memory.md"
         },
         {
@@ -4767,7 +4744,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 125
+          "files": 123
         },
         {
           "boundary": "domain",
@@ -5230,7 +5207,7 @@
           "config": "apps/desktop/vite.config.ts",
           "coverage": true,
           "dir": "apps/desktop",
-          "files": 53,
+          "files": 52,
           "job": "check-and-test",
           "runner": "vitest",
           "step": "pnpm test with coverage",
@@ -5635,7 +5612,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 137
+          "files": 135
         },
         {
           "boundary": "packaging",
@@ -5977,8 +5954,8 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "6396e465e9bcbb9f8907858171e286334a7f3e9b",
-    "tracked": 465
+    "commit": "e6cbe8438e17f599b5287419f49e8655bea91091",
+    "tracked": 463
   },
   "landings": [
     {
@@ -6347,7 +6324,7 @@
   "overlaps": [],
   "submodules": [],
   "symlinks": [],
-  "testFiles": 93,
+  "testFiles": 92,
   "unassigned": [],
   "workspaces": [
     "apps/desktop",

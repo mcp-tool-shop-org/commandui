@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { HistoryItem } from "@commandui/domain";
 import type { SessionSummary } from "@commandui/domain";
 import { historyStatusLabel } from "../lib/commandResult";
+import { displayPath } from "../lib/displayPath";
 import { useModalDialog } from "../lib/useModalDialog";
 import { RelativeTime } from "./RelativeTime";
 
@@ -233,21 +234,22 @@ export function HistoryDrawer({
                 <div className="history-meta">
                   <span className="history-source">{sourceLabel}</span>
                   {item.workflowRunId && onViewWorkflowRun && (
-                    <span
+                    <button
+                      type="button"
                       className="history-wf-badge"
                       onClick={(e) => {
                         e.stopPropagation();
                         onViewWorkflowRun(item.workflowRunId!);
                       }}
                     >
-                      WF
-                    </span>
+                      View workflow
+                    </button>
                   )}
                   {duration && (
                     <span className="history-duration">{duration}</span>
                   )}
                   {item.cwd && (
-                    <span className="history-cwd">{item.cwd}</span>
+                    <span className="history-cwd">{displayPath(item.cwd)}</span>
                   )}
                   <span className="history-time">
                     <RelativeTime value={item.createdAt} />
@@ -282,8 +284,8 @@ export function HistoryDrawer({
                     </div>
                     {item.cwd && (
                       <div className="history-detail-row">
-                        <span className="detail-label">CWD</span>
-                        <span>{item.cwd}</span>
+                        <span className="detail-label">Working folder</span>
+                        <span className="history-detail-value">{displayPath(item.cwd)}</span>
                       </div>
                     )}
                     {duration && (

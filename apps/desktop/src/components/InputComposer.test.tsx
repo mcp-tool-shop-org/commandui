@@ -14,7 +14,7 @@ describe("InputComposer", () => {
       />,
     );
 
-    const input = screen.getByPlaceholderText(/submit a command/i);
+    const input = screen.getByPlaceholderText(/type a command/i);
     await userEvent.type(input, "git status{Enter}");
 
     expect(onSubmit).toHaveBeenCalledWith("git status");
@@ -44,7 +44,7 @@ describe("InputComposer", () => {
       />,
     );
 
-    const input = screen.getByPlaceholderText(/submit a command/i);
+    const input = screen.getByPlaceholderText(/type a command/i);
     await userEvent.type(input, "{Enter}");
 
     expect(onSubmit).not.toHaveBeenCalled();
@@ -55,7 +55,7 @@ describe("InputComposer", () => {
     render(
       <InputComposer mode="command" onModeChange={() => {}} onSubmit={onSubmit} />,
     );
-    const input = screen.getByPlaceholderText(/submit a command/i);
+    const input = screen.getByPlaceholderText(/type a command/i);
     await userEvent.type(input, "git status{Shift>}{Enter}{/Shift}");
     expect(onSubmit).not.toHaveBeenCalled();
   });
@@ -65,7 +65,7 @@ describe("InputComposer", () => {
     render(
       <InputComposer mode="command" onModeChange={() => {}} onSubmit={onSubmit} />,
     );
-    const input = screen.getByPlaceholderText(/submit a command/i);
+    const input = screen.getByPlaceholderText(/type a command/i);
     await userEvent.type(input, "   {Enter}");
     expect(onSubmit).not.toHaveBeenCalled();
 
@@ -84,7 +84,7 @@ describe("InputComposer", () => {
         busy
       />,
     );
-    const input = screen.getByPlaceholderText(/submit a command/i);
+    const input = screen.getByPlaceholderText(/type a command/i);
     await userEvent.type(input, "ls{Enter}");
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText("Working…")).toBeDisabled();
@@ -97,7 +97,7 @@ describe("InputComposer", () => {
     const onSubmit = vi.fn();
     const props = { mode: "command" as const, onModeChange: () => {}, onSubmit };
     const { rerender } = render(<InputComposer {...props} />);
-    await userEvent.type(screen.getByPlaceholderText(/submit a command/i), "ls");
+    await userEvent.type(screen.getByPlaceholderText(/type a command/i), "ls");
 
     rerender(<InputComposer {...props} {...flags} />);
     const input = screen.getByRole("textbox");
