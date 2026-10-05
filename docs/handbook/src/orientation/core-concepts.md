@@ -22,7 +22,7 @@ A plan is a structured proposal: the AI's translation of your intent into a shel
 
 ## History
 
-Every interaction is recorded: raw commands, semantic requests, generated plans, approvals, rejections, and execution results. History items include the original input, the generated command (if any), the actually-executed command (if different from generated), exit code, duration, and working directory.
+Every interaction is recorded: typed commands, Ask requests, drafted plans, approvals, rejections, and execution results. History items include the original input, the generated command (if any), the actually-executed command (if different from generated), exit code, duration, and working directory.
 
 ## Workflows
 

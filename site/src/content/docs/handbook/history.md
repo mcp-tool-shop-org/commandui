@@ -5,7 +5,7 @@ sidebar:
   order: 6
 ---
 
-Every structured interaction — raw commands through the composer and semantic requests — is recorded in history. Open the history drawer with `Ctrl+H`.
+Every structured interaction — commands you type and requests you make with Ask — is recorded in history. Open the history drawer with `Ctrl+H`.
 
 ## History item fields
 

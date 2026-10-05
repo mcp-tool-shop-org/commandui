@@ -1,19 +1,14 @@
 # commandui: how it works
 
-Mapped at 2026-10-05 from commit 3a7d7d7 by Atlas 1.24.0.
+Mapped at 2026-10-05 from commit 1523e33 by Atlas 1.24.0.
 
 ## What this is
 
 16 parts, mostly TypeScript (139 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).
 
-## What changed since 2026-10-05 (a733e62)
+## What changed since 2026-10-05 (3a7d7d7)
 
-- CI now also runs apps/desktop/src/ and apps/desktop/vite.config.ts.
-- Release Desktop now also runs apps/desktop/src-tauri/build.rs, apps/desktop/src/ and apps/desktop/vite.config.ts.
-- Release Desktop now also builds apps/desktop/src-tauri/src/main.rs.
-- And 1 more change to a door.
-- apps/desktop/package.json is now read by packaging/check-release-version.mjs.
-- 7 files added and 1 changed content, across 3 parts.
+Nothing structural changed since 2026-10-05; 11 files changed content.
 
 ## What comes in
 
@@ -56,15 +51,15 @@ Mapped at 2026-10-05 from commit 3a7d7d7 by Atlas 1.24.0.
 
 ## What tends to change together
 
-- **apps/console/src/model.rs** and **apps/console/src/ui.rs** changed together in 9 of 11 commits, inside the console part.
-- **crates/runtime-core/src/services/session_service.rs** and **crates/runtime-core/src/services/terminal_service.rs** changed together in 12 of 15 commits, inside the runtime-core part.
-- **apps/console/src/input.rs** and **apps/console/src/model.rs** changed together in 8 of 10 commits, inside the console part.
-- **apps/console/src/input.rs** and **apps/console/src/ui.rs** changed together in 8 of 10 commits, inside the console part.
-- **apps/console/src/app.rs** and **apps/console/src/model.rs** changed together in 9 of 12 commits, inside the console part.
+- **apps/console/src/app.rs** and **apps/console/src/model.rs** changed together in 9 of 10 commits, inside the console part.
+- **apps/console/src/model.rs** and **apps/console/src/ui.rs** changed together in 9 of 10 commits, inside the console part.
+- **apps/console/src/input.rs** and **apps/console/src/model.rs** changed together in 8 of 9 commits, inside the console part.
+- **apps/console/src/app.rs** and **apps/console/src/ui.rs** changed together in 9 of 11 commits, inside the console part.
+- **crates/runtime-core/src/pty.rs** and **crates/runtime-core/src/services/session_service.rs** changed together in 12 of 15 commits, inside the runtime-core part.
 
 Confidence is low: fewer than 25 source files reach 10 revisions in the window.
 
-Window: 180 days; a pair counts from 3 shared commits, since 7 source files reach 10 revisions; the floor rises to 10 when 25 do.
+Window: 180 days; a pair counts from 3 shared commits, since 6 source files reach 10 revisions; the floor rises to 10 when 25 do.
 
 ## What no test touches
 
@@ -100,7 +95,7 @@ Read those in order to follow one pull request end to end.
 
 ## What this map cannot see
 
-- 1 import could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository.
+- 3 imports could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository; `apps/desktop/src/components/MemoryDrawer.tsx` imports `../lib/memoryLabels`, which is not in this repository; `apps/desktop/src/components/MemorySuggestions.tsx` imports `../lib/memoryLabels`, which is not in this repository.
 - 2 writes and 3 reads use paths built at run time and are not named here.
 - 2 writes and 1 read go to a path their caller passes, not to this repository.
 - 3 writes go to a temporary directory, not to this repository.

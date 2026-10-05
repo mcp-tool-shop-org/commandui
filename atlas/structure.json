@@ -1875,7 +1875,7 @@
           "path": "apps/desktop/src/components/InputComposer.tsx"
         },
         {
-          "hash": "7c229df6c46f161a91e6cf65c742070ec0969324fb00784a869249942efc341a",
+          "hash": "61db9e50072d187fb6e4917eeb9752191bbafdda52e88114a84397c9fae0f87d",
           "importOrder": [
             "packages/domain/src/index.ts",
             "apps/desktop/src/components/MemoryDrawer.tsx"
@@ -1891,7 +1891,7 @@
           "exports": [
             "MemoryDrawer"
           ],
-          "hash": "525114ec37a699bc17a18c8fc98666538ac32fbd195bb6dd02a70774224e26ef",
+          "hash": "e63f95cb0c5fd9e7ec04484455107b1ff71830ab85c9812b8769595ffab2ffd5",
           "importOrder": [
             "packages/domain/src/index.ts",
             "apps/desktop/src/lib/useModalDialog.ts"
@@ -1919,7 +1919,7 @@
           "exports": [
             "MemorySuggestions"
           ],
-          "hash": "cdb953a68b71767800958d2d101ed12e901125da86367d794526c884178c362c",
+          "hash": "dc00d8862a2df7e8e2480a17cf96bb282973cb8fd7ee98bbc1859a3fbb44ce94",
           "importOrder": [
             "packages/domain/src/index.ts",
             "apps/desktop/src/components/FoldPanel.tsx"
@@ -2826,9 +2826,19 @@
           "path": "apps/desktop/src/app/AppShell.honesty.test.tsx",
           "specifier": "./AppShell.tsx?raw",
           "why": "missing"
+        },
+        {
+          "path": "apps/desktop/src/components/MemoryDrawer.tsx",
+          "specifier": "../lib/memoryLabels",
+          "why": "missing"
+        },
+        {
+          "path": "apps/desktop/src/components/MemorySuggestions.tsx",
+          "specifier": "../lib/memoryLabels",
+          "why": "missing"
         }
       ],
-      "unresolvedSites": 1
+      "unresolvedSites": 3
     },
     {
       "dynamicReads": 0,
@@ -2883,7 +2893,7 @@
           "path": "docs/handbook/src/developer-guide/testing.md"
         },
         {
-          "hash": "b5f6869f4c0dbc2d203745c732cfb48eb72cee058598fd82dc6033161a14fea4",
+          "hash": "cbc084d086dede9d8c648aaf5fe28a26f022077747cd55f05a097551c7074a6a",
           "path": "docs/handbook/src/intelligence/context-enrichment.md"
         },
         {
@@ -2907,7 +2917,7 @@
           "path": "docs/handbook/src/orientation/accessibility.md"
         },
         {
-          "hash": "8ed8edbd91a16e405a704b194fecd505e6ffc1b3cf9f2303991cc76d3b0b2977",
+          "hash": "764a96b4c191330538897d888821c6ec5ad50744c47f709d318beffc7cc378cf",
           "path": "docs/handbook/src/orientation/core-concepts.md"
         },
         {
@@ -2935,7 +2945,7 @@
           "path": "docs/handbook/src/product-behavior/settings.md"
         },
         {
-          "hash": "45a4bacae0113120418c6e54355beaf261ded0cf341bbea1c7258f62b7dc6bc6",
+          "hash": "3fa37a68ce958073118e2b6d6db39b71a24a78194ae1fe325285c0a3ae133458",
           "path": "docs/handbook/src/user-guide/history.md"
         },
         {
@@ -2943,7 +2953,7 @@
           "path": "docs/handbook/src/user-guide/input-modes.md"
         },
         {
-          "hash": "42e15d5699ff31ae3a4ed118ffe479a67a076003faa833f9565853325f83b41b",
+          "hash": "ffdebd4f930657e0c502b54b5f9b26769757f999a0bcc7abe2f0bc5b127338dc",
           "path": "docs/handbook/src/user-guide/memory.md"
         },
         {
@@ -4254,7 +4264,7 @@
           "path": "site/src/content/docs/handbook/beginners.md"
         },
         {
-          "hash": "d2ddbe2f6be515b9c352b9f684c1f50dcdb07c3789263ebec7d9df84b42c66f6",
+          "hash": "acc13176145444e120010d6b5dbae28f5af7c5542fce1a97f8f103b6a573f2da",
           "path": "site/src/content/docs/handbook/core-concepts.md"
         },
         {
@@ -4278,7 +4288,7 @@
           "path": "site/src/content/docs/handbook/first-ten-minutes.md"
         },
         {
-          "hash": "21f1a339a42889ac0ebcb782e416118227781436042ebc560d6f408cfb8d6d3f",
+          "hash": "5e5fed545912bd4a453b61b61eaad03306ba37a6e3b18a95f5d797acd93b9e97",
           "path": "site/src/content/docs/handbook/history.md"
         },
         {
@@ -4290,7 +4300,7 @@
           "path": "site/src/content/docs/handbook/input-modes.md"
         },
         {
-          "hash": "dbd61cdd5798a4ac9d04336e67cc66da2748d928f60366ff863e4f5665880826",
+          "hash": "86aad3a366c33ce5d44edfc2ab1c0ae20d1d1e9b296fb460231e91843888e6b8",
           "path": "site/src/content/docs/handbook/intelligence/context-enrichment.md"
         },
         {
@@ -4310,7 +4320,7 @@
           "path": "site/src/content/docs/handbook/layers.md"
         },
         {
-          "hash": "8426039d403cbb2733039b4a4b984d9b1b79a3b590c89de51ee2ed8098eebf5d",
+          "hash": "0f805c9d22faeaa50835f27e1f8b03348436df2c1cbd283bee5c19eeab52d2bf",
           "path": "site/src/content/docs/handbook/memory.md"
         },
         {
@@ -5952,7 +5962,7 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "3a7d7d7cdf9aefa523b6210915b4baf1c31a53ba",
+    "commit": "1523e33c0d0968e6624157651cda1095534dd9ad",
     "tracked": 463
   },
   "landings": [
