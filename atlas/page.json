@@ -93,22 +93,22 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 0,
-      "changed": 11,
+      "added": 2,
+      "changed": 0,
       "moved": 0,
-      "parts": 3,
+      "parts": 1,
       "removed": 0
     },
     "items": [
       {
         "kind": "counts",
-        "sentence": "Nothing structural changed since 2026-10-05; 11 files changed content.",
+        "sentence": "Nothing structural changed since 2026-10-05; 2 files added.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "3a7d7d7cdf9aefa523b6210915b4baf1c31a53ba",
-      "generatedAt": "2026-10-05T00:48:26.422Z"
+      "commit": "1523e33c0d0968e6624157651cda1095534dd9ad",
+      "generatedAt": "2026-10-05T01:39:11.228Z"
     },
     "unchanged": true
   },
@@ -194,9 +194,9 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 6 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "1523e33c0d0968e6624157651cda1095534dd9ad",
+  "commit": "6396e465e9bcbb9f8907858171e286334a7f3e9b",
   "defaultBranch": "main",
-  "derived": "16 parts, mostly TypeScript (139 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
+  "derived": "16 parts, mostly TypeScript (141 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
     {
       "checks": [
@@ -228,7 +228,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 123
+          "files": 125
         },
         {
           "boundary": "domain",
@@ -312,7 +312,7 @@
         "packages/state/src/index.test.ts"
       ],
       "runsCount": 43,
-      "runsMore": 146,
+      "runsMore": 148,
       "sends": [
         "uploads coverage to Codecov"
       ],
@@ -355,7 +355,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 135
+          "files": 137
         },
         {
           "boundary": "packaging",
@@ -592,9 +592,9 @@
       ]
     }
   ],
-  "generatedAt": "2026-10-05T01:39:11.228Z",
+  "generatedAt": "2026-10-05T01:39:49.283Z",
   "limits": [
-    "3 imports could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository; `apps/desktop/src/components/MemoryDrawer.tsx` imports `../lib/memoryLabels`, which is not in this repository; `apps/desktop/src/components/MemorySuggestions.tsx` imports `../lib/memoryLabels`, which is not in this repository.",
+    "1 import could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository.",
     "2 writes and 3 reads use paths built at run time and are not named here.",
     "2 writes and 1 read go to a path their caller passes, not to this repository.",
     "3 writes go to a temporary directory, not to this repository.",
@@ -635,11 +635,11 @@
   ],
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 92,
+  "testFiles": 93,
   "testedBy": {
     "api-contract": 21,
     "console": 7,
-    "desktop": 56,
+    "desktop": 57,
     "domain": 20,
     "runtime-core": 9,
     "runtime-persistence": 6,

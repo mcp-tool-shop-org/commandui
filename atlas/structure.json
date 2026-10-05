@@ -1894,9 +1894,11 @@
           "hash": "e63f95cb0c5fd9e7ec04484455107b1ff71830ab85c9812b8769595ffab2ffd5",
           "importOrder": [
             "packages/domain/src/index.ts",
+            "apps/desktop/src/lib/memoryLabels.ts",
             "apps/desktop/src/lib/useModalDialog.ts"
           ],
           "importsFiles": [
+            "apps/desktop/src/lib/memoryLabels.ts",
             "apps/desktop/src/lib/useModalDialog.ts",
             "packages/domain/src/index.ts"
           ],
@@ -1922,10 +1924,12 @@
           "hash": "dc00d8862a2df7e8e2480a17cf96bb282973cb8fd7ee98bbc1859a3fbb44ce94",
           "importOrder": [
             "packages/domain/src/index.ts",
+            "apps/desktop/src/lib/memoryLabels.ts",
             "apps/desktop/src/components/FoldPanel.tsx"
           ],
           "importsFiles": [
             "apps/desktop/src/components/FoldPanel.tsx",
+            "apps/desktop/src/lib/memoryLabels.ts",
             "packages/domain/src/index.ts"
           ],
           "path": "apps/desktop/src/components/MemorySuggestions.tsx"
@@ -2527,6 +2531,27 @@
           "path": "apps/desktop/src/lib/layoutWidth.ts"
         },
         {
+          "hash": "6670d5b9f39bd6c0a467dfb003872fda3c1aae2d5e5820b5360b0fe1ff558221",
+          "importsFiles": [
+            "apps/desktop/src/lib/memoryLabels.ts"
+          ],
+          "path": "apps/desktop/src/lib/memoryLabels.test.ts",
+          "testFramework": "vitest"
+        },
+        {
+          "exports": [
+            "memoryKindLabel",
+            "memoryScopeLabel",
+            "memoryValueLabel",
+            "suggestionLabel"
+          ],
+          "hash": "744e9185a4490cbaa51964d4b37e182099edf95996afbe876461adaefad6a5a2",
+          "importsFiles": [
+            "apps/desktop/src/lib/displayPath.ts"
+          ],
+          "path": "apps/desktop/src/lib/memoryLabels.ts"
+        },
+        {
           "hash": "ee8fb44407700e322ed2a1a4e5b23a6563e708e7ad51e08d486687a10a588be7",
           "importsFiles": [
             "apps/desktop/src/lib/mockBridge.ts"
@@ -2820,25 +2845,15 @@
         "cargo test",
         "vitest"
       ],
-      "testedBy": 56,
+      "testedBy": 57,
       "unresolvedNamed": [
         {
           "path": "apps/desktop/src/app/AppShell.honesty.test.tsx",
           "specifier": "./AppShell.tsx?raw",
           "why": "missing"
-        },
-        {
-          "path": "apps/desktop/src/components/MemoryDrawer.tsx",
-          "specifier": "../lib/memoryLabels",
-          "why": "missing"
-        },
-        {
-          "path": "apps/desktop/src/components/MemorySuggestions.tsx",
-          "specifier": "../lib/memoryLabels",
-          "why": "missing"
         }
       ],
-      "unresolvedSites": 3
+      "unresolvedSites": 1
     },
     {
       "dynamicReads": 0,
@@ -4752,7 +4767,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 123
+          "files": 125
         },
         {
           "boundary": "domain",
@@ -5215,7 +5230,7 @@
           "config": "apps/desktop/vite.config.ts",
           "coverage": true,
           "dir": "apps/desktop",
-          "files": 52,
+          "files": 53,
           "job": "check-and-test",
           "runner": "vitest",
           "step": "pnpm test with coverage",
@@ -5620,7 +5635,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 135
+          "files": 137
         },
         {
           "boundary": "packaging",
@@ -5962,8 +5977,8 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "1523e33c0d0968e6624157651cda1095534dd9ad",
-    "tracked": 463
+    "commit": "6396e465e9bcbb9f8907858171e286334a7f3e9b",
+    "tracked": 465
   },
   "landings": [
     {
@@ -6332,7 +6347,7 @@
   "overlaps": [],
   "submodules": [],
   "symlinks": [],
-  "testFiles": 92,
+  "testFiles": 93,
   "unassigned": [],
   "workspaces": [
     "apps/desktop",

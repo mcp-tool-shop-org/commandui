@@ -84,7 +84,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "desktop",
-      "qualifyingSourceCommits": 20,
+      "qualifyingSourceCommits": 21,
       "rebaseline": null
     },
     {
@@ -1226,13 +1226,13 @@
         "path": "apps/desktop/src/components/InputComposer.tsx"
       },
       {
-        "commits": 1,
-        "lines": 76,
+        "commits": 2,
+        "lines": 91,
         "path": "apps/desktop/src/components/MemoryDrawer.test.tsx"
       },
       {
-        "commits": 3,
-        "lines": 78,
+        "commits": 4,
+        "lines": 96,
         "path": "apps/desktop/src/components/MemoryDrawer.tsx"
       },
       {
@@ -1241,8 +1241,8 @@
         "path": "apps/desktop/src/components/MemorySuggestions.test.tsx"
       },
       {
-        "commits": 3,
-        "lines": 138,
+        "commits": 4,
+        "lines": 156,
         "path": "apps/desktop/src/components/MemorySuggestions.tsx"
       },
       {
@@ -1491,6 +1491,16 @@
         "path": "apps/desktop/src/lib/layoutWidth.ts"
       },
       {
+        "commits": 1,
+        "lines": 26,
+        "path": "apps/desktop/src/lib/memoryLabels.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 44,
+        "path": "apps/desktop/src/lib/memoryLabels.ts"
+      },
+      {
         "commits": 2,
         "lines": 272,
         "path": "apps/desktop/src/lib/mockBridge.test.ts"
@@ -1636,8 +1646,8 @@
         "path": "apps/desktop/vite.config.ts"
       },
       {
-        "commits": 7,
-        "lines": 335,
+        "commits": 8,
+        "lines": 360,
         "path": "atlas/README.md"
       },
       {
@@ -1646,18 +1656,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 7,
-        "lines": 2055,
+        "commits": 8,
+        "lines": 2161,
         "path": "atlas/page.json"
       },
       {
-        "commits": 7,
-        "lines": 4412,
+        "commits": 8,
+        "lines": 4863,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 7,
-        "lines": 10162,
+        "commits": 8,
+        "lines": 10198,
         "path": "atlas/structure.json"
       },
       {
@@ -1861,8 +1871,8 @@
         "path": "docs/handbook/src/developer-guide/testing.md"
       },
       {
-        "commits": 2,
-        "lines": 104,
+        "commits": 3,
+        "lines": 110,
         "path": "docs/handbook/src/intelligence/context-enrichment.md"
       },
       {
@@ -1891,8 +1901,8 @@
         "path": "docs/handbook/src/orientation/accessibility.md"
       },
       {
-        "commits": 1,
-        "lines": 62,
+        "commits": 2,
+        "lines": 64,
         "path": "docs/handbook/src/orientation/core-concepts.md"
       },
       {
@@ -1926,8 +1936,8 @@
         "path": "docs/handbook/src/product-behavior/settings.md"
       },
       {
-        "commits": 2,
-        "lines": 62,
+        "commits": 3,
+        "lines": 64,
         "path": "docs/handbook/src/user-guide/history.md"
       },
       {
@@ -1936,8 +1946,8 @@
         "path": "docs/handbook/src/user-guide/input-modes.md"
       },
       {
-        "commits": 1,
-        "lines": 77,
+        "commits": 2,
+        "lines": 103,
         "path": "docs/handbook/src/user-guide/memory.md"
       },
       {
@@ -2481,8 +2491,8 @@
         "path": "site/src/content/docs/handbook/beginners.md"
       },
       {
-        "commits": 1,
-        "lines": 67,
+        "commits": 2,
+        "lines": 69,
         "path": "site/src/content/docs/handbook/core-concepts.md"
       },
       {
@@ -2511,8 +2521,8 @@
         "path": "site/src/content/docs/handbook/first-ten-minutes.md"
       },
       {
-        "commits": 2,
-        "lines": 67,
+        "commits": 3,
+        "lines": 69,
         "path": "site/src/content/docs/handbook/history.md"
       },
       {
@@ -2526,8 +2536,8 @@
         "path": "site/src/content/docs/handbook/input-modes.md"
       },
       {
-        "commits": 2,
-        "lines": 109,
+        "commits": 3,
+        "lines": 115,
         "path": "site/src/content/docs/handbook/intelligence/context-enrichment.md"
       },
       {
@@ -2551,8 +2561,8 @@
         "path": "site/src/content/docs/handbook/layers.md"
       },
       {
-        "commits": 1,
-        "lines": 82,
+        "commits": 2,
+        "lines": 108,
         "path": "site/src/content/docs/handbook/memory.md"
       },
       {
@@ -2671,9 +2681,9 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-10-05T01:39:11.228Z",
+  "generatedAt": "2026-10-05T01:39:49.283Z",
   "generatedFrom": {
-    "commit": "1523e33c0d0968e6624157651cda1095534dd9ad"
+    "commit": "6396e465e9bcbb9f8907858171e286334a7f3e9b"
   },
   "pairs": [
     {
@@ -2728,43 +2738,43 @@
     {
       "a": "atlas/README.md",
       "b": "atlas/page.json",
-      "either": 5,
-      "shared": 5,
+      "either": 6,
+      "shared": 6,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/statistics.json",
-      "either": 5,
-      "shared": 5,
+      "either": 6,
+      "shared": 6,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/structure.json",
-      "either": 5,
-      "shared": 5,
+      "either": 6,
+      "shared": 6,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/statistics.json",
-      "either": 5,
-      "shared": 5,
+      "either": 6,
+      "shared": 6,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/structure.json",
-      "either": 5,
-      "shared": 5,
+      "either": 6,
+      "shared": 6,
       "strength": 1
     },
     {
       "a": "atlas/statistics.json",
       "b": "atlas/structure.json",
-      "either": 5,
-      "shared": 5,
+      "either": 6,
+      "shared": 6,
       "strength": 1
     },
     {
@@ -2848,16 +2858,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-10-04T17:56:09-07:00",
-    "inScopeFiles": 468,
+    "headDate": "2026-10-04T21:39:24-04:00",
+    "inScopeFiles": 470,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 62,
+    "qualifyingCommits": 63,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-08T00:56:09.000Z",
+    "since": "2026-04-08T01:39:24.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",
