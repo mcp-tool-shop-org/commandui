@@ -52,7 +52,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "api-contract",
-      "qualifyingSourceCommits": 8,
+      "qualifyingSourceCommits": 9,
       "rebaseline": null
     },
     {
@@ -84,7 +84,7 @@
       "confidence": "full",
       "highWater": null,
       "name": "desktop",
-      "qualifyingSourceCommits": 31,
+      "qualifyingSourceCommits": 32,
       "rebaseline": null
     },
     {
@@ -249,7 +249,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "state",
-      "qualifyingSourceCommits": 5,
+      "qualifyingSourceCommits": 6,
       "rebaseline": null
     },
     {
@@ -579,8 +579,8 @@
         "path": ".claude/workflows/ship-feature.md"
       },
       {
-        "commits": 12,
-        "lines": 198,
+        "commits": 14,
+        "lines": 350,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -664,8 +664,8 @@
         "path": "README.ja.md"
       },
       {
-        "commits": 5,
-        "lines": 294,
+        "commits": 7,
+        "lines": 296,
         "path": "README.md"
       },
       {
@@ -754,8 +754,8 @@
         "path": "apps/desktop/index.html"
       },
       {
-        "commits": 4,
-        "lines": 49,
+        "commits": 6,
+        "lines": 55,
         "path": "apps/desktop/package.json"
       },
       {
@@ -1094,8 +1094,18 @@
         "path": "apps/desktop/src/app/AppShell.result.test.tsx"
       },
       {
-        "commits": 21,
-        "lines": 4635,
+        "commits": 2,
+        "lines": 304,
+        "path": "apps/desktop/src/app/AppShell.runtime.test.tsx"
+      },
+      {
+        "commits": 2,
+        "lines": 943,
+        "path": "apps/desktop/src/app/AppShell.test.tsx"
+      },
+      {
+        "commits": 23,
+        "lines": 4999,
         "path": "apps/desktop/src/app/AppShell.tsx"
       },
       {
@@ -1117,6 +1127,26 @@
         "commits": 1,
         "lines": 32,
         "path": "apps/desktop/src/app/execState.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 104,
+        "path": "apps/desktop/src/app/sessionWatch.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 96,
+        "path": "apps/desktop/src/app/sessionWatch.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 240,
+        "path": "apps/desktop/src/app/terminalReplay.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 262,
+        "path": "apps/desktop/src/app/terminalReplay.ts"
       },
       {
         "commits": 2,
@@ -1155,6 +1185,11 @@
       },
       {
         "commits": 2,
+        "lines": 110,
+        "path": "apps/desktop/src/components/ErrorBoundary.test.tsx"
+      },
+      {
+        "commits": 2,
         "lines": 105,
         "path": "apps/desktop/src/components/ErrorBoundary.tsx"
       },
@@ -1174,8 +1209,8 @@
         "path": "apps/desktop/src/components/HelpDialog.tsx"
       },
       {
-        "commits": 2,
-        "lines": 93,
+        "commits": 4,
+        "lines": 371,
         "path": "apps/desktop/src/components/HistoryDrawer.test.tsx"
       },
       {
@@ -1194,13 +1229,18 @@
         "path": "apps/desktop/src/components/InputComposer.tsx"
       },
       {
+        "commits": 2,
+        "lines": 152,
+        "path": "apps/desktop/src/components/MemoryDrawer.test.tsx"
+      },
+      {
         "commits": 3,
         "lines": 78,
         "path": "apps/desktop/src/components/MemoryDrawer.tsx"
       },
       {
-        "commits": 2,
-        "lines": 67,
+        "commits": 4,
+        "lines": 191,
         "path": "apps/desktop/src/components/MemorySuggestions.test.tsx"
       },
       {
@@ -1219,8 +1259,8 @@
         "path": "apps/desktop/src/components/OutputView.tsx"
       },
       {
-        "commits": 5,
-        "lines": 236,
+        "commits": 7,
+        "lines": 379,
         "path": "apps/desktop/src/components/PlanPanel.test.tsx"
       },
       {
@@ -1254,9 +1294,19 @@
         "path": "apps/desktop/src/components/ResultLine.tsx"
       },
       {
+        "commits": 2,
+        "lines": 78,
+        "path": "apps/desktop/src/components/SessionTabs.test.tsx"
+      },
+      {
         "commits": 4,
         "lines": 79,
         "path": "apps/desktop/src/components/SessionTabs.tsx"
+      },
+      {
+        "commits": 2,
+        "lines": 116,
+        "path": "apps/desktop/src/components/SettingsDrawer.test.tsx"
       },
       {
         "commits": 4,
@@ -1264,8 +1314,8 @@
         "path": "apps/desktop/src/components/SettingsDrawer.tsx"
       },
       {
-        "commits": 4,
-        "lines": 142,
+        "commits": 6,
+        "lines": 409,
         "path": "apps/desktop/src/components/TerminalPane.test.tsx"
       },
       {
@@ -1284,19 +1334,39 @@
         "path": "apps/desktop/src/components/WelcomeScreen.tsx"
       },
       {
+        "commits": 2,
+        "lines": 444,
+        "path": "apps/desktop/src/components/WorkflowDrawer.test.tsx"
+      },
+      {
         "commits": 5,
         "lines": 330,
         "path": "apps/desktop/src/components/WorkflowDrawer.tsx"
       },
       {
-        "commits": 4,
-        "lines": 228,
+        "commits": 2,
+        "lines": 162,
+        "path": "apps/desktop/src/components/WorkflowEditor.test.tsx"
+      },
+      {
+        "commits": 5,
+        "lines": 234,
         "path": "apps/desktop/src/components/WorkflowEditor.tsx"
+      },
+      {
+        "commits": 2,
+        "lines": 96,
+        "path": "apps/desktop/src/components/WorkflowRunBanner.test.tsx"
       },
       {
         "commits": 2,
         "lines": 43,
         "path": "apps/desktop/src/components/WorkflowRunBanner.tsx"
+      },
+      {
+        "commits": 2,
+        "lines": 235,
+        "path": "apps/desktop/src/features/clients.test.ts"
       },
       {
         "commits": 2,
@@ -1324,9 +1394,19 @@
         "path": "apps/desktop/src/features/terminal/terminalClient.ts"
       },
       {
+        "commits": 2,
+        "lines": 122,
+        "path": "apps/desktop/src/features/terminal/terminalEvents.test.ts"
+      },
+      {
         "commits": 1,
         "lines": 58,
         "path": "apps/desktop/src/features/terminal/terminalEvents.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 42,
+        "path": "apps/desktop/src/hooks/useFocusZone.test.tsx"
       },
       {
         "commits": 1,
@@ -1335,8 +1415,18 @@
       },
       {
         "commits": 2,
+        "lines": 82,
+        "path": "apps/desktop/src/hooks/useShortcuts.test.tsx"
+      },
+      {
+        "commits": 2,
         "lines": 31,
         "path": "apps/desktop/src/hooks/useShortcuts.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 200,
+        "path": "apps/desktop/src/lib/buildPlannerContext.test.ts"
       },
       {
         "commits": 1,
@@ -1374,8 +1464,8 @@
         "path": "apps/desktop/src/lib/displayPath.ts"
       },
       {
-        "commits": 1,
-        "lines": 19,
+        "commits": 3,
+        "lines": 170,
         "path": "apps/desktop/src/lib/displaySafe.test.ts"
       },
       {
@@ -1404,8 +1494,13 @@
         "path": "apps/desktop/src/lib/layoutWidth.ts"
       },
       {
-        "commits": 5,
-        "lines": 512,
+        "commits": 2,
+        "lines": 340,
+        "path": "apps/desktop/src/lib/mockBridge.test.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 609,
         "path": "apps/desktop/src/lib/mockBridge.ts"
       },
       {
@@ -1469,8 +1564,8 @@
         "path": "apps/desktop/src/lib/shortcuts.ts"
       },
       {
-        "commits": 1,
-        "lines": 55,
+        "commits": 3,
+        "lines": 125,
         "path": "apps/desktop/src/lib/tauriInvoke.test.ts"
       },
       {
@@ -1497,6 +1592,11 @@
         "commits": 1,
         "lines": 31,
         "path": "apps/desktop/src/lib/welcomePref.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 118,
+        "path": "apps/desktop/src/main.test.tsx"
       },
       {
         "commits": 1,
@@ -1539,8 +1639,8 @@
         "path": "apps/desktop/vite.config.ts"
       },
       {
-        "commits": 17,
-        "lines": 417,
+        "commits": 19,
+        "lines": 517,
         "path": "atlas/README.md"
       },
       {
@@ -1549,19 +1649,24 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 17,
-        "lines": 2013,
+        "commits": 19,
+        "lines": 2674,
         "path": "atlas/page.json"
       },
       {
-        "commits": 17,
-        "lines": 5114,
+        "commits": 19,
+        "lines": 5665,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 17,
-        "lines": 8900,
+        "commits": 19,
+        "lines": 11440,
         "path": "atlas/structure.json"
+      },
+      {
+        "commits": 2,
+        "lines": 78,
+        "path": "codecov.yml"
       },
       {
         "commits": 1,
@@ -1855,6 +1960,11 @@
       },
       {
         "commits": 2,
+        "lines": 206,
+        "path": "docs/handoff-2026-10-04-ui-coverage.md"
+      },
+      {
+        "commits": 2,
         "lines": 45,
         "path": "docs/product/desktop-packaging-checklist.md"
       },
@@ -1919,18 +2029,18 @@
         "path": "docs/store-listing.md"
       },
       {
-        "commits": 3,
-        "lines": 35,
+        "commits": 5,
+        "lines": 37,
         "path": "package.json"
       },
       {
-        "commits": 1,
-        "lines": 19,
+        "commits": 3,
+        "lines": 23,
         "path": "packages/api-contract/package.json"
       },
       {
-        "commits": 4,
-        "lines": 117,
+        "commits": 6,
+        "lines": 127,
         "path": "packages/api-contract/src/contracts.test.ts"
       },
       {
@@ -2004,8 +2114,8 @@
         "path": "packages/api-contract/vitest.config.ts"
       },
       {
-        "commits": 1,
-        "lines": 16,
+        "commits": 3,
+        "lines": 20,
         "path": "packages/domain/package.json"
       },
       {
@@ -2064,13 +2174,13 @@
         "path": "packages/domain/tsconfig.json"
       },
       {
-        "commits": 1,
-        "lines": 20,
+        "commits": 3,
+        "lines": 24,
         "path": "packages/state/package.json"
       },
       {
-        "commits": 3,
-        "lines": 434,
+        "commits": 5,
+        "lines": 656,
         "path": "packages/state/src/index.test.ts"
       },
       {
@@ -2089,8 +2199,8 @@
         "path": "packages/state/tsconfig.json"
       },
       {
-        "commits": 1,
-        "lines": 16,
+        "commits": 3,
+        "lines": 20,
         "path": "packages/ui/package.json"
       },
       {
@@ -2334,8 +2444,8 @@
         "path": "packaging/pack-msix.ps1"
       },
       {
-        "commits": 4,
-        "lines": 2475,
+        "commits": 6,
+        "lines": 3359,
         "path": "pnpm-lock.yaml"
       },
       {
@@ -2564,17 +2674,17 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-10-05T00:41:59.507Z",
+  "generatedAt": "2026-10-05T00:48:26.422Z",
   "generatedFrom": {
-    "commit": "a733e62be3ee41ac5445f4e7848328518fe86ffd"
+    "commit": "3a7d7d7cdf9aefa523b6210915b4baf1c31a53ba"
   },
   "pairs": [
     {
       "a": ".github/workflows/ci.yml",
       "b": ".github/workflows/release-desktop.yml",
-      "either": 11,
+      "either": 12,
       "shared": 6,
-      "strength": 0.545455
+      "strength": 0.5
     },
     {
       "a": "apps/console/src/app.rs",
@@ -2621,9 +2731,9 @@
     {
       "a": "apps/desktop/src/app/AppShell.tsx",
       "b": "apps/desktop/src/styles/globals.css",
-      "either": 19,
+      "either": 20,
       "shared": 12,
-      "strength": 0.631579
+      "strength": 0.6
     },
     {
       "a": "apps/desktop/src/components/HistoryDrawer.tsx",
@@ -2635,43 +2745,43 @@
     {
       "a": "atlas/README.md",
       "b": "atlas/page.json",
-      "either": 16,
-      "shared": 16,
+      "either": 17,
+      "shared": 17,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/statistics.json",
-      "either": 16,
-      "shared": 16,
+      "either": 17,
+      "shared": 17,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/structure.json",
-      "either": 16,
-      "shared": 16,
+      "either": 17,
+      "shared": 17,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/statistics.json",
-      "either": 16,
-      "shared": 16,
+      "either": 17,
+      "shared": 17,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/structure.json",
-      "either": 16,
-      "shared": 16,
+      "either": 17,
+      "shared": 17,
       "strength": 1
     },
     {
       "a": "atlas/statistics.json",
       "b": "atlas/structure.json",
-      "either": 16,
-      "shared": 16,
+      "either": 17,
+      "shared": 17,
       "strength": 1
     },
     {
@@ -2755,16 +2865,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-10-04T20:20:49-04:00",
-    "inScopeFiles": 487,
+    "headDate": "2026-10-04T20:42:43-04:00",
+    "inScopeFiles": 468,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 89,
+    "qualifyingCommits": 90,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-08T00:20:49.000Z",
+    "since": "2026-04-08T00:42:43.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",
