@@ -93,68 +93,73 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 7,
-      "changed": 1,
+      "added": 0,
+      "changed": 13,
       "moved": 0,
       "parts": 3,
       "removed": 0
     },
     "items": [
       {
-        "kind": "door",
-        "sentence": "CI now also runs apps/desktop/src/ and apps/desktop/vite.config.ts.",
-        "subjects": [
-          ".github/workflows/ci.yml",
-          "apps/desktop/src/",
-          "apps/desktop/vite.config.ts"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "Release Desktop now also runs apps/desktop/src-tauri/build.rs, apps/desktop/src/ and apps/desktop/vite.config.ts.",
-        "subjects": [
-          ".github/workflows/release-desktop.yml",
-          "apps/desktop/src-tauri/build.rs",
-          "apps/desktop/src/",
-          "apps/desktop/vite.config.ts"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "Release Desktop now also builds apps/desktop/src-tauri/src/main.rs.",
-        "subjects": [
-          ".github/workflows/release-desktop.yml",
-          "apps/desktop/src-tauri/src/main.rs"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "And 1 more change to a door.",
-        "subjects": []
-      },
-      {
-        "kind": "landing",
-        "sentence": "apps/desktop/package.json is now read by packaging/check-release-version.mjs.",
-        "subjects": [
-          "apps/desktop/package.json",
-          "packaging/check-release-version.mjs"
-        ]
-      },
-      {
         "kind": "counts",
-        "sentence": "7 files added and 1 changed content, across 3 parts.",
+        "sentence": "Nothing structural changed since 2026-10-05; 13 files changed content.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "a733e62be3ee41ac5445f4e7848328518fe86ffd",
-      "generatedAt": "2026-10-05T00:41:59.507Z"
+      "commit": "3a7d7d7cdf9aefa523b6210915b4baf1c31a53ba",
+      "generatedAt": "2026-10-05T00:48:26.422Z"
     },
-    "unchanged": false
+    "unchanged": true
   },
   "changesTogether": [
     {
+      "a": "apps/console/src/app.rs",
+      "b": "apps/console/src/model.rs",
+      "either": 10,
+      "partLabels": [
+        "console",
+        "console"
+      ],
+      "parts": [
+        "console",
+        "console"
+      ],
+      "relation": "inside",
+      "shared": 9
+    },
+    {
       "a": "apps/console/src/model.rs",
+      "b": "apps/console/src/ui.rs",
+      "either": 10,
+      "partLabels": [
+        "console",
+        "console"
+      ],
+      "parts": [
+        "console",
+        "console"
+      ],
+      "relation": "inside",
+      "shared": 9
+    },
+    {
+      "a": "apps/console/src/input.rs",
+      "b": "apps/console/src/model.rs",
+      "either": 9,
+      "partLabels": [
+        "console",
+        "console"
+      ],
+      "parts": [
+        "console",
+        "console"
+      ],
+      "relation": "inside",
+      "shared": 8
+    },
+    {
+      "a": "apps/console/src/app.rs",
       "b": "apps/console/src/ui.rs",
       "either": 11,
       "partLabels": [
@@ -169,8 +174,8 @@
       "shared": 9
     },
     {
-      "a": "crates/runtime-core/src/services/session_service.rs",
-      "b": "crates/runtime-core/src/services/terminal_service.rs",
+      "a": "crates/runtime-core/src/pty.rs",
+      "b": "crates/runtime-core/src/services/session_service.rs",
       "either": 15,
       "partLabels": [
         "runtime-core",
@@ -182,59 +187,14 @@
       ],
       "relation": "inside",
       "shared": 12
-    },
-    {
-      "a": "apps/console/src/input.rs",
-      "b": "apps/console/src/model.rs",
-      "either": 10,
-      "partLabels": [
-        "console",
-        "console"
-      ],
-      "parts": [
-        "console",
-        "console"
-      ],
-      "relation": "inside",
-      "shared": 8
-    },
-    {
-      "a": "apps/console/src/input.rs",
-      "b": "apps/console/src/ui.rs",
-      "either": 10,
-      "partLabels": [
-        "console",
-        "console"
-      ],
-      "parts": [
-        "console",
-        "console"
-      ],
-      "relation": "inside",
-      "shared": 8
-    },
-    {
-      "a": "apps/console/src/app.rs",
-      "b": "apps/console/src/model.rs",
-      "either": 12,
-      "partLabels": [
-        "console",
-        "console"
-      ],
-      "parts": [
-        "console",
-        "console"
-      ],
-      "relation": "inside",
-      "shared": 9
     }
   ],
   "changesTogetherNote": [
     "Confidence is low: fewer than 25 source files reach 10 revisions in the window.",
-    "Window: 180 days; a pair counts from 3 shared commits, since 7 source files reach 10 revisions; the floor rises to 10 when 25 do."
+    "Window: 180 days; a pair counts from 3 shared commits, since 6 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "3a7d7d7cdf9aefa523b6210915b4baf1c31a53ba",
+  "commit": "e6cbe8438e17f599b5287419f49e8655bea91091",
   "defaultBranch": "main",
   "derived": "16 parts, mostly TypeScript (139 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
@@ -632,7 +592,7 @@
       ]
     }
   ],
-  "generatedAt": "2026-10-05T00:48:26.422Z",
+  "generatedAt": "2026-10-05T01:27:27.315Z",
   "limits": [
     "1 import could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository.",
     "2 writes and 3 reads use paths built at run time and are not named here.",
