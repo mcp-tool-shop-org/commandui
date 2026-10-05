@@ -1,20 +1,18 @@
 # commandui: how it works
 
-Mapped at 2026-10-04 from commit ae587f8 by Atlas 1.24.0.
+Mapped at 2026-10-05 from commit 4929659 by Atlas 1.24.0.
 
 ## What this is
 
-16 parts, mostly TypeScript (117 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).
+16 parts, mostly TypeScript (119 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).
 
-## What changed since 2026-10-04 (f9a0f07)
+## What changed since 2026-10-04 (ae587f8)
 
-- CI now also runs apps/desktop/vite.config.ts.
-- CI no longer runs apps/desktop/src/app/AppShell.honesty.test.tsx, apps/desktop/src/app/AppShell.result.test.tsx, apps/desktop/src/app/a11y.test.tsx and 30 more.
-- 2 files added and 10 changed content, across 4 parts.
+Nothing structural changed since 2026-10-04; 2 files added and 5 changed content.
 
 ## What comes in
 
-1. **CI.** On a pull request; on a push to main touching 18 paths; or by hand. Runs packaging/check-release-version.mjs, apps/console/src/app.rs, apps/console/src/event_sink.rs and 124 more; checks packages/api-contract/src/, packages/domain/src/, packages/state/src/ and 1 more.
+1. **CI.** On a pull request; on a push to main touching 18 paths; or by hand. Runs packaging/check-release-version.mjs, apps/console/src/app.rs, apps/console/src/event_sink.rs and 126 more; checks packages/api-contract/src/, packages/domain/src/, packages/state/src/ and 1 more.
 2. **Release Desktop.** When a release is published; or by hand. Runs packaging/pack-msix.ps1, apps/desktop/src-tauri/build.rs, apps/desktop/src/ and 1 more; builds apps/desktop/src-tauri/src/main.rs; checks apps/desktop/src-tauri/src/lib.rs. On a release event, it also runs packaging/check-release-version.mjs.
 3. **Deploy site to GitHub Pages.** On a pull request touching 2 paths; on a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
 4. **commandui-desktop** (the desktop app people install). Runs apps/desktop/src-tauri/src/main.rs.
@@ -22,7 +20,7 @@ Mapped at 2026-10-04 from commit ae587f8 by Atlas 1.24.0.
 
 ## What happens through CI
 
-1. The workflow runs packaging/check-release-version.mjs in packaging, packages/api-contract/src/contracts.test.ts in api-contract, 7 files in console, 93 files in desktop, packages/domain/src/memoryDetectors.test.ts and packages/domain/src/workflowPersist.test.ts in domain, and 23 files in 4 more parts; it checks packages/api-contract/src/ in api-contract, packages/domain/src/ in domain, packages/state/src/ in state and packages/ui/src/ in ui.
+1. The workflow runs packaging/check-release-version.mjs in packaging, packages/api-contract/src/contracts.test.ts in api-contract, 7 files in console, 95 files in desktop, packages/domain/src/memoryDetectors.test.ts and packages/domain/src/workflowPersist.test.ts in domain, and 23 files in 4 more parts; it checks packages/api-contract/src/ in api-contract, packages/domain/src/ in domain, packages/state/src/ in state and packages/ui/src/ in ui.
 2. It writes to apps/desktop/src-tauri/gen/schemas/.
 
 ## Who reads the results

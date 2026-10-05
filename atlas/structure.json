@@ -699,7 +699,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "b4b6a0b9368e3157c185e669b38184172ada9f660ff50784005a164f9ae4bc13",
+          "hash": "0a5357f864cde280a8616111fdf06691fa0a8de167023ccf2a58ab55f5a9f1b3",
           "path": "apps/desktop/e2e/large-text.browser.ts"
         },
         {
@@ -1288,190 +1288,190 @@
             {
               "in": "refreshSessionStatuses",
               "kind": "catch",
-              "line": 556
+              "line": 557
             },
             {
               "in": "reconcileSessionStates",
               "kind": "catch",
-              "line": 645
+              "line": 646
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 737
+              "line": 738
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 745
+              "line": 746
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 771
+              "line": 772
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 791
+              "line": 792
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 799
+              "line": 800
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 806
+              "line": 807
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 814
+              "line": 815
             },
             {
               "in": "boot",
               "kind": "catch",
-              "line": 822
+              "line": 823
             },
             {
               "in": "handleSubmit",
               "kind": "catch",
-              "line": 1505
+              "line": 1506
             },
             {
               "in": "handleSubmit",
               "kind": "throw",
-              "line": 1507
+              "line": 1508
             },
             {
               "in": "handleSubmit",
               "kind": "catch",
-              "line": 1573
+              "line": 1574
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1713
+              "line": 1714
             },
             {
               "in": "handleApprovePlan",
               "kind": "throw",
-              "line": 1723
+              "line": 1724
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1737
+              "line": 1738
             },
             {
               "in": "handleApprovePlan",
               "kind": "catch",
-              "line": 1747
+              "line": 1748
             },
             {
               "in": "handleSaveWorkflow",
               "kind": "catch",
-              "line": 1816
+              "line": 1817
             },
             {
               "in": "handleInterrupt",
               "kind": "catch",
-              "line": 1885
+              "line": 1886
             },
             {
               "in": "handleResync",
               "kind": "catch",
-              "line": 1907
+              "line": 1908
             },
             {
               "in": "handleCreateSession",
               "kind": "catch",
-              "line": 1925
+              "line": 1926
             },
             {
               "in": "handleCloseSession",
               "kind": "catch",
-              "line": 1972
+              "line": 1973
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "catch",
-              "line": 2048
+              "line": 2049
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "throw",
-              "line": 2050
+              "line": 2051
             },
             {
               "in": "handleRerunHistoryItem",
               "kind": "catch",
-              "line": 2056
+              "line": 2057
             },
             {
               "in": "handleSaveWorkflowFromHistory",
               "kind": "catch",
-              "line": 2144
+              "line": 2145
             },
             {
               "in": "handleRunWorkflow",
               "kind": "catch",
-              "line": 2332
+              "line": 2333
             },
             {
               "in": "handleRunWorkflow",
               "kind": "throw",
-              "line": 2334
+              "line": 2335
             },
             {
               "in": "handleRunWorkflow",
               "kind": "catch",
-              "line": 2410
+              "line": 2411
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "throw",
-              "line": 2490
+              "line": 2491
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "catch",
-              "line": 2502
+              "line": 2503
             },
             {
               "in": "handleAcceptSuggestion",
               "kind": "catch",
-              "line": 2519
+              "line": 2520
             },
             {
               "in": "handleWorkflowEditorConfirm",
               "kind": "catch",
-              "line": 2583
+              "line": 2584
             },
             {
               "in": "handleWorkflowEditorConfirm",
               "kind": "catch",
-              "line": 2596
+              "line": 2597
             },
             {
               "in": "handleDismissSuggestion",
               "kind": "catch",
-              "line": 2610
+              "line": 2611
             },
             {
               "in": "generateSuggestions",
               "kind": "catch",
-              "line": 2680
+              "line": 2681
             },
             {
               "in": "refreshPlannerStatus",
               "kind": "catch",
-              "line": 2791
+              "line": 2792
             }
           ],
-          "hash": "9af07562b49d1fd574d30c90985ccb5cf9af24cef4757a7be73bb1e392ecff7b",
+          "hash": "828173a519882e282473f97598516fbea0e8863cf53967ce5707c3a316e207f2",
           "importOrder": [
             "packages/domain/src/index.ts",
             "packages/api-contract/src/index.ts",
@@ -1497,6 +1497,7 @@
             "apps/desktop/src/components/HistoryDrawer.tsx",
             "apps/desktop/src/components/SessionTabs.tsx",
             "apps/desktop/src/components/SettingsDrawer.tsx",
+            "apps/desktop/src/components/FoldPanel.tsx",
             "apps/desktop/src/components/MemorySuggestions.tsx",
             "apps/desktop/src/components/MemoryDrawer.tsx",
             "apps/desktop/src/components/WorkflowDrawer.tsx",
@@ -1521,6 +1522,7 @@
             "apps/desktop/src/app/workflowStepWait.ts",
             "apps/desktop/src/components/CommandPalette.tsx",
             "apps/desktop/src/components/ConfirmDialog.tsx",
+            "apps/desktop/src/components/FoldPanel.tsx",
             "apps/desktop/src/components/HelpDialog.tsx",
             "apps/desktop/src/components/HistoryDrawer.tsx",
             "apps/desktop/src/components/InputComposer.tsx",
@@ -1715,6 +1717,21 @@
           "path": "apps/desktop/src/components/ErrorBoundary.tsx"
         },
         {
+          "hash": "6325cfbb5d7c1be03f9db8906b213e53f805339fceec4422fea09ebc665aee92",
+          "importsFiles": [
+            "apps/desktop/src/components/FoldPanel.tsx"
+          ],
+          "path": "apps/desktop/src/components/FoldPanel.test.tsx",
+          "testFramework": "vitest"
+        },
+        {
+          "exports": [
+            "FoldPanel"
+          ],
+          "hash": "effc83f8c44990adf9c0b37688aa8b660d5b6b72428407f0b138dc1de328e074",
+          "path": "apps/desktop/src/components/FoldPanel.tsx"
+        },
+        {
           "exports": [
             "HelpDialog"
           ],
@@ -1787,7 +1804,7 @@
           "path": "apps/desktop/src/components/MemoryDrawer.tsx"
         },
         {
-          "hash": "74384eae93466adc10be62166614030c86412e9762bbed198b184294b8ac5a0b",
+          "hash": "115bfa44bc12800ad479b64517d07d7c745ffa09a7bbc97757ebed08203642f4",
           "importOrder": [
             "packages/domain/src/index.ts",
             "apps/desktop/src/components/MemorySuggestions.tsx"
@@ -1803,8 +1820,13 @@
           "exports": [
             "MemorySuggestions"
           ],
-          "hash": "8578ef7ddf1534e53583a652c46acd891ff0719fbaecd6b9fe024d9a0965e38c",
+          "hash": "cdb953a68b71767800958d2d101ed12e901125da86367d794526c884178c362c",
+          "importOrder": [
+            "packages/domain/src/index.ts",
+            "apps/desktop/src/components/FoldPanel.tsx"
+          ],
           "importsFiles": [
+            "apps/desktop/src/components/FoldPanel.tsx",
             "packages/domain/src/index.ts"
           ],
           "path": "apps/desktop/src/components/MemorySuggestions.tsx"
@@ -2499,7 +2521,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "8cb29d362e41dbb55505a3e212beb841ef93b1a4f6b9e696d25652cc10fe31ba",
+          "hash": "4eb57b5873fe79bcd4c11292e9f5c8d8b8a19cc86cbf749acb20ec6086a29f7e",
           "path": "apps/desktop/src/styles/globals.css"
         },
         {
@@ -2556,7 +2578,7 @@
         "cargo test",
         "vitest"
       ],
-      "testedBy": 37,
+      "testedBy": 38,
       "unresolvedNamed": [
         {
           "path": "apps/desktop/src/app/AppShell.honesty.test.tsx",
@@ -4435,7 +4457,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 101
+          "files": 103
         },
         {
           "boundary": "domain",
@@ -4896,7 +4918,7 @@
         {
           "config": "apps/desktop/vite.config.ts",
           "dir": "apps/desktop",
-          "files": 33,
+          "files": 34,
           "job": "check-and-test",
           "runner": "vitest",
           "step": "pnpm test",
@@ -5292,7 +5314,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 113
+          "files": 115
         },
         {
           "boundary": "packaging",
@@ -5634,8 +5656,8 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "ae587f870048fb49365b2c0cfafdb3c0fda9c8cd",
-    "tracked": 437
+    "commit": "4929659ade8cf852c00d97a640c044a7026c907e",
+    "tracked": 439
   },
   "landings": [
     {
@@ -5992,7 +6014,7 @@
   "overlaps": [],
   "submodules": [],
   "symlinks": [],
-  "testFiles": 73,
+  "testFiles": 74,
   "unassigned": [],
   "workspaces": [
     "apps/desktop",
