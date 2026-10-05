@@ -29,7 +29,8 @@ Aún así, obtienes una interfaz real, con tu propio perfil y más de una sesió
 ## Instalación
 
 - **Microsoft Store:** [CommandUI en Microsoft Store](https://apps.microsoft.com/detail/9NTN1GFQJ91M). La tienda tiene una versión anterior hasta que se publique esta actualización.
-- **winget:** `winget install mcp-tool-shop.CommandUI` instala la v1.0.0 desde [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest).
+- **Descarga directa:** el archivo `.msi` o el instalador `.exe` desde [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest). No están firmados digitalmente, por lo que Windows podría pedirle que confirme antes de instalarlos.
+- **winget:** `winget install mcp-tool-shop.CommandUI` instala la versión 1.0.0 hasta que el catálogo de winget incluya la versión 1.0.2.
 
 Windows 10 o 11, x64. La función "Ask" necesita [Ollama](https://ollama.com) en el mismo ordenador con el modelo `qwen2.5:14b`. Todo lo demás funciona sin él.
 
@@ -102,6 +103,6 @@ Más: [Handbook](https://mcp-tool-shop-org.github.io/commandui/handbook/) · [De
 
 ## Estado
 
-v1.0.2, aún no publicada. La Microsoft Store tiene una versión anterior, y la versión pública de GitHub es la v1.0.0.
+La versión 1.0.2 está disponible en GitHub Releases. La actualización de Microsoft Store está en proceso de certificación. Las pruebas con Narrator, NVDA y los temas de contraste de Windows se realizarán en una actualización posterior.
 
 Creado por [MCP Tool Shop](https://mcp-tool-shop.github.io/).

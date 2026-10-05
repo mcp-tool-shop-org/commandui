@@ -28,8 +28,9 @@
 
 ## इंस्टॉल करें
 
-- **Microsoft Store:** [Microsoft Store पर CommandUI](https://apps.microsoft.com/detail/9NTN1GFQJ91M)। स्टोर में यह अपडेट प्रकाशित होने तक पहले का संस्करण उपलब्ध है।
-- **winget:** `winget install mcp-tool-shop.CommandUI` [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest) से v1.0.0 इंस्टॉल करता है।
+- **माइक्रोसॉफ्ट स्टोर:** [माइक्रोसॉफ्ट स्टोर पर कमांडयूआई](https://apps.microsoft.com/detail/9NTN1GFQJ91M)। इस अपडेट को प्रकाशित किए जाने तक स्टोर में इसका पुराना संस्करण उपलब्ध है।
+- **सीधा डाउनलोड:** `.msi` या सेटअप `.exe` को [गिटहब रिलीज़](https://github.com/mcp-tool-shop-org/commandui/releases/latest) से डाउनलोड करें। ये कोड-हस्ताक्षरित नहीं हैं, इसलिए विंडोज आपसे इन्हें स्थापित करने से पहले इसकी पुष्टि करने के लिए कह सकता है।
+- **विंगेट:** `winget install mcp-tool-shop.CommandUI`, विंगेट कैटलॉग में v1.0.2 आने तक v1.0.0 स्थापित करता है।
 
 Windows 10 या 11, x64। Ask को `qwen2.5:14b` मॉडल के साथ उसी कंप्यूटर पर [Ollama](https://ollama.com) की आवश्यकता होती है। बाकी सब कुछ इसके बिना काम करता है।
 
@@ -102,6 +103,6 @@ commandui/
 
 ## स्थिति
 
-v1.0.2, अभी तक जारी नहीं किया गया। Microsoft Store में पहले का संस्करण है, और सार्वजनिक GitHub रिलीज़ v1.0.0 है।
+v1.0.2 गिटहब रिलीज़ पर उपलब्ध है। माइक्रोसॉफ्ट स्टोर अपडेट प्रमाणीकरण प्रक्रिया में है। नैरेटर, एनवीडीए और विंडोज कंट्रास्ट थीम के साथ परीक्षण बाद के अपडेट में किया जाएगा।
 
 [MCP Tool Shop](https://mcp-tool-shop.github.io/) द्वारा निर्मित।

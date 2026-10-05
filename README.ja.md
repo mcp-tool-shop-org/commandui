@@ -28,8 +28,9 @@
 
 ## インストール
 
-- **Microsoft Store:** [Microsoft StoreのCommandUI](https://apps.microsoft.com/detail/9NTN1GFQJ91M)。ストアには、このアップデートが公開されるまでの古いバージョンがあります。
-- **winget:** `winget install mcp-tool-shop.CommandUI` を使用して、[GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest) からv1.0.0をインストールします。
+- **Microsoft Store:** [Microsoft StoreのCommandUI](https://apps.microsoft.com/detail/9NTN1GFQJ91M)。このアップデートが公開されるまでは、ストアにはそれ以前のバージョンがあります。
+- **直接ダウンロード:** `.msi`または[GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest)からセットアップファイル`.exe`をダウンロードします。これらはコード署名されていないため、Windowsはインストール前に確認を求める場合があります。
+- **winget:** `winget install mcp-tool-shop.CommandUI`は、wingetカタログにv1.0.2が登録されるまで、v1.0.0をインストールします。
 
 Windows 10または11、x64。Ask機能を使用するには、同じコンピューターに`qwen2.5:14b`モデルと[Ollama](https://ollama.com)が必要です。それ以外は、これらがなくても動作します。
 
@@ -102,6 +103,6 @@ commandui/
 
 ## ステータス
 
-v1.0.2、まだリリースされていません。Microsoft Storeには、それよりも古いバージョンがあります。GitHubの公開リリースはv1.0.0です。
+v1.0.2はGitHub Releasesで公開されています。Microsoft Storeのアップデートは現在、認証中です。Narrator、NVDA、およびWindowsのコントラストテーマを使用したテストは、今後のアップデートで行われます。
 
 [MCP Tool Shop](https://mcp-tool-shop.github.io/)によって作成されました。
