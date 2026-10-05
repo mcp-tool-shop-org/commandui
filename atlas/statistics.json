@@ -84,7 +84,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "desktop",
-      "qualifyingSourceCommits": 22,
+      "qualifyingSourceCommits": 23,
       "rebaseline": null
     },
     {
@@ -168,7 +168,7 @@
           "desktop"
         ]
       },
-      "cohesion": 0.712689,
+      "cohesion": 0.780407,
       "cohesionDropped": false,
       "confidence": "low",
       "highWater": null,
@@ -207,12 +207,12 @@
           "desktop"
         ]
       },
-      "cohesion": 0.256593,
+      "cohesion": 0.302013,
       "cohesionDropped": false,
       "confidence": "low",
       "highWater": null,
       "name": "runtime-planner",
-      "qualifyingSourceCommits": 8,
+      "qualifyingSourceCommits": 9,
       "rebaseline": null
     },
     {
@@ -576,8 +576,8 @@
         "path": ".claude/workflows/ship-feature.md"
       },
       {
-        "commits": 13,
-        "lines": 274,
+        "commits": 14,
+        "lines": 293,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -1086,8 +1086,8 @@
         "path": "apps/desktop/src/app/AppShell.honesty.test.tsx"
       },
       {
-        "commits": 3,
-        "lines": 123,
+        "commits": 2,
+        "lines": 119,
         "path": "apps/desktop/src/app/AppShell.result.test.tsx"
       },
       {
@@ -1096,8 +1096,8 @@
         "path": "apps/desktop/src/app/AppShell.runtime.test.tsx"
       },
       {
-        "commits": 4,
-        "lines": 610,
+        "commits": 3,
+        "lines": 592,
         "path": "apps/desktop/src/app/AppShell.test.tsx"
       },
       {
@@ -1206,23 +1206,23 @@
         "path": "apps/desktop/src/components/HelpDialog.tsx"
       },
       {
-        "commits": 5,
-        "lines": 254,
+        "commits": 4,
+        "lines": 246,
         "path": "apps/desktop/src/components/HistoryDrawer.test.tsx"
       },
       {
-        "commits": 8,
-        "lines": 491,
+        "commits": 7,
+        "lines": 477,
         "path": "apps/desktop/src/components/HistoryDrawer.tsx"
       },
       {
         "commits": 5,
-        "lines": 169,
+        "lines": 181,
         "path": "apps/desktop/src/components/InputComposer.test.tsx"
       },
       {
         "commits": 6,
-        "lines": 181,
+        "lines": 203,
         "path": "apps/desktop/src/components/InputComposer.tsx"
       },
       {
@@ -1381,8 +1381,8 @@
         "path": "apps/desktop/src/features/persistence/persistenceClient.ts"
       },
       {
-        "commits": 1,
-        "lines": 11,
+        "commits": 2,
+        "lines": 27,
         "path": "apps/desktop/src/features/planner/plannerClient.ts"
       },
       {
@@ -1441,13 +1441,13 @@
         "path": "apps/desktop/src/lib/commandError.ts"
       },
       {
-        "commits": 3,
-        "lines": 366,
+        "commits": 2,
+        "lines": 357,
         "path": "apps/desktop/src/lib/commandResult.test.ts"
       },
       {
-        "commits": 3,
-        "lines": 577,
+        "commits": 2,
+        "lines": 569,
         "path": "apps/desktop/src/lib/commandResult.ts"
       },
       {
@@ -1456,8 +1456,8 @@
         "path": "apps/desktop/src/lib/displayPath.test.ts"
       },
       {
-        "commits": 3,
-        "lines": 46,
+        "commits": 2,
+        "lines": 40,
         "path": "apps/desktop/src/lib/displayPath.ts"
       },
       {
@@ -1571,13 +1571,13 @@
         "path": "apps/desktop/src/lib/shortcuts.ts"
       },
       {
-        "commits": 2,
-        "lines": 134,
+        "commits": 3,
+        "lines": 153,
         "path": "apps/desktop/src/lib/tauriInvoke.test.ts"
       },
       {
-        "commits": 3,
-        "lines": 72,
+        "commits": 4,
+        "lines": 89,
         "path": "apps/desktop/src/lib/tauriInvoke.ts"
       },
       {
@@ -1616,8 +1616,8 @@
         "path": "apps/desktop/src/styles/contrast.test.ts"
       },
       {
-        "commits": 8,
-        "lines": 2050,
+        "commits": 7,
+        "lines": 2025,
         "path": "apps/desktop/src/styles/globals.css"
       },
       {
@@ -1626,8 +1626,8 @@
         "path": "apps/desktop/src/styles/nodeBuiltins.d.ts"
       },
       {
-        "commits": 3,
-        "lines": 60,
+        "commits": 2,
+        "lines": 53,
         "path": "apps/desktop/src/styles/reflow.test.ts"
       },
       {
@@ -1646,8 +1646,8 @@
         "path": "apps/desktop/vite.config.ts"
       },
       {
-        "commits": 11,
-        "lines": 409,
+        "commits": 9,
+        "lines": 370,
         "path": "atlas/README.md"
       },
       {
@@ -1656,18 +1656,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 11,
-        "lines": 2323,
+        "commits": 9,
+        "lines": 2185,
         "path": "atlas/page.json"
       },
       {
-        "commits": 11,
-        "lines": 5594,
+        "commits": 9,
+        "lines": 5036,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 11,
-        "lines": 10364,
+        "commits": 9,
+        "lines": 10253,
         "path": "atlas/structure.json"
       },
       {
@@ -1776,8 +1776,8 @@
         "path": "crates/runtime-planner/Cargo.toml"
       },
       {
-        "commits": 7,
-        "lines": 737,
+        "commits": 8,
+        "lines": 744,
         "path": "crates/runtime-planner/src/client.rs"
       },
       {
@@ -1806,8 +1806,8 @@
         "path": "crates/runtime-planner/src/status.rs"
       },
       {
-        "commits": 2,
-        "lines": 130,
+        "commits": 3,
+        "lines": 146,
         "path": "crates/runtime-planner/src/types.rs"
       },
       {
@@ -1936,8 +1936,8 @@
         "path": "docs/handbook/src/product-behavior/settings.md"
       },
       {
-        "commits": 5,
-        "lines": 72,
+        "commits": 4,
+        "lines": 68,
         "path": "docs/handbook/src/user-guide/history.md"
       },
       {
@@ -2521,8 +2521,8 @@
         "path": "site/src/content/docs/handbook/first-ten-minutes.md"
       },
       {
-        "commits": 5,
-        "lines": 77,
+        "commits": 4,
+        "lines": 73,
         "path": "site/src/content/docs/handbook/history.md"
       },
       {
@@ -2681,17 +2681,17 @@
     "level": "low",
     "reason": "fewer than 25 source files reach 10 revisions in the window"
   },
-  "generatedAt": "2026-10-05T01:51:09.853Z",
+  "generatedAt": "2026-10-05T02:06:29.376Z",
   "generatedFrom": {
-    "commit": "df8c39e2eed8ebc66b54bd4e657fd2eb0442eaa3"
+    "commit": "eb408fdcb9c7db1945f69d64fe0ca1bd924e4a84"
   },
   "pairs": [
     {
       "a": ".github/workflows/ci.yml",
       "b": ".github/workflows/release-desktop.yml",
-      "either": 11,
+      "either": 12,
       "shared": 6,
-      "strength": 0.545455
+      "strength": 0.5
     },
     {
       "a": "apps/console/src/app.rs",
@@ -2745,43 +2745,43 @@
     {
       "a": "atlas/README.md",
       "b": "atlas/page.json",
-      "either": 8,
-      "shared": 8,
+      "either": 7,
+      "shared": 7,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/statistics.json",
-      "either": 8,
-      "shared": 8,
+      "either": 7,
+      "shared": 7,
       "strength": 1
     },
     {
       "a": "atlas/README.md",
       "b": "atlas/structure.json",
-      "either": 8,
-      "shared": 8,
+      "either": 7,
+      "shared": 7,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/statistics.json",
-      "either": 8,
-      "shared": 8,
+      "either": 7,
+      "shared": 7,
       "strength": 1
     },
     {
       "a": "atlas/page.json",
       "b": "atlas/structure.json",
-      "either": 8,
-      "shared": 8,
+      "either": 7,
+      "shared": 7,
       "strength": 1
     },
     {
       "a": "atlas/statistics.json",
       "b": "atlas/structure.json",
-      "either": 8,
-      "shared": 8,
+      "either": 7,
+      "shared": 7,
       "strength": 1
     },
     {
@@ -2828,13 +2828,6 @@
     },
     {
       "a": "crates/runtime-core/src/services/terminal_service.rs",
-      "b": "crates/runtime-planner/src/client.rs",
-      "either": 10,
-      "shared": 5,
-      "strength": 0.5
-    },
-    {
-      "a": "crates/runtime-core/src/services/terminal_service.rs",
       "b": "crates/runtime-planner/src/validate.rs",
       "either": 10,
       "shared": 6,
@@ -2850,9 +2843,9 @@
     {
       "a": "crates/runtime-planner/src/client.rs",
       "b": "crates/runtime-planner/src/validate.rs",
-      "either": 7,
+      "either": 8,
       "shared": 4,
-      "strength": 0.571429
+      "strength": 0.5
     }
   ],
   "parameters": {
@@ -2865,16 +2858,16 @@
     "floor": "fallen",
     "floorHeld": false,
     "floorTrigger": "revision-depth",
-    "headDate": "2026-10-04T21:51:05-04:00",
+    "headDate": "2026-10-04T22:06:21-04:00",
     "inScopeFiles": 470,
     "pinnedStart": null,
     "priorFloor": "fallen",
-    "qualifyingCommits": 65,
+    "qualifyingCommits": 66,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 3,
-    "since": "2026-04-08T01:51:05.000Z",
+    "since": "2026-04-08T02:06:21.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

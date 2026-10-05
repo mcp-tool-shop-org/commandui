@@ -8,49 +8,50 @@
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/commandui/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/commandui/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://codecov.io/gh/mcp-tool-shop-org/commandui"><img src="https://codecov.io/gh/mcp-tool-shop-org/commandui/graph/badge.svg" alt="Coverage" /></a>
   <a href="https://github.com/mcp-tool-shop-org/commandui/releases/latest"><img src="https://img.shields.io/github/v/release/mcp-tool-shop-org/commandui?label=Release" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT License" /></a>
   <a href="https://mcp-tool-shop-org.github.io/commandui/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page" /></a>
   <a href="https://mcp-tool-shop-org.github.io/commandui/handbook/"><img src="https://img.shields.io/badge/Handbook-read-blue" alt="Handbook" /></a>
 </p>
 
-Una interfaz para aquellos a quienes la terminal no da acceso. CommandUI explica cada resultado en lenguaje sencillo, permite solicitar un comando en lenguaje sencillo y nunca ejecuta un comando redactado hasta que lo haya visto y aprobado.
+Una interfaz para aquellos a quienes la terminal les resulta inaccesible. CommandUI explica cada resultado en lenguaje sencillo, permite solicitar un comando en lenguaje sencillo y nunca ejecuta un comando redactado hasta que lo haya visto y aprobado.
 
 ## Para quién es
 
 - Personas que utilizan un lector de pantalla o que no utilizan un ratón
 - Personas con baja visión, que necesitan texto más grande o un tema de alto contraste
-- Personas a las que les resulta difícil seguir lo que ocurre en la terminal, incluidos principiantes y personas con discapacidades cognitivas o de aprendizaje
+- Personas a las que les resulta difícil seguir lo que ocurre en la terminal, incluidos los principiantes y las personas con discapacidades cognitivas o de aprendizaje
 - Cualquiera que quiera leer un comando antes de que se ejecute
 
-Aún así, obtienes una interfaz real, con tu propio perfil y más de una sesión. Escribir un comando funciona como siempre lo ha hecho.
+Aún así, obtienes una interfaz real, con tu propio perfil y más de una sesión. Escribir un comando funciona como siempre.
 
 ## Instalación
 
-- **Microsoft Store:** [CommandUI en Microsoft Store](https://apps.microsoft.com/detail/9NTN1GFQJ91M). Actualmente, la tienda tiene una versión anterior. La actualización descrita aquí está a la espera de pruebas de accesibilidad antes de que se envíe.
-- **winget:** `winget install mcp-tool-shop.CommandUI` instala v1.0.0 desde [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest).
+- **Microsoft Store:** [CommandUI en Microsoft Store](https://apps.microsoft.com/detail/9NTN1GFQJ91M). La tienda tiene una versión anterior hasta que se publique esta actualización.
+- **winget:** `winget install mcp-tool-shop.CommandUI` instala la v1.0.0 desde [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest).
 
-Windows 10 o 11, x64. Ask necesita [Ollama](https://ollama.com) en el mismo ordenador con el modelo `qwen2.5:14b`. Todo lo demás funciona sin él.
+Windows 10 o 11, x64. La función "Ask" necesita [Ollama](https://ollama.com) en el mismo ordenador con el modelo `qwen2.5:14b`. Todo lo demás funciona sin él.
 
 ## Qué hace
 
-- **Cada resultado en una frase.** "Finalizado. 3 líneas de salida" o "No funcionó (código de salida 1). Un archivo o carpeta en ese comando no existe". Un fallo ofrece **Preguntar cómo solucionarlo** y **Volver a ejecutar**.
+- **Cada resultado en una frase.** "Finalizado. 3 líneas de salida" o "No funcionó (código de salida 1). No existe un archivo o carpeta en ese comando". En caso de error, ofrece **Preguntar cómo solucionarlo** y **Volver a ejecutar**.
 - **Preguntar en lenguaje sencillo.** Describe la tarea, y CommandUI redacta un comando, lo explica y espera. **Ejecutar plan** es la aprobación, y **Rechazar** no ejecuta nada. Cuando no puede explicar un comando, lo indica.
-- **Un sí cuidadoso.** Un comando que elimina archivos o necesita permisos más altos espera hasta que escribas el nombre de la carpeta.
+- **Un "sí" cuidadoso.** Un comando que elimina archivos o necesita permisos más altos espera hasta que escribas el nombre de la carpeta.
 - **El comando sigue ejecutando lo que escribes.** Si una línea parece una solicitud, CommandUI ofrece preguntar en lugar de ejecutar la frase.
-- **Flujos de trabajo que puedes crear.** Crea una lista de comandos, edítala, ejecútala y elimínala. Se puede deshacer una eliminación. El historial puede guardar los comandos que elijas.
-- **Historial y memoria que controlas.** Busca lo que se ejecutó y lee o elimina lo que CommandUI ha notado.
+- **Flujos de trabajo que puedes crear.** Crea una lista de comandos, edítala, ejecútala y elimínala. Se puede deshacer una eliminación. El historial puede guardar los comandos que selecciones.
+- **Historial y memoria que controlas.** Busca lo que se ejecutó y lee o elimina lo que CommandUI ha detectado.
 
 ## Diseñado para el teclado y para los lectores de pantalla
 
-- Los resultados y los errores se anuncian una vez, sin mover el foco.
+- Los resultados y los errores se anuncian una sola vez, sin cambiar el foco.
 - **Salida** (Ctrl+Shift+O) muestra la salida de cada comando como texto sin formato, una región por comando, sin códigos de terminal.
 - **F1** abre la ayuda del teclado. **Ctrl+Shift+R** salta al último resultado. **Ctrl+Shift+A** cambia entre Comando y Preguntar.
 - Cada cuadro de diálogo mantiene el foco dentro de él, y Escape lo cierra y devuelve el foco a donde estabas.
 - El tamaño del texto va del 100% al 200% en la configuración. Los paneles debajo de la terminal se pueden ocultar.
 - Se respetan los temas de contraste de Windows y la configuración de movimiento reducido.
 
-**Qué no se ha probado todavía:** Narrator, NVDA y los temas de contraste de Windows no han sido probados por personas en esta versión. Estas pruebas se realizarán antes de la actualización en la tienda. Hasta entonces, considera la lista anterior como lo que la aplicación está diseñada para hacer, no como una afirmación probada.
+**Qué no se ha probado todavía:** Narrator, NVDA y los temas de contraste de Windows no han sido probados por personas en esta versión. Estas pruebas se realizarán en una actualización posterior. Hasta entonces, considera la lista anterior como lo que la aplicación está diseñada para hacer, no como una afirmación probada.
 
 ## Seguridad
 
@@ -101,6 +102,6 @@ Más: [Handbook](https://mcp-tool-shop-org.github.io/commandui/handbook/) · [De
 
 ## Estado
 
-v1.0.2, aún no lanzado. La Microsoft Store tiene una versión anterior, y la versión pública de GitHub es v1.0.0.
+v1.0.2, aún no publicada. La Microsoft Store tiene una versión anterior, y la versión pública de GitHub es la v1.0.0.
 
 Creado por [MCP Tool Shop](https://mcp-tool-shop.github.io/).

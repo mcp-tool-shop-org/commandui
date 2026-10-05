@@ -28,7 +28,7 @@ You still get a real shell, with your own profile and more than one session. Typ
 
 ## Install
 
-- **Microsoft Store:** [CommandUI on the Microsoft Store](https://apps.microsoft.com/detail/9NTN1GFQJ91M). The Store currently has an earlier version. The update described here is waiting on accessibility testing before it is submitted.
+- **Microsoft Store:** [CommandUI on the Microsoft Store](https://apps.microsoft.com/detail/9NTN1GFQJ91M). The Store has an earlier version until this update is published there.
 - **winget:** `winget install mcp-tool-shop.CommandUI` installs v1.0.0 from [GitHub Releases](https://github.com/mcp-tool-shop-org/commandui/releases/latest).
 
 Windows 10 or 11, x64. Ask needs [Ollama](https://ollama.com) on the same computer with the `qwen2.5:14b` model. Everything else works without it.
@@ -51,7 +51,7 @@ Windows 10 or 11, x64. Ask needs [Ollama](https://ollama.com) on the same comput
 - Text size goes from 100% to 200% in Settings. The panels below the terminal can be hidden.
 - Windows contrast themes and reduced-motion settings are respected.
 
-**What has not been tested yet:** Narrator, NVDA, and Windows contrast themes have not been tested by people on this build. Those runs come before the Store update. Until then, treat the list above as what the app is built to do, not a tested claim.
+**What has not been tested yet:** Narrator, NVDA, and Windows contrast themes have not been tested by people on this build. Those runs come in a later update. Until then, treat the list above as what the app is built to do, not a tested claim.
 
 ## Security
 

@@ -260,7 +260,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "591732d583821a86ce8df8e5d9116366724c723bdf9a15d6f8697d299937d58a",
+          "hash": "b176bf3ed63168603d9cda66f774e6a5eca8670fea06092ee304a16d75f6b685",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -1862,7 +1862,7 @@
           "path": "apps/desktop/src/components/HistoryDrawer.tsx"
         },
         {
-          "hash": "1dfce9182ac46d36f3c38e886916bf72506064c1b59ed08c26455910e2edae97",
+          "hash": "4648c1806fc67cfe4a48602d12600f07e3961c93fc50a615d593de800ab0073b",
           "importsFiles": [
             "apps/desktop/src/components/InputComposer.tsx"
           ],
@@ -1870,7 +1870,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "74e9a0c6e53aba56bcb48676032188122546d651aa25eec3c5d1ce4759428397",
+          "hash": "583ff327cffa519e1a68e6628d83db4fcc77ca6ecdf4353376cef09361d38f24",
           "importsFiles": [
             "packages/state/src/index.ts"
           ],
@@ -2293,7 +2293,7 @@
           "exports": [
             "generatePlan"
           ],
-          "hash": "2a5699f6c84b62e898ffa811d162d86985d1c3b3208e4e765ad9a44b2bacb175",
+          "hash": "93fcbe8f66c1da2345fb99e7a51eb418b8bf803ed0835f389b87bfc2a403274b",
           "importsFiles": [
             "apps/desktop/src/lib/tauriInvoke.ts",
             "packages/api-contract/src/index.ts"
@@ -2674,7 +2674,7 @@
           "path": "apps/desktop/src/lib/shortcuts.ts"
         },
         {
-          "hash": "4637850496108da4d01cf422b43ecc4b61ae79e3d49586ae7058ad3c51afcc02",
+          "hash": "ea022ad73fd2ad9252d4c8e69effc82ce76b2dce0b42aae761c5933219e388fe",
           "importsFiles": [
             "apps/desktop/src/lib/commandError.ts",
             "apps/desktop/src/lib/mockBridge.ts",
@@ -2692,15 +2692,15 @@
             {
               "in": "tauriInvoke",
               "kind": "catch",
-              "line": 35
+              "line": 42
             },
             {
               "in": "tauriInvoke",
               "kind": "throw",
-              "line": 44
+              "line": 51
             }
           ],
-          "hash": "d434f9c422b04e7220c638c6bd21b49b0e842e92acf2a0c95e9995c498c1b01c",
+          "hash": "39b204ce75a1367347a8c1becb265769757b882a6e3404ccd1040fa96f1bf0bf",
           "importOrder": [
             "apps/desktop/src/lib/mockBridge.ts",
             "apps/desktop/src/lib/commandError.ts"
@@ -4052,15 +4052,15 @@
             {
               "in": "try_ollama",
               "kind": "err",
-              "line": 77
+              "line": 80
             },
             {
               "in": "list_models",
               "kind": "err",
-              "line": 126
+              "line": 131
             }
           ],
-          "hash": "44842cd5d977f731b3d584207f2b840785f1d7082f6a9feb24ff79006167c80a",
+          "hash": "73f3a215888880227719147db5abfb4e6e0a4d41901856a1380836ef2f24e7d2",
           "importsFiles": [
             "crates/runtime-planner/src/prompt.rs",
             "crates/runtime-planner/src/types.rs",
@@ -4168,8 +4168,9 @@
           "testsInside": true
         },
         {
-          "hash": "1f1551620b510813bfe1a0571263bba164d2397f0a851b08f2497f77595f85b9",
-          "path": "crates/runtime-planner/src/types.rs"
+          "hash": "16a2182575676b69918cd7b7fe587db068ee455e2ec1794cf8fa6a012863ac73",
+          "path": "crates/runtime-planner/src/types.rs",
+          "testsInside": true
         },
         {
           "exports": [
@@ -4243,7 +4244,7 @@
       "testRunners": [
         "cargo test"
       ],
-      "testedBy": 7,
+      "testedBy": 8,
       "testedInside": true,
       "unresolvedSites": 0
     },
@@ -4674,6 +4675,17 @@
         },
         {
           "dir": "",
+          "job": "codecov",
+          "programs": [
+            "chmod",
+            "curl",
+            "echo",
+            "sha256sum"
+          ],
+          "step": "Fetch the Codecov uploader"
+        },
+        {
+          "dir": "",
           "job": "windows-shells",
           "programs": [
             "cargo"
@@ -5093,51 +5105,10 @@
           "via": "cargo test"
         },
         {
+          "directory": true,
           "job": "check-and-test",
           "matched": true,
-          "path": "crates/runtime-planner/src/client.rs",
-          "runKind": "executes",
-          "via": "cargo test"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "crates/runtime-planner/src/lib.rs",
-          "runKind": "executes",
-          "via": "cargo test"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "crates/runtime-planner/src/mock.rs",
-          "runKind": "executes",
-          "via": "cargo test"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "crates/runtime-planner/src/parity.rs",
-          "runKind": "executes",
-          "via": "cargo test"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "crates/runtime-planner/src/prompt.rs",
-          "runKind": "executes",
-          "via": "cargo test"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "crates/runtime-planner/src/status.rs",
-          "runKind": "executes",
-          "via": "cargo test"
-        },
-        {
-          "job": "check-and-test",
-          "matched": true,
-          "path": "crates/runtime-planner/src/validate.rs",
+          "path": "crates/runtime-planner/",
           "runKind": "executes",
           "via": "cargo test"
         },
@@ -5207,7 +5178,7 @@
           "runKind": "executes"
         }
       ],
-      "runsCount": 47,
+      "runsCount": 41,
       "secrets": [],
       "sends": {
         "deploysPages": false,
@@ -5223,7 +5194,7 @@
       "tests": [
         {
           "coverage": true,
-          "files": 36,
+          "files": 37,
           "job": "check-and-test",
           "runner": "cargo test",
           "step": "Cargo test with coverage (crates)"
@@ -5979,7 +5950,7 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "df8c39e2eed8ebc66b54bd4e657fd2eb0442eaa3",
+    "commit": "eb408fdcb9c7db1945f69d64fe0ca1bd924e4a84",
     "tracked": 465
   },
   "landings": [
@@ -6349,7 +6320,7 @@
   "overlaps": [],
   "submodules": [],
   "symlinks": [],
-  "testFiles": 93,
+  "testFiles": 94,
   "unassigned": [],
   "workspaces": [
     "apps/desktop",

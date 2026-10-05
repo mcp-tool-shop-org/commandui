@@ -93,24 +93,46 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 2,
-      "changed": 11,
+      "added": 0,
+      "changed": 8,
       "moved": 0,
       "parts": 3,
       "removed": 0
     },
     "items": [
       {
+        "kind": "door",
+        "sentence": "CI now also runs crates/runtime-planner/.",
+        "subjects": [
+          ".github/workflows/ci.yml",
+          "crates/runtime-planner/"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "CI no longer runs crates/runtime-planner/src/client.rs, crates/runtime-planner/src/lib.rs, crates/runtime-planner/src/mock.rs and 4 more.",
+        "subjects": [
+          ".github/workflows/ci.yml",
+          "crates/runtime-planner/src/client.rs",
+          "crates/runtime-planner/src/lib.rs",
+          "crates/runtime-planner/src/mock.rs",
+          "crates/runtime-planner/src/parity.rs",
+          "crates/runtime-planner/src/prompt.rs",
+          "crates/runtime-planner/src/status.rs",
+          "crates/runtime-planner/src/validate.rs"
+        ]
+      },
+      {
         "kind": "counts",
-        "sentence": "Nothing structural changed since 2026-10-05; 2 files added and 11 changed content.",
+        "sentence": "8 files changed content, across 3 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "e6cbe8438e17f599b5287419f49e8655bea91091",
-      "generatedAt": "2026-10-05T01:27:27.315Z"
+      "commit": "df8c39e2eed8ebc66b54bd4e657fd2eb0442eaa3",
+      "generatedAt": "2026-10-05T01:51:09.853Z"
     },
-    "unchanged": true
+    "unchanged": false
   },
   "changesTogether": [
     {
@@ -194,7 +216,7 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 6 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "df8c39e2eed8ebc66b54bd4e657fd2eb0442eaa3",
+  "commit": "eb408fdcb9c7db1945f69d64fe0ca1bd924e4a84",
   "defaultBranch": "main",
   "derived": "16 parts, mostly TypeScript (141 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
@@ -299,20 +321,14 @@
         "crates/runtime-persistence/src/schema.rs",
         "crates/runtime-persistence/src/settings.rs",
         "crates/runtime-persistence/src/workflow.rs",
-        "crates/runtime-planner/src/client.rs",
-        "crates/runtime-planner/src/lib.rs",
-        "crates/runtime-planner/src/mock.rs",
-        "crates/runtime-planner/src/parity.rs",
-        "crates/runtime-planner/src/prompt.rs",
-        "crates/runtime-planner/src/status.rs",
-        "crates/runtime-planner/src/validate.rs",
+        "crates/runtime-planner/",
         "packages/api-contract/src/contracts.test.ts",
         "packages/domain/src/memoryDetectors.test.ts",
         "packages/domain/src/workflowPersist.test.ts",
         "packages/state/src/index.test.ts"
       ],
-      "runsCount": 43,
-      "runsMore": 148,
+      "runsCount": 37,
+      "runsMore": 149,
       "sends": [
         "uploads coverage to Codecov"
       ],
@@ -592,7 +608,7 @@
       ]
     }
   ],
-  "generatedAt": "2026-10-05T01:51:09.853Z",
+  "generatedAt": "2026-10-05T02:06:29.376Z",
   "limits": [
     "1 import could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository.",
     "2 writes and 3 reads use paths built at run time and are not named here.",
@@ -635,7 +651,7 @@
   ],
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 93,
+  "testFiles": 94,
   "testedBy": {
     "api-contract": 21,
     "console": 7,
@@ -643,7 +659,7 @@
     "domain": 20,
     "runtime-core": 9,
     "runtime-persistence": 6,
-    "runtime-planner": 7,
+    "runtime-planner": 8,
     "state": 15,
     "ui": 0
   },

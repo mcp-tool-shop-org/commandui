@@ -175,10 +175,25 @@ jobs:
         with:
           name: codecov-coverage
           path: coverage
+      # The action normally fetches the uploader from cli.codecov.io. On
+      # 2026-10-05 that host refused TLS from the runners for hours while
+      # Codecov reported no incident, and every upload failed. The same
+      # release is published on GitHub; it is fetched from there and checked
+      # against a pinned SHA-256, so the action's own integrity check (which
+      # needs cli.codecov.io) is replaced, not dropped.
+      - name: Fetch the Codecov uploader
+        env:
+          CODECOV_CLI_VERSION: v11.3.1
+          CODECOV_CLI_SHA256: ca1d64196d2d34771084afe76ea657d581bf628e31d993ff8e52ea09cc88a56d
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/codecov" \
+            "https://github.com/codecov/codecov-cli/releases/download/${CODECOV_CLI_VERSION}/codecovcli_linux"
+          echo "${CODECOV_CLI_SHA256}  $RUNNER_TEMP/codecov" | sha256sum --check --strict
+          chmod +x "$RUNNER_TEMP/codecov"
       - name: Upload Rust coverage
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
-          version: v11.3.1
+          binary: ${{ runner.temp }}/codecov
           use_oidc: true
           fail_ci_if_error: true
           disable_search: true
@@ -187,7 +202,7 @@ jobs:
       - name: Upload TypeScript coverage
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
-          version: v11.3.1
+          binary: ${{ runner.temp }}/codecov
           use_oidc: true
           fail_ci_if_error: true
           disable_search: true

@@ -30,7 +30,7 @@ export const config: SiteConfig = {
       cards: [
         {
           title: 'Microsoft Store',
-          code: 'apps.microsoft.com/detail/9NTN1GFQJ91M\n\n# The Store has an earlier version. The update\n# waits on accessibility testing first.',
+          code: 'apps.microsoft.com/detail/9NTN1GFQJ91M\n\n# The Store has an earlier version until this\n# update is published there.',
         },
         {
           title: 'winget',
@@ -78,7 +78,7 @@ export const config: SiteConfig = {
       kind: 'features',
       id: 'accessibility',
       title: 'Built for the keyboard and screen readers',
-      subtitle: 'Narrator, NVDA, and contrast-theme testing by people is still to come on this build.',
+      subtitle: 'Narrator, NVDA, and contrast-theme testing by people comes in a later update.',
       features: [
         {
           title: 'Announced, not just shown',

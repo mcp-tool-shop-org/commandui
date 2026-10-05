@@ -31,6 +31,9 @@ struct OllamaGenerateResponse {
     response: String,
 }
 
+/// The longest a model-list status check waits.
+const STATUS_TIMEOUT_SECS: u64 = 10;
+
 /// Try to generate a proposal via Ollama.
 /// Returns the full PlanResult on success, or an error string on failure.
 pub(crate) async fn try_ollama(
@@ -109,8 +112,10 @@ struct TagModel {
 /// Local model list. An error means the endpoint could not be asked.
 /// This only calls the configured endpoint. It never calls a cloud host of its own.
 pub(crate) async fn list_models(config: &OllamaConfig) -> Result<Vec<String>, String> {
+    // Listing models loads nothing, so the status check stays quick even
+    // though a plan request may wait for a model to load.
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(config.timeout_secs.max(1)))
+        .timeout(Duration::from_secs(config.timeout_secs.clamp(1, STATUS_TIMEOUT_SECS)))
         .build()
         .map_err(|e| format!("HTTP client: {e}"))?;
     let endpoint = config.endpoint.trim().trim_end_matches('/');

@@ -2,6 +2,15 @@ import { mockInvoke } from "./mockBridge";
 import { CommandError, commandErrorFrom } from "./commandError";
 
 const TAURI_INVOKE_TIMEOUT_MS = 15000;
+const TIMEOUT_MESSAGE =
+  "CommandUI did not answer in time. Try again. If it keeps happening, restart CommandUI.";
+
+export type InvokeOptions = {
+  /** How long to wait. Most calls answer at once; a plan can wait for a model to load. */
+  timeoutMs?: number;
+  /** What to tell the user when the wait runs out. */
+  timeoutMessage?: string;
+};
 
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -10,6 +19,7 @@ function isTauriRuntime(): boolean {
 export async function tauriInvoke<T>(
   command: string,
   args?: Record<string, unknown>,
+  options: InvokeOptions = {},
 ): Promise<T> {
   if (!isTauriRuntime()) {
     return mockInvoke<T>(command, args);
@@ -19,12 +29,9 @@ export async function tauriInvoke<T>(
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       reject(
-        new CommandError(
-          "UNKNOWN_ERROR",
-          "CommandUI did not answer in time. Try again. If it keeps happening, restart CommandUI.",
-        ),
+        new CommandError("UNKNOWN_ERROR", options.timeoutMessage ?? TIMEOUT_MESSAGE),
       );
-    }, TAURI_INVOKE_TIMEOUT_MS);
+    }, options.timeoutMs ?? TAURI_INVOKE_TIMEOUT_MS);
   });
 
   try {
