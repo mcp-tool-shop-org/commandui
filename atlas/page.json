@@ -33,7 +33,7 @@
       "partLabel": "runtime-core"
     },
     {
-      "doors": 4,
+      "doors": 3,
       "importedBy": [
         "console",
         "desktop"
@@ -55,7 +55,7 @@
       "partLabel": "api-contract"
     },
     {
-      "doors": 3,
+      "doors": 2,
       "importedBy": [
         "desktop"
       ],
@@ -87,36 +87,114 @@
       "importedBy": [],
       "importedByTests": [],
       "kind": "part",
-      "name": "console",
-      "partLabel": "console"
+      "name": "packaging",
+      "partLabel": "packaging"
     }
   ],
   "changes": {
     "fileCounts": {
-      "added": 0,
-      "changed": 15,
+      "added": 31,
+      "changed": 30,
       "moved": 0,
-      "parts": 3,
+      "parts": 12,
       "removed": 0
     },
     "items": [
       {
+        "kind": "door",
+        "sentence": "CI's push trigger now also names `codecov.yml`.",
+        "subjects": [
+          ".github/workflows/ci.yml"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "CI now also runs apps/desktop/src/app/AppShell.runtime.test.tsx, apps/desktop/src/app/AppShell.test.tsx, apps/desktop/src/app/execState.test.ts and 21 more.",
+        "subjects": [
+          ".github/workflows/ci.yml",
+          "apps/desktop/src/app/AppShell.runtime.test.tsx",
+          "apps/desktop/src/app/AppShell.test.tsx",
+          "apps/desktop/src/app/execState.test.ts",
+          "apps/desktop/src/app/sessionWatch.test.ts",
+          "apps/desktop/src/app/terminalReplay.test.ts",
+          "apps/desktop/src/components/ErrorBoundary.test.tsx",
+          "apps/desktop/src/components/MemoryDrawer.test.tsx",
+          "apps/desktop/src/components/MemorySuggestions.test.tsx",
+          "apps/desktop/src/components/SessionTabs.test.tsx",
+          "apps/desktop/src/components/SettingsDrawer.test.tsx",
+          "apps/desktop/src/components/WorkflowDrawer.test.tsx",
+          "apps/desktop/src/components/WorkflowEditor.test.tsx",
+          "apps/desktop/src/components/WorkflowRunBanner.test.tsx",
+          "apps/desktop/src/features/clients.test.ts",
+          "apps/desktop/src/features/persistence/persistenceClient.test.ts",
+          "apps/desktop/src/features/terminal/terminalEvents.test.ts",
+          "apps/desktop/src/hooks/useFocusZone.test.tsx",
+          "apps/desktop/src/hooks/useShortcuts.test.tsx",
+          "apps/desktop/src/lib/buildPlannerContext.test.ts",
+          "apps/desktop/src/lib/displaySafe.test.ts",
+          "apps/desktop/src/lib/mockBridge.test.ts",
+          "apps/desktop/src/lib/tauriInvoke.test.ts",
+          "apps/desktop/src/main.test.tsx",
+          "packages/domain/src/workflowPersist.test.ts"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "CI no longer runs apps/console/src/app.rs, apps/console/src/event_sink.rs, apps/console/src/input.rs and 22 more.",
+        "subjects": [
+          ".github/workflows/ci.yml",
+          "apps/console/src/app.rs",
+          "apps/console/src/event_sink.rs",
+          "apps/console/src/input.rs",
+          "apps/console/src/model.rs",
+          "apps/console/src/planner.rs",
+          "apps/console/src/stderr_guard.rs",
+          "apps/console/src/ui.rs",
+          "apps/desktop/src-tauri/src/commands/ipc_tests.rs",
+          "apps/desktop/src-tauri/src/commands/planner.rs",
+          "apps/desktop/src-tauri/src/commands/terminal.rs",
+          "apps/desktop/src-tauri/src/events/tauri_sink.rs",
+          "apps/desktop/src-tauri/src/navigation.rs",
+          "apps/desktop/src-tauri/src/state.rs",
+          "crates/runtime-persistence/src/db.rs",
+          "crates/runtime-persistence/src/history.rs",
+          "crates/runtime-persistence/src/memory.rs",
+          "crates/runtime-persistence/src/schema.rs",
+          "crates/runtime-persistence/src/settings.rs",
+          "crates/runtime-persistence/src/workflow.rs",
+          "crates/runtime-planner/src/client.rs",
+          "crates/runtime-planner/src/lib.rs",
+          "crates/runtime-planner/src/mock.rs",
+          "crates/runtime-planner/src/parity.rs",
+          "crates/runtime-planner/src/prompt.rs",
+          "crates/runtime-planner/src/validate.rs"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "README.md is now read by apps/desktop/src/lib/mockBridge.test.ts.",
+        "subjects": [
+          "README.md",
+          "apps/desktop/src/lib/mockBridge.test.ts"
+        ]
+      },
+      {
         "kind": "counts",
-        "sentence": "Nothing structural changed since 2026-10-04; 15 files changed content.",
+        "sentence": "31 files added and 30 changed content, across 12 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "334a5b3d74c9cd3aa3c05bf049819fcdc455368c",
-      "generatedAt": "2026-10-04T08:09:20.836Z"
+      "commit": "042eaae94dd4edb0fcf727f1853715a8e9165baf",
+      "generatedAt": "2026-10-04T15:27:29.067Z"
     },
-    "unchanged": true
+    "unchanged": false
   },
   "changesTogether": [
     {
-      "a": "apps/console/src/input.rs",
+      "a": "apps/console/src/app.rs",
       "b": "apps/console/src/model.rs",
-      "either": 8,
+      "either": 10,
       "partLabels": [
         "console",
         "console"
@@ -126,27 +204,12 @@
         "console"
       ],
       "relation": "inside",
-      "shared": 8
-    },
-    {
-      "a": "apps/console/src/input.rs",
-      "b": "apps/console/src/ui.rs",
-      "either": 8,
-      "partLabels": [
-        "console",
-        "console"
-      ],
-      "parts": [
-        "console",
-        "console"
-      ],
-      "relation": "inside",
-      "shared": 8
+      "shared": 9
     },
     {
       "a": "apps/console/src/model.rs",
       "b": "apps/console/src/ui.rs",
-      "either": 8,
+      "either": 10,
       "partLabels": [
         "console",
         "console"
@@ -156,25 +219,10 @@
         "console"
       ],
       "relation": "inside",
-      "shared": 8
+      "shared": 9
     },
     {
-      "a": "apps/console/src/app.rs",
-      "b": "apps/console/src/input.rs",
-      "either": 9,
-      "partLabels": [
-        "console",
-        "console"
-      ],
-      "parts": [
-        "console",
-        "console"
-      ],
-      "relation": "inside",
-      "shared": 8
-    },
-    {
-      "a": "apps/console/src/app.rs",
+      "a": "apps/console/src/input.rs",
       "b": "apps/console/src/model.rs",
       "either": 9,
       "partLabels": [
@@ -187,145 +235,47 @@
       ],
       "relation": "inside",
       "shared": 8
+    },
+    {
+      "a": "apps/console/src/app.rs",
+      "b": "apps/console/src/ui.rs",
+      "either": 11,
+      "partLabels": [
+        "console",
+        "console"
+      ],
+      "parts": [
+        "console",
+        "console"
+      ],
+      "relation": "inside",
+      "shared": 9
+    },
+    {
+      "a": "crates/runtime-core/src/pty.rs",
+      "b": "crates/runtime-core/src/services/session_service.rs",
+      "either": 15,
+      "partLabels": [
+        "runtime-core",
+        "runtime-core"
+      ],
+      "parts": [
+        "runtime-core",
+        "runtime-core"
+      ],
+      "relation": "inside",
+      "shared": 12
     }
   ],
   "changesTogetherNote": [
     "Confidence is low: fewer than 25 source files reach 10 revisions in the window.",
-    "Window: 180 days; a pair counts from 3 shared commits, since 3 source files reach 10 revisions; the floor rises to 10 when 25 do."
+    "Window: 180 days; a pair counts from 3 shared commits, since 6 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "042eaae94dd4edb0fcf727f1853715a8e9165baf",
+  "commit": "7183341580e4e542bbb28a34b99248ad42e7fb43",
   "defaultBranch": "main",
-  "derived": "16 parts, mostly TypeScript (68 files), Rust (57), CSS (3), Astro (2), JavaScript (2), HTML (1) and PowerShell (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
+  "derived": "16 parts, mostly TypeScript (94 files), Rust (57), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is Release Desktop, which reaches 8 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
-    {
-      "checks": [
-        "apps/desktop/src/",
-        "packages/api-contract/src/",
-        "packages/domain/src/",
-        "packages/state/src/",
-        "packages/ui/src/"
-      ],
-      "checksCount": 5,
-      "checksMore": 4,
-      "file": ".github/workflows/ci.yml",
-      "id": ".github/workflows/ci.yml",
-      "landings": [
-        "apps/desktop/src-tauri/gen/schemas/"
-      ],
-      "name": "CI",
-      "pushes": false,
-      "reach": [
-        {
-          "boundary": "api-contract",
-          "depth": 0,
-          "files": 13
-        },
-        {
-          "boundary": "console",
-          "depth": 0,
-          "files": 7
-        },
-        {
-          "boundary": "desktop",
-          "depth": 0,
-          "files": 53
-        },
-        {
-          "boundary": "domain",
-          "depth": 0,
-          "files": 9
-        },
-        {
-          "boundary": "packaging",
-          "depth": 0,
-          "files": 1
-        },
-        {
-          "boundary": "runtime-core",
-          "depth": 0,
-          "files": 10
-        },
-        {
-          "boundary": "runtime-persistence",
-          "depth": 0,
-          "files": 6
-        },
-        {
-          "boundary": "runtime-planner",
-          "depth": 0,
-          "files": 7
-        },
-        {
-          "boundary": "state",
-          "depth": 0,
-          "files": 3
-        },
-        {
-          "boundary": "ui",
-          "depth": 0,
-          "files": 1
-        }
-      ],
-      "runs": [
-        "packaging/check-release-version.mjs",
-        "apps/console/src/app.rs",
-        "apps/console/src/event_sink.rs",
-        "apps/console/src/input.rs",
-        "apps/console/src/model.rs",
-        "apps/console/src/planner.rs",
-        "apps/console/src/stderr_guard.rs",
-        "apps/console/src/ui.rs",
-        "apps/desktop/src-tauri/build.rs",
-        "apps/desktop/src-tauri/src/commands/ipc_tests.rs",
-        "apps/desktop/src-tauri/src/commands/planner.rs",
-        "apps/desktop/src-tauri/src/commands/terminal.rs",
-        "apps/desktop/src-tauri/src/events/tauri_sink.rs",
-        "apps/desktop/src-tauri/src/navigation.rs",
-        "apps/desktop/src-tauri/src/state.rs",
-        "apps/desktop/src/app/workflowStepWait.test.ts",
-        "apps/desktop/src/components/CommandPalette.test.tsx",
-        "apps/desktop/src/components/HistoryDrawer.test.tsx",
-        "apps/desktop/src/components/InputComposer.test.tsx",
-        "apps/desktop/src/components/PlanPanel.test.tsx",
-        "apps/desktop/src/components/TerminalPane.test.tsx",
-        "apps/desktop/src/lib/persistInBackground.test.ts",
-        "apps/desktop/src/lib/shortcuts.test.ts",
-        "crates/runtime-core/src/errors.rs",
-        "crates/runtime-core/src/events.rs",
-        "crates/runtime-core/src/lib.rs",
-        "crates/runtime-core/src/parity.rs",
-        "crates/runtime-core/src/pty.rs",
-        "crates/runtime-core/src/services/session_service.rs",
-        "crates/runtime-core/src/services/terminal_service.rs",
-        "crates/runtime-core/src/session.rs",
-        "crates/runtime-core/tests/",
-        "crates/runtime-persistence/src/db.rs",
-        "crates/runtime-persistence/src/history.rs",
-        "crates/runtime-persistence/src/memory.rs",
-        "crates/runtime-persistence/src/schema.rs",
-        "crates/runtime-persistence/src/settings.rs",
-        "crates/runtime-persistence/src/workflow.rs",
-        "crates/runtime-planner/src/client.rs",
-        "crates/runtime-planner/src/lib.rs",
-        "crates/runtime-planner/src/mock.rs",
-        "crates/runtime-planner/src/parity.rs",
-        "crates/runtime-planner/src/prompt.rs",
-        "crates/runtime-planner/src/validate.rs",
-        "packages/api-contract/src/contracts.test.ts",
-        "packages/domain/src/memoryDetectors.test.ts",
-        "packages/state/src/index.test.ts"
-      ],
-      "runsCount": 47,
-      "runsMore": 44,
-      "sends": [],
-      "stages": [],
-      "triggers": [
-        "on a pull request",
-        "on a push to main touching 18 paths",
-        "or by hand"
-      ]
-    },
     {
       "builds": [
         "apps/desktop/src-tauri/src/main.rs"
@@ -358,7 +308,7 @@
         {
           "boundary": "desktop",
           "depth": 0,
-          "files": 66
+          "files": 91
         },
         {
           "boundary": "packaging",
@@ -410,6 +360,120 @@
       "stages": [],
       "triggers": [
         "when a release is published",
+        "or by hand"
+      ]
+    },
+    {
+      "checks": [
+        "apps/desktop/src/",
+        "packages/api-contract/src/",
+        "packages/domain/src/",
+        "packages/state/src/",
+        "packages/ui/src/"
+      ],
+      "checksCount": 5,
+      "checksMore": 4,
+      "file": ".github/workflows/ci.yml",
+      "id": ".github/workflows/ci.yml",
+      "landings": [
+        "apps/desktop/src-tauri/gen/schemas/"
+      ],
+      "name": "CI",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "api-contract",
+          "depth": 0,
+          "files": 13
+        },
+        {
+          "boundary": "desktop",
+          "depth": 0,
+          "files": 66
+        },
+        {
+          "boundary": "domain",
+          "depth": 0,
+          "files": 10
+        },
+        {
+          "boundary": "packaging",
+          "depth": 0,
+          "files": 1
+        },
+        {
+          "boundary": "runtime-core",
+          "depth": 0,
+          "files": 10
+        },
+        {
+          "boundary": "state",
+          "depth": 0,
+          "files": 3
+        },
+        {
+          "boundary": "ui",
+          "depth": 0,
+          "files": 1
+        }
+      ],
+      "runs": [
+        "packaging/check-release-version.mjs",
+        "apps/desktop/src-tauri/build.rs",
+        "apps/desktop/src/app/AppShell.runtime.test.tsx",
+        "apps/desktop/src/app/AppShell.test.tsx",
+        "apps/desktop/src/app/execState.test.ts",
+        "apps/desktop/src/app/sessionWatch.test.ts",
+        "apps/desktop/src/app/terminalReplay.test.ts",
+        "apps/desktop/src/app/workflowStepWait.test.ts",
+        "apps/desktop/src/components/CommandPalette.test.tsx",
+        "apps/desktop/src/components/ErrorBoundary.test.tsx",
+        "apps/desktop/src/components/HistoryDrawer.test.tsx",
+        "apps/desktop/src/components/InputComposer.test.tsx",
+        "apps/desktop/src/components/MemoryDrawer.test.tsx",
+        "apps/desktop/src/components/MemorySuggestions.test.tsx",
+        "apps/desktop/src/components/PlanPanel.test.tsx",
+        "apps/desktop/src/components/SessionTabs.test.tsx",
+        "apps/desktop/src/components/SettingsDrawer.test.tsx",
+        "apps/desktop/src/components/TerminalPane.test.tsx",
+        "apps/desktop/src/components/WorkflowDrawer.test.tsx",
+        "apps/desktop/src/components/WorkflowEditor.test.tsx",
+        "apps/desktop/src/components/WorkflowRunBanner.test.tsx",
+        "apps/desktop/src/features/clients.test.ts",
+        "apps/desktop/src/features/persistence/persistenceClient.test.ts",
+        "apps/desktop/src/features/terminal/terminalEvents.test.ts",
+        "apps/desktop/src/hooks/useFocusZone.test.tsx",
+        "apps/desktop/src/hooks/useShortcuts.test.tsx",
+        "apps/desktop/src/lib/buildPlannerContext.test.ts",
+        "apps/desktop/src/lib/displaySafe.test.ts",
+        "apps/desktop/src/lib/mockBridge.test.ts",
+        "apps/desktop/src/lib/persistInBackground.test.ts",
+        "apps/desktop/src/lib/shortcuts.test.ts",
+        "apps/desktop/src/lib/tauriInvoke.test.ts",
+        "apps/desktop/src/main.test.tsx",
+        "crates/runtime-core/src/errors.rs",
+        "crates/runtime-core/src/events.rs",
+        "crates/runtime-core/src/lib.rs",
+        "crates/runtime-core/src/parity.rs",
+        "crates/runtime-core/src/pty.rs",
+        "crates/runtime-core/src/services/session_service.rs",
+        "crates/runtime-core/src/services/terminal_service.rs",
+        "crates/runtime-core/src/session.rs",
+        "crates/runtime-core/tests/",
+        "packages/api-contract/src/contracts.test.ts",
+        "packages/domain/src/memoryDetectors.test.ts",
+        "packages/domain/src/workflowPersist.test.ts",
+        "packages/state/src/index.test.ts"
+      ],
+      "runsCount": 46,
+      "runsMore": 43,
+      "sends": [
+        "uploads coverage to Codecov"
+      ],
+      "stages": [],
+      "triggers": [
+        "on a pull request",
+        "on a push to main touching 19 paths",
         "or by hand"
       ]
     },
@@ -536,16 +600,6 @@
       "to": "domain"
     },
     {
-      "from": "console",
-      "fromTests": false,
-      "to": "runtime-core"
-    },
-    {
-      "from": "console",
-      "fromTests": false,
-      "to": "runtime-planner"
-    },
-    {
       "from": "desktop",
       "fromTests": false,
       "to": "api-contract"
@@ -586,7 +640,7 @@
       "to": "domain"
     }
   ],
-  "engine": "1.24.0",
+  "engine": "1.23.0",
   "generated": [
     {
       "place": "apps/desktop/src-tauri/gen/schemas/",
@@ -595,14 +649,14 @@
       ]
     }
   ],
-  "generatedAt": "2026-10-04T15:27:29.067Z",
+  "generatedAt": "2026-10-04T18:23:48.867Z",
   "limits": [
     "2 writes and 3 reads use paths built at run time and are not named here.",
     "2 writes and 1 read go to a path their caller passes, not to this repository.",
     "3 writes go to a temporary directory, not to this repository.",
     "Statistics confidence is low: fewer than 25 source files reach 10 revisions in the window."
   ],
-  "mainDoor": ".github/workflows/ci.yml",
+  "mainDoor": ".github/workflows/release-desktop.yml",
   "partLabels": {
     ".claude": ".claude",
     ".github": ".github",
@@ -643,16 +697,16 @@
   "startReason": "This path follows commandui-desktop (the desktop app people install) from its entry, since CI runs only tests, scripts that import no code here and checks.",
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 46,
+  "testFiles": 70,
   "testedBy": {
-    "api-contract": 2,
+    "api-contract": 13,
     "console": 7,
-    "desktop": 14,
-    "domain": 3,
+    "desktop": 37,
+    "domain": 16,
     "runtime-core": 9,
     "runtime-persistence": 6,
     "runtime-planner": 6,
-    "state": 5,
+    "state": 11,
     "ui": 0
   },
   "testedInside": [

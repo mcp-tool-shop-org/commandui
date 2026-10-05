@@ -8,9 +8,11 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --passWithNoTests --coverage.enabled --coverage.provider=v8 --coverage.reporter=lcov --coverage.include=src/**",
     "lint": "echo \"lint not configured yet\""
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "3.2.7",
     "vitest": "^3.0.8"
   }
 }

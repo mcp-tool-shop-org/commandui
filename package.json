@@ -8,6 +8,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:coverage": "pnpm -r --if-present test:coverage",
     "lint": "pnpm -r lint",
     "format": "prettier --write .",
     "verify": "pnpm typecheck && pnpm test"

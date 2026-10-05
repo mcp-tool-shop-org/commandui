@@ -1,23 +1,59 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render } from "@testing-library/react";
+import { createRef } from "react";
+import { render, screen } from "@testing-library/react";
 
 type KeyHandler = (event: KeyboardEvent) => boolean;
-const captured: { handler: KeyHandler | null } = { handler: null };
+type DataHandler = (data: string) => void;
+type BufferHandler = (buffer: { type: string }) => void;
+const captured: {
+  handler: KeyHandler | null;
+  onData: DataHandler | null;
+  onBuffer: BufferHandler | null;
+  writes: string[];
+  cleared: number;
+  resetCount: number;
+  focused: number;
+} = {
+  handler: null,
+  onData: null,
+  onBuffer: null,
+  writes: [],
+  cleared: 0,
+  resetCount: 0,
+  focused: 0,
+};
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     cols = 80;
     rows = 24;
-    options: Record<string, unknown> = {};
+    options: Record<string, unknown> = { convertEol: true };
     textarea = document.createElement("textarea");
+    buffer = {
+      onBufferChange(handler: BufferHandler) {
+        captured.onBuffer = handler;
+        return { dispose() {} };
+      },
+    };
     loadAddon() {}
     open() {}
-    write() {}
-    clear() {}
-    reset() {}
-    focus() {}
+    write(data: string, callback?: () => void) {
+      captured.writes.push(data);
+      if (data.includes("\x1b[6n")) captured.onData?.("\x1b[1;1R");
+      callback?.();
+    }
+    clear() {
+      captured.cleared += 1;
+    }
+    reset() {
+      captured.resetCount += 1;
+    }
+    focus() {
+      captured.focused += 1;
+    }
     dispose() {}
-    onData() {
+    onData(handler: DataHandler) {
+      captured.onData = handler;
       return { dispose() {} };
     }
     attachCustomKeyEventHandler(handler: KeyHandler) {
@@ -32,7 +68,7 @@ vi.mock("@xterm/addon-fit", () => ({
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
-import { TerminalPane } from "./TerminalPane";
+import { isTerminalAutoReply, TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 
 function key(
   key: string,
@@ -45,6 +81,12 @@ function key(
 describe("TerminalPane custom key handler", () => {
   beforeEach(() => {
     captured.handler = null;
+    captured.onData = null;
+    captured.onBuffer = null;
+    captured.writes = [];
+    captured.cleared = 0;
+    captured.resetCount = 0;
+    captured.focused = 0;
     globalThis.ResizeObserver ??= class {
       observe() {}
       unobserve() {}
@@ -80,5 +122,73 @@ describe("TerminalPane custom key handler", () => {
 
   it("passes Ctrl+Shift+non-letter to the terminal", () => {
     expect(captured.handler!(key("1", { ctrlKey: true, shiftKey: true }))).toBe(true);
+  });
+});
+
+describe("isTerminalAutoReply", () => {
+  it("recognises xterm's own reports and nothing a person types", () => {
+    expect(isTerminalAutoReply("\x1b[1;1R")).toBe(true);
+    expect(isTerminalAutoReply("\x1b[?1;2c")).toBe(true);
+    expect(isTerminalAutoReply("\x1b[0n")).toBe(true);
+    expect(isTerminalAutoReply("\x1b]0;title\x07")).toBe(true);
+    expect(isTerminalAutoReply("ls\r")).toBe(false);
+    expect(isTerminalAutoReply("\x1b[A")).toBe(false);
+  });
+});
+
+describe("TerminalPane replay and status", () => {
+  beforeEach(() => {
+    captured.writes = [];
+    captured.cleared = 0;
+    captured.resetCount = 0;
+    captured.focused = 0;
+    captured.onData = null;
+    captured.onBuffer = null;
+    globalThis.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  });
+
+  it("drops an auto-reply during replay, then delivers a keystroke and a queued live write", () => {
+    const onData = vi.fn();
+    const onResize = vi.fn();
+    const ref = createRef<TerminalPaneHandle>();
+    const view = render(
+      <TerminalPane ref={ref} sessionId="s1" onData={onData} onResize={onResize} autoFocus />,
+    );
+
+    expect(captured.focused).toBeGreaterThan(0);
+    expect(onResize).toHaveBeenCalledWith(80, 24);
+    expect(screen.getByText("idle")).toBeInTheDocument();
+
+    const original = captured.onData;
+    captured.onData = (data) => {
+      if (data === "\x1b[1;1R") ref.current?.write("held");
+      original?.(data);
+    };
+    ref.current?.replay(["\x1b[6n", "prompt"]);
+    expect(onData).not.toHaveBeenCalled();
+    expect(captured.writes).toContain("held");
+    expect(captured.cleared).toBeGreaterThan(0);
+
+    captured.onData?.("ls\r");
+    expect(onData).toHaveBeenCalledWith("ls\r");
+
+    captured.onBuffer?.({ type: "alternate" });
+    view.rerender(
+      <TerminalPane
+        ref={ref}
+        sessionId="s1"
+        executionStatus="running"
+        statusLabel="running (typed)"
+        onData={onData}
+      />,
+    );
+    expect(screen.getByText("running (typed)")).toBeInTheDocument();
+
+    view.rerender(<TerminalPane ref={ref} sessionId="s2" onData={onData} />);
+    expect(captured.resetCount).toBeGreaterThan(1);
   });
 });
