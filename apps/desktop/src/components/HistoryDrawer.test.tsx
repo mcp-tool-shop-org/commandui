@@ -163,7 +163,7 @@ describe("HistoryDrawer rows", () => {
       createdAt: new Date(Date.now() - 120_000).toISOString(),
       durationMs: 1_500,
       exitCode: 0,
-      cwd: "/work",
+      cwd: "C:\\Users\\Default\\acme-api",
       plannerSource: "mock",
       workflowRunId: "run-1",
     };
@@ -211,9 +211,13 @@ describe("HistoryDrawer rows", () => {
     expect(onReopenPlan).toHaveBeenCalledWith(expect.objectContaining({ id: "sem" }));
     fireEvent.click(screen.getByRole("button", { name: "Save Workflow" }));
     expect(onSaveWorkflow).toHaveBeenCalledWith(expect.objectContaining({ id: "sem" }));
+    expect(screen.getAllByText("~\\acme-api").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Users\\Default/)).toBeNull();
+    expect(screen.getByText("Working folder")).toBeInTheDocument();
+    expect(screen.queryByText("CWD")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "View workflow run" }));
     expect(onViewWorkflowRun).toHaveBeenCalledWith("run-1");
-    fireEvent.click(screen.getByText("WF"));
+    fireEvent.click(screen.getByRole("button", { name: "View workflow" }));
     expect(onViewWorkflowRun).toHaveBeenCalledTimes(2);
 
     const rejectedRow = screen.getByRole("button", { name: /do not run/ });

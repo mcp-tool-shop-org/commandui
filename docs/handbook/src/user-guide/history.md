@@ -15,7 +15,7 @@ Each entry records:
 | **Status** | `success`, `failure`, `rejected`, `planned`, `interrupted` |
 | **Exit code** | Shell exit code (0 = success) |
 | **Duration** | How long execution took |
-| **CWD** | Working directory at execution time |
+| **Working folder** | The folder the command ran in. The row shows it the same way as the header, with `~` for the home folder. |
 | **Planner source, stored** | The model, or a practice plan |
 | **Workflow run ID** | Links to parent workflow run, if applicable |
 
@@ -45,7 +45,7 @@ Saves the command as a reusable workflow. Opens the workflow editor.
 
 ## Workflow-linked items
 
-Items that were executed as part of a workflow run show a **WF** badge in the metadata row. Clicking it navigates to the workflow drawer with that workflow's run details expanded. This creates bidirectional navigation: history → workflow and workflow → history.
+A command that was part of a workflow run has a **View workflow** button on its row. That button opens the workflow run. The expanded row has the same action, named **View workflow run**.
 
 ## Persistence
 

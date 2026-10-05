@@ -48,7 +48,8 @@ describe("describeResult", () => {
 
   it("names a real exit code and offers the three actions", () => {
     const result = describeResult({ phase: "failure", exitCode: 1, exitKnown: true, outputText: "nope" });
-    expect(result.headline).toBe("Did not work (exit code 1)");
+    expect(result.headline).toBe("Did not work (exit code 1).");
+    expect(resultText(result)).toContain("Did not work (exit code 1). The command finished with an error.");
     expect(result.reason).toBe("The command finished with an error.");
     expect(result.actions).toEqual(["show-output", "ask-fix", "run-again"]);
   });
@@ -72,7 +73,7 @@ describe("describeResult", () => {
         exitKnown: true,
         outputText: "bash: foo: command not found",
       }).headline,
-    ).toBe("Did not work (exit code 127)");
+    ).toBe("Did not work (exit code 127).");
   });
 
   it("explains access denied", () => {
@@ -176,7 +177,7 @@ describe("describeResult", () => {
       exitKnown: false,
       reason: "exit_unknown",
     });
-    expect(result.headline).toBe("CommandUI could not tell whether this worked");
+    expect(result.headline).toBe("CommandUI could not tell whether this worked.");
     expect(resultText(result)).not.toMatch(/exit code \d/i);
     expect(result.actions).toEqual(["show-output", "ask-fix", "run-again"]);
   });
@@ -200,7 +201,9 @@ describe("describeResult", () => {
       exitKnown: false,
       reason: "input_not_accepted",
     });
+    expect(result.headline).toBe("Did not work.");
     expect(result.reason).toBe("The terminal did not accept that input.");
+    expect(resultText(result)).toContain("Did not work. The terminal did not accept that input.");
     expect(resultText(result).toLowerCase()).not.toContain("exit code");
     expect(result.actions).toEqual(["run-again"]);
   });

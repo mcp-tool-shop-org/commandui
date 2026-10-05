@@ -42,5 +42,12 @@ describe("narrow layout", () => {
     const memory = blockAfter(css, ".memory-panel {", ".memory-item");
     expect(memory).toContain("max-height: 8rem");
     expect(memory).not.toContain("30vh");
+
+    const drawer = blockAfter(css, ".history-drawer {", ".history-controls");
+    expect(drawer).toContain("overflow-x: hidden");
+    const historyTitle = blockAfter(css, ".history-main {", ".history-meta");
+    expect(historyTitle).toContain("min-width: 0");
+    expect(historyTitle).toContain("text-overflow: ellipsis");
+    expect(historyTitle).toContain("white-space: nowrap");
   });
 });
