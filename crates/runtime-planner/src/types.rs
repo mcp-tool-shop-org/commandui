@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 pub struct OllamaConfig {
     pub endpoint: String,
     pub model: String,
+    /// How long one plan request may take. A model that is not loaded yet
+    /// has to load first, which can take most of a minute on a modest
+    /// machine. The desktop's plan limit (PLAN_TIMEOUT_MS) waits longer.
     pub timeout_secs: u64,
 }
 
@@ -18,7 +21,7 @@ impl Default for OllamaConfig {
         Self {
             endpoint: "http://localhost:11434".to_string(),
             model: "qwen2.5:14b".to_string(),
-            timeout_secs: 30,
+            timeout_secs: 90,
         }
     }
 }
@@ -121,4 +124,15 @@ pub(crate) struct LlmPlanResponse {
 
 fn default_confidence() -> f64 {
     0.8
+}
+
+#[cfg(test)]
+mod default_tests {
+    use super::OllamaConfig;
+
+    #[test]
+    fn a_plan_request_waits_for_a_cold_model() {
+        // Loading qwen2.5:14b from disk took longer than 15 s on a fast machine.
+        assert_eq!(OllamaConfig::default().timeout_secs, 90);
+    }
 }

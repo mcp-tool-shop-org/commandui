@@ -61,4 +61,23 @@ describe("tauriInvoke", () => {
     });
     expect((error as Error).message).not.toMatch(/backend/i);
   });
+
+  it("waits as long as a call asks, and says what that call's timeout means", async () => {
+    asTauri();
+    vi.useFakeTimers();
+    invoke.mockReturnValue(new Promise(() => {}));
+    let settled: unknown = "pending";
+    const pending = tauriInvoke("planner_generate_plan", {}, {
+      timeoutMs: 100_000,
+      timeoutMessage: "The model did not answer in time.",
+    }).then(
+      () => "resolved",
+      (error: unknown) => (settled = error),
+    );
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(settled).toBe("pending");
+    await vi.advanceTimersByTimeAsync(85_000);
+    await pending;
+    expect(settled).toMatchObject({ code: "UNKNOWN_ERROR", message: "The model did not answer in time." });
+  });
 });

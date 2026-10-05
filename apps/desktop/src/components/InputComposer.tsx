@@ -7,6 +7,11 @@ export type InputComposerHandle = {
   setValue: (value: string) => void;
 };
 
+/** Shown once Ask has been drafting for a while. */
+export const SLOW_DRAFT_TEXT =
+  "Still drafting. The first request after CommandUI opens can take up to a minute while the model loads.";
+const SLOW_DRAFT_AFTER_MS = 5000;
+
 type Props = {
   mode: "command" | "ask";
   onModeChange: (mode: "command" | "ask") => void;
@@ -38,6 +43,8 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
     ref,
   ) {
     const [value, setValue] = useState("");
+    const [slow, setSlow] = useState(false);
+    const drafting = busy && mode === "ask";
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const setFocusZone = useFocusStore((s) => s.setFocusZone);
 
@@ -53,6 +60,15 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
     useEffect(() => {
       textareaRef.current?.focus();
     }, [mode]);
+
+    useEffect(() => {
+      if (!drafting) {
+        setSlow(false);
+        return;
+      }
+      const timer = setTimeout(() => setSlow(true), SLOW_DRAFT_AFTER_MS);
+      return () => clearTimeout(timer);
+    }, [drafting]);
 
     // Auto-resize textarea to content
     useEffect(() => {
@@ -131,6 +147,10 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
           placeholder={
             isRunning
               ? "Command running…"
+              : drafting
+                ? slow
+                  ? SLOW_DRAFT_TEXT
+                  : "Drafting a command…"
               : disabled && disabledReason
                 ? disabledReason
                 : mode === "command"
@@ -140,6 +160,10 @@ export const InputComposer = forwardRef<InputComposerHandle, Props>(
           readOnly={isRunning}
           disabled={disabled && !isRunning}
         />
+
+        <span className="visually-hidden" role="status">
+          {drafting && slow ? SLOW_DRAFT_TEXT : ""}
+        </span>
 
         {isRunning ? (
           <button

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { InputComposer } from "./InputComposer";
+import { act } from "react";
+import { InputComposer, SLOW_DRAFT_TEXT } from "./InputComposer";
 
 describe("InputComposer", () => {
   it("submits on Enter", async () => {
@@ -88,6 +89,27 @@ describe("InputComposer", () => {
     await userEvent.type(input, "ls{Enter}");
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText("Working…")).toBeDisabled();
+  });
+
+  it("says Ask is drafting, then why it can take a while", () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender } = render(
+        <InputComposer mode="ask" onModeChange={() => {}} onSubmit={() => {}} busy />,
+      );
+      expect(screen.getByPlaceholderText("Drafting a command…")).toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent("");
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(screen.getByPlaceholderText(SLOW_DRAFT_TEXT)).toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent(SLOW_DRAFT_TEXT);
+      rerender(<InputComposer mode="ask" onModeChange={() => {}} onSubmit={() => {}} />);
+      expect(screen.getByPlaceholderText("Describe what you want to do…")).toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent("");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([
