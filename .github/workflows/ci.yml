@@ -76,7 +76,7 @@ jobs:
       # and fixable, not a release-path break. If flakes appear, vendor Atlas as
       # a devDependency in the pnpm lockfile.
       - name: Atlas check
-        run: npx --yes @dogfood-lab/atlas@1.24.0 check
+        run: npx --yes @dogfood-lab/atlas@1.26.0 check
 
       - name: Install system dependencies
         run: |

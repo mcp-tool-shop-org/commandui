@@ -1,16 +1,14 @@
 # commandui: how it works
 
-Mapped at 2026-10-05 from commit eb408fd by Atlas 1.24.0.
+Mapped at 2026-11-11 from commit 6ce3235 by Atlas 1.26.0.
 
 ## What this is
 
 16 parts, mostly TypeScript (141 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).
 
-## What changed since 2026-10-05 (df8c39e)
+## What changed since 2026-10-05 (eb408fd)
 
-- CI now also runs crates/runtime-planner/.
-- CI no longer runs crates/runtime-planner/src/client.rs, crates/runtime-planner/src/lib.rs, crates/runtime-planner/src/mock.rs and 4 more.
-- 8 files changed content, across 3 parts.
+Nothing structural changed since 2026-10-05; 15 files changed content.
 
 ## What comes in
 
