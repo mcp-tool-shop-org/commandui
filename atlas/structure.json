@@ -293,7 +293,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "a8a3a1199f77ff9da20727573661fd5e949fd5c65c4f08c9c648050d4d616207",
+          "hash": "4c3ed7c382a91b6b41ab28026c09e86261dd85a7680aefd6da6d9d44e388d3e3",
           "path": "packages/api-contract/package.json"
         },
         {
@@ -707,7 +707,7 @@
           "path": "apps/desktop/index.html"
         },
         {
-          "hash": "a2ed73ea16bbe391adf892315c73e54f7a5dc8fddb71c36517df5c44171c4fb1",
+          "hash": "fe6b9227008949658e7929df98556a541650fadc6e06734679aaabd6660f63b9",
           "path": "apps/desktop/package.json"
         },
         {
@@ -3063,7 +3063,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "1b0609785d93fac46f4cb8063ad8594eefb270b06df60076913cc913876f9433",
+          "hash": "67173bba2b5f75c982d56d11d2e4f6b4424fe7ad996b7d42d67308b26fb3b238",
           "path": "packages/domain/package.json"
         },
         {
@@ -3461,15 +3461,15 @@
           "path": "codecov.yml"
         },
         {
-          "hash": "0d710422be397f5bba2ee144ad27cb733d8024f7ee03163573ce6248ad2f286c",
+          "hash": "b8fefdebfa94e4f3691243c2b317942f91329db0e1d16366f642fb4d1ccd73ac",
           "path": "package.json"
         },
         {
-          "hash": "366a76488b8dcc81d3ed9d76493894ddaa97664eb1f3e3c59674de2ce63ded0f",
+          "hash": "f3fa31eaf6375804ab855a4dfcf31664429af73f9781353f55d6f754cce500ba",
           "path": "pnpm-lock.yaml"
         },
         {
-          "hash": "54a86b14bb292cc301ce2f36b2f3aa49b48993bc44d5217a756f13823285fcab",
+          "hash": "c684193ab87b4a9e73614d5676c19653d36fb39bf8993bcd455f2e5175d085a9",
           "path": "pnpm-workspace.yaml"
         },
         {
@@ -4452,7 +4452,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "7e0168a27171826961533170cfd808da69b3a9729a037961eb2bc35af156f48c",
+          "hash": "99fa651dfcf543d950b5616ac9839a5660feb0517fd792a46d7324515af82489",
           "path": "packages/state/package.json"
         },
         {
@@ -4524,7 +4524,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "7647de74bf1ca7204dfbd770fbfcc37f1da2da9afac8589e8011d3bfc1c0cfb5",
+          "hash": "c94e0b3215d555c394db97e20b6c01941ef245074b7844e49f768acc8c2fc21b",
           "path": "packages/ui/package.json"
         },
         {
@@ -5950,7 +5950,7 @@
   ],
   "engine": "1.26.0",
   "generatedFrom": {
-    "commit": "6ce3235aea74c44d58020c95b93c676c40c4db1d",
+    "commit": "76e63a6f321bade108afbe71dcf507d7a02b88ee",
     "tracked": 465
   },
   "landings": [

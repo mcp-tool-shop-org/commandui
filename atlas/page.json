@@ -94,21 +94,21 @@
   "changes": {
     "fileCounts": {
       "added": 0,
-      "changed": 15,
+      "changed": 8,
       "moved": 0,
-      "parts": 4,
+      "parts": 6,
       "removed": 0
     },
     "items": [
       {
         "kind": "counts",
-        "sentence": "Nothing structural changed since 2026-10-05; 15 files changed content.",
+        "sentence": "Nothing structural changed since 2026-11-11; 8 files changed content.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "eb408fdcb9c7db1945f69d64fe0ca1bd924e4a84",
-      "generatedAt": "2026-10-05T02:06:29.376Z"
+      "commit": "6ce3235aea74c44d58020c95b93c676c40c4db1d",
+      "generatedAt": "2026-11-11T22:14:16.892Z"
     },
     "unchanged": true
   },
@@ -194,7 +194,7 @@
     "Window: 180 days; a pair counts from 3 shared commits, since 6 source files reach 10 revisions; the floor rises to 10 when 25 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "6ce3235aea74c44d58020c95b93c676c40c4db1d",
+  "commit": "76e63a6f321bade108afbe71dcf507d7a02b88ee",
   "defaultBranch": "main",
   "derived": "16 parts, mostly TypeScript (141 files), Rust (58), CSS (3), Astro (2), JavaScript (2), PowerShell (2) and HTML (1). Work enters through 5 doors; the busiest is CI, which reaches 10 parts. It deploys a site to GitHub Pages. People install the commandui-desktop desktop app. commandui-console is a command built from apps/console (nothing ships it).",
   "doors": [
@@ -586,7 +586,7 @@
       ]
     }
   ],
-  "generatedAt": "2026-11-11T22:14:16.892Z",
+  "generatedAt": "2026-11-12T01:05:22.453Z",
   "limits": [
     "1 import could not be resolved: `apps/desktop/src/app/AppShell.honesty.test.tsx` imports `./AppShell.tsx?raw`, which is not in this repository.",
     "2 writes and 3 reads use paths built at run time and are not named here.",
