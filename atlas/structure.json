@@ -260,7 +260,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "b176bf3ed63168603d9cda66f774e6a5eca8670fea06092ee304a16d75f6b685",
+          "hash": "945c4c66fc6f8a4a27893d7cc5a4fd1945b6cbc0bc1f71fd652d7b7fc8dd1580",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -293,7 +293,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "a8a3a1199f77ff9da20727573661fd5e949fd5c65c4f08c9c648050d4d616207",
+          "hash": "4c3ed7c382a91b6b41ab28026c09e86261dd85a7680aefd6da6d9d44e388d3e3",
           "path": "packages/api-contract/package.json"
         },
         {
@@ -707,7 +707,7 @@
           "path": "apps/desktop/index.html"
         },
         {
-          "hash": "a2ed73ea16bbe391adf892315c73e54f7a5dc8fddb71c36517df5c44171c4fb1",
+          "hash": "fe6b9227008949658e7929df98556a541650fadc6e06734679aaabd6660f63b9",
           "path": "apps/desktop/package.json"
         },
         {
@@ -2930,7 +2930,7 @@
           "path": "docs/handbook/src/operations/release-checklist.md"
         },
         {
-          "hash": "68940089da508f82b8f54a3a4d75ff789546e8a27fb55e99972668a513590b44",
+          "hash": "e12b4a16cc79433576a266b4f3b968ef7247c59a98d78ad5b5b2bb9ccc530a7a",
           "path": "docs/handbook/src/orientation/accessibility.md"
         },
         {
@@ -2982,7 +2982,7 @@
           "path": "docs/handbook/src/user-guide/workflows.md"
         },
         {
-          "hash": "ae5bb52212e08e2aa6a5055f74119ab846ffadd914d8d24e9eb563a5cdef3375",
+          "hash": "108fb7cd29acb3aa9cb392eb1c7f0f1274151acbd836f59f0781743829027570",
           "path": "docs/handoff-2026-10-04-accessible-commandui.md"
         },
         {
@@ -3038,7 +3038,7 @@
           "path": "docs/specs/tui-spine.md"
         },
         {
-          "hash": "49352da32dfb1a744bc91234ba15919e3d8fa476d39247e008e983d5031587be",
+          "hash": "fcfe5ed884841e8b3e4afcb279203a7cdbc9ee0b807732a7594bad3d50b1d9c9",
           "path": "docs/store-listing.md"
         }
       ],
@@ -3063,7 +3063,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "1b0609785d93fac46f4cb8063ad8594eefb270b06df60076913cc913876f9433",
+          "hash": "67173bba2b5f75c982d56d11d2e4f6b4424fe7ad996b7d42d67308b26fb3b238",
           "path": "packages/domain/package.json"
         },
         {
@@ -3397,7 +3397,7 @@
           "path": ".prettierignore"
         },
         {
-          "hash": "c00801a52f1d1afd4ba4ae9d299a2e03787bdb7b51c62ed9dc14f036d76e70a6",
+          "hash": "80eaebf6893805a9fdfd3ae777fb69bc3895871164feec8f2556f67763a30ec3",
           "path": "CHANGELOG.md"
         },
         {
@@ -3413,35 +3413,35 @@
           "path": "LICENSE"
         },
         {
-          "hash": "e6cb4d68dd8432423066220bd93e8759c01fd2e8cf99f67a83beeeef5b58ee2a",
+          "hash": "d96ab2673df171be2483f55842739e5a20097a71573e01a9d2c397d871388d4e",
           "path": "README.es.md"
         },
         {
-          "hash": "ee54851e7bfdd520768f45d7e6e19a6fdea5b3ab9ecbcb93fa974be6565b4c0b",
+          "hash": "59351b6dadb86f0ce86dd8f1e44a09c790ef4923cb9d837a9e4ceb868ed23119",
           "path": "README.fr.md"
         },
         {
-          "hash": "69c15187ef6a1d3dbdf50d072cde0d1f6c84ad6fc64f64f98807fe23d5e1e263",
+          "hash": "30f93b14de6dc39d0cdb72b745748d70332a7fc4812039c3b1eeec576ac189dd",
           "path": "README.hi.md"
         },
         {
-          "hash": "be6983ec76c9c1c7c0cf33b09625c664d147e3cbb51bf7c2ff5312edefe85f86",
+          "hash": "96f3ad4306d34272c97cf0e26bc45599327698eb8122e466d5822f02dba1c6ca",
           "path": "README.it.md"
         },
         {
-          "hash": "ad30d5f9a1f721a2ac5981366b8f75feffb0a3a9763e49dffa1c6ae765c69881",
+          "hash": "e6527b7f3fb1bce768d4c483e19fd3e00b3d432b25e1c6cba8d8a81cf789d15b",
           "path": "README.ja.md"
         },
         {
-          "hash": "5a20231c9f3e8d030ebe14d278ca5012cd98ec43f78681ee2e022af6ea2c18c0",
+          "hash": "31dfcb7ce74538c80904542c7427090edcfd7163d5dcbe180e9b52e763a32d23",
           "path": "README.md"
         },
         {
-          "hash": "5e40da729b87b6aaf3fa8df4d0fe7498e22fd3cb1026666932e20336ce124ebb",
+          "hash": "04e5230449d8370d683c5bc1b44e6e48d106dc1d17f8370b1a69fc59f565a23f",
           "path": "README.pt-BR.md"
         },
         {
-          "hash": "79e8e5d33a5690d7bbdeaa1cd848849398ce2a8e1e5d1cec2e407b5414ab66f5",
+          "hash": "469076278e58cdc11089efdc90bcdf1a379f16712098c8611b3e87c789de26c2",
           "path": "README.zh.md"
         },
         {
@@ -3461,15 +3461,15 @@
           "path": "codecov.yml"
         },
         {
-          "hash": "0d710422be397f5bba2ee144ad27cb733d8024f7ee03163573ce6248ad2f286c",
+          "hash": "b8fefdebfa94e4f3691243c2b317942f91329db0e1d16366f642fb4d1ccd73ac",
           "path": "package.json"
         },
         {
-          "hash": "366a76488b8dcc81d3ed9d76493894ddaa97664eb1f3e3c59674de2ce63ded0f",
+          "hash": "f3fa31eaf6375804ab855a4dfcf31664429af73f9781353f55d6f754cce500ba",
           "path": "pnpm-lock.yaml"
         },
         {
-          "hash": "54a86b14bb292cc301ce2f36b2f3aa49b48993bc44d5217a756f13823285fcab",
+          "hash": "c684193ab87b4a9e73614d5676c19653d36fb39bf8993bcd455f2e5175d085a9",
           "path": "pnpm-workspace.yaml"
         },
         {
@@ -4274,7 +4274,7 @@
           "path": "site/src/content.config.ts"
         },
         {
-          "hash": "304728a14ffe8bafefdcafd5224edbc48f319d321b50094348691e680ad52389",
+          "hash": "f94a65febb4fb90f723a3fbdf523360d372c57f852d684e704b31bb4c74cf515",
           "path": "site/src/content/docs/handbook/accessibility.md"
         },
         {
@@ -4415,7 +4415,7 @@
         },
         {
           "constantOnly": true,
-          "hash": "9c6165444af6535cbcfd964d9d88106a913521e1311d7b57276dc340487b4f72",
+          "hash": "51ca5135d8d04864e9054ccf614fe7160bc5d718cf6538773300feea58a057b8",
           "path": "site/src/site-config.ts"
         },
         {
@@ -4452,7 +4452,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "7e0168a27171826961533170cfd808da69b3a9729a037961eb2bc35af156f48c",
+          "hash": "99fa651dfcf543d950b5616ac9839a5660feb0517fd792a46d7324515af82489",
           "path": "packages/state/package.json"
         },
         {
@@ -4524,7 +4524,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "7647de74bf1ca7204dfbd770fbfcc37f1da2da9afac8589e8011d3bfc1c0cfb5",
+          "hash": "c94e0b3215d555c394db97e20b6c01941ef245074b7844e49f768acc8c2fc21b",
           "path": "packages/ui/package.json"
         },
         {
@@ -5948,9 +5948,9 @@
       "to": "domain"
     }
   ],
-  "engine": "1.24.0",
+  "engine": "1.26.0",
   "generatedFrom": {
-    "commit": "eb408fdcb9c7db1945f69d64fe0ca1bd924e4a84",
+    "commit": "76e63a6f321bade108afbe71dcf507d7a02b88ee",
     "tracked": 465
   },
   "landings": [
